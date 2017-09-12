@@ -101,7 +101,7 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	ShowWindow(hwnd, SW_HIDE);
 
 	// Process any messages generated during creation
-	sys->RunMessages();
+	sys->RunMessages(NULL, true);
 }
 
 sys_video_c::~sys_video_c()
@@ -262,7 +262,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 
 	// Process any messages generated during application
-	sys->RunMessages();
+	sys->RunMessages(NULL, true);
 
 	initialised = true;
 	return 0;

@@ -635,16 +635,29 @@ LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-void sys_main_c::RunMessages(HWND hwnd)
+void sys_main_c::RunMessages(HWND hwnd, bool slurp)
 {
-	// Flush message queue
 	MSG msg;
-	while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
-		if (GetMessage(&msg, hwnd, 0, 0) == 0) {
+	BOOL ret;
+	//HANDLE handle = (HANDLE) hwnd;
+
+	while (!slurp || PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE))
+	{
+		//UINT timer_id = SetTimer(hwnd, 0, 1000, NULL);
+		ret = GetMessage(&msg, hwnd, 0, 0);
+		//(void) KillTimer(hwnd, timer_id);
+		if (ret == -1)
+			break;
+		else if (ret == 0)
+		{
 			Exit();
+			break;
 		}
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		else
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
 	}
 }
 
@@ -679,8 +692,8 @@ void sys_main_c::Error(char *fmt, ...)
 
 	exitFlag = false;
 	while (exitFlag == false) {
-		RunMessages();
-		Sleep(50);
+		RunMessages(NULL, false);
+		//Sleep(50);
 	}
 
 #ifdef _MEMTRAK_H
@@ -763,19 +776,16 @@ bool sys_main_c::Run(int argc, char** argv)
 	con->Printf("\n");
 
 	initialised = true;
-
 	try {
 		// Enable translation to catch C exceptions if debugger is not present
 		if ( !debuggerRunning ) {
 			_set_se_translator(SE_ErrorTrans);
 		}
-
 		// Initialise engine
 		core->Init(argc, argv);
-
 		// Run frame loop
 		while (exitFlag == false) {
-			RunMessages();
+			RunMessages(NULL, false);
 
 			core->Frame();
 
@@ -813,8 +823,8 @@ bool sys_main_c::Run(int argc, char** argv)
 			exitMsg = NULL;
 		}
 		while (exitFlag == false) {
-			RunMessages();
-			Sleep(50);
+			RunMessages(NULL, false);
+			//Sleep(50);
 		}
 	}	
 
