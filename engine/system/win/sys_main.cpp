@@ -11,6 +11,10 @@
 
 #include <eh.h>
 
+#if defined __MINGW32__
+#   define _set_se_translator(x) 0
+#endif
+
 // ======
 // Locals
 // ======
@@ -638,13 +642,11 @@ LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 void sys_main_c::RunMessages(HWND hwnd, bool slurp)
 {
 	MSG msg;
-	BOOL ret;
-	//HANDLE handle = (HANDLE) hwnd;
 
 	while (!slurp || PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE))
 	{
 		//UINT timer_id = SetTimer(hwnd, 0, 1000, NULL);
-		ret = GetMessage(&msg, hwnd, 0, 0);
+		BOOL ret = GetMessage(&msg, hwnd, 0, 0);
 		//(void) KillTimer(hwnd, timer_id);
 		if (ret == -1)
 			break;
@@ -658,6 +660,9 @@ void sys_main_c::RunMessages(HWND hwnd, bool slurp)
 			TranslateMessage(&msg);
 			DispatchMessage(&msg);
 		}
+
+		if (!slurp)
+			break;
 	}
 }
 
