@@ -106,8 +106,12 @@ void ui_main_c::LAssert(lua_State* L, int cond, const char* fmt, ...)
 				break;
 			case 't':
 				*p = 's';
+#if defined __MINGW32__
+				(void) va_arg(va, char*);
+#else
 				int* arg = &va_arg(va, int);
 				*(char**)arg = (char*)luaL_typename(L, *arg);
+#endif
 				break;
 			}
 		}
