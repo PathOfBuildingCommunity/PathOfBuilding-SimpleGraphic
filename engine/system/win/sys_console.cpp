@@ -131,16 +131,17 @@ void sys_console_c::ThreadProc()
 	bBackground = CreateSolidBrush(CFG_SCON_TEXTBG);
 
 	// Flush any messages created
-	sys->RunMessages();
+	sys->RunMessages(NULL, true);
 
 	shown = true;
 
 	InstallPrintHook();
 	
 	isRunning = true;
+
 	while (doRun) {
-		sys->RunMessages(hwMain);
-		sys->Sleep(1);
+		sys->RunMessages(NULL, false);
+		//sys->Sleep(1);
 	}
 
 	RemovePrintHook();
@@ -211,7 +212,7 @@ void sys_console_c::SetVisible(bool show)
 			Print(buffer);
 			delete buffer;
 	
-			sys->RunMessages(hwMain);
+			sys->RunMessages(NULL, true);
 		}
 	} else {
 		shown = false;
@@ -269,7 +270,7 @@ void sys_console_c::Print(const char* text)
 	Edit_SetSel(hwOut, Edit_GetTextLength(hwOut), -1);
 	Edit_ReplaceSel(hwOut, winText);
 	Edit_Scroll(hwOut, 0xFFFF, 0);
-	sys->RunMessages(hwMain);
+	sys->RunMessages(NULL, true);
 	delete winText;
 }
 
