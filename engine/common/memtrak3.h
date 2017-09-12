@@ -7,12 +7,14 @@
 
 /** MemTrak operators **/
 
+#if 0
 void* operator new(size_t size, const char *file, int line);
 void* operator new[](size_t size, const char *file, int line);
 void operator delete(void *ptr, const char *file, int line);
 void operator delete[](void *ptr, const char *file, int line);
 void operator delete(void *ptr);
 void operator delete[](void *ptr);
+#endif
 
 void* _memTrak_realloc(void* ptr, size_t size, const char* file, int line);
 void* _memTrak_reallocNoTrack(void* ptr, size_t size);
@@ -27,7 +29,9 @@ size_t _memTrak_getOverhead();
 
 /** Macro hack **/
 
+#if 0
 #define new new(__FILE__, __LINE__)
 #define realloc(p, s) _memTrak_realloc(p, s, __FILE__, __LINE__)
+#endif
 
 #endif

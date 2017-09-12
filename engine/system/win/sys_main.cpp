@@ -11,6 +11,10 @@
 
 #include <eh.h>
 
+#if defined __MINGW32__
+#   define _set_se_translator(x) 0
+#endif
+
 // ======
 // Locals
 // ======

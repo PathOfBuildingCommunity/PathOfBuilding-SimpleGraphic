@@ -81,7 +81,8 @@ void core_main_c::Init(int argc, char** argv)
 
 void core_main_c::Frame()
 {
-	sys->con->Printf("Messages...\n");
+	// causes a livelock?
+	// sys->con->Printf("Messages...\n");
 
 	// Execute commands
 	sys->con->ExecCommands();

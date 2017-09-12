@@ -370,12 +370,12 @@ struct jpegError_s: public jpeg_error_mgr {
 		char buffer[JMSG_LENGTH_MAX];
 		(*cinfo->err->format_message)(cinfo, buffer);
 		clientData_s* cd = (clientData_s*)cinfo->client_data;
-		cd->con->Warning("JPEG '%s': %s", cd->fileName, buffer);
+		//cd->con->Warning("JPEG '%s': %s", cd->fileName, buffer);
 	}
 	static void FatalError(j_common_ptr cinfo)
 	{
 		MSGOut(cinfo);
-		throw 1;
+		//throw 1;
 	}
 };
 

@@ -279,6 +279,7 @@ again:
 
 static _memTrak_c _memTrak;
 
+#if 0
 void* operator new(size_t size, const char *file, int line)
 {
 	return _memTrak.New(size, file, line);
@@ -308,6 +309,7 @@ void operator delete[](void *ptr)
 {
 	_memTrak.Delete(ptr);
 }
+#endif
 
 void* _memTrak_realloc(void* ptr, size_t size, const char* file, int line)
 {
