@@ -18,6 +18,8 @@ public:
 	void	KeyEvent(int key, int type);
 	bool	CanExit();
 
+	int	SubScriptCount();
+
 	// Encapsulated
 	ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd);
 

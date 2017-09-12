@@ -9,6 +9,7 @@
 
 #include "system.h"
 
+#undef _WIN32_WINNT
 #define _WIN32_WINNT _WIN32_WINNT_WINXP
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -44,7 +45,7 @@ public:
 	bool	Run(int argc, char** argv);
 
 	static LRESULT __stdcall WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	void	RunMessages(HWND hwnd = NULL);
+	int	RunMessages(HWND hwnd, bool slurp, unsigned timeout = 0);
 	void	PrintLastError(const char* msg);
 
 	int		KeyToVirtual(byte key);

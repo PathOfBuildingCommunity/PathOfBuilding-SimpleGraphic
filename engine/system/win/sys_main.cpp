@@ -11,6 +11,10 @@
 
 #include <eh.h>
 
+#if defined __MINGW32__
+#   define _set_se_translator(x) ((void)0)
+#endif
+
 // ======
 // Locals
 // ======
@@ -635,17 +639,63 @@ LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 	return DefWindowProc(hwnd, msg, wParam, lParam);
 }
 
-void sys_main_c::RunMessages(HWND hwnd)
+int sys_main_c::RunMessages(HWND hwnd, bool slurp, unsigned timeout)
 {
-	// Flush message queue
 	MSG msg;
-	while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
-		if (GetMessage(&msg, hwnd, 0, 0) == 0) {
-			Exit();
+	unsigned ret;
+	unsigned nmsg = 0;
+
+	if (timeout == 0)
+		timeout = 250;
+
+	for (;;)
+	{
+		// take care of non-blocking, blocking, and block+timeout message reads
+		if (slurp)
+		{
+			if (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE))
+			{
+				ret = GetMessage(&msg, hwnd, 0, 0);
+			}
+			else
+				break;
 		}
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		else
+		{
+			static const UINT_PTR TIMER_ID = 1042;
+			UINT_PTR id = hwnd ? TIMER_ID : 0;
+			id = SetTimer(hwnd, id, timeout, NULL);
+			ret = GetMessage(&msg, hwnd, 0, 0);
+			(void) KillTimer(hwnd, id);
+			if (ret != unsigned(-1) && ret != 0)
+			{
+				if (msg.message == WM_TIMER && msg.wParam == id)
+					break;
+			}
+		}
+
+		// deal error, window destruction, and valid messages respectively
+		if (ret == unsigned(-1))
+			break;
+		else if (ret == 0)
+		{
+			nmsg++;
+			Exit();
+			break;
+		}
+		else
+		{
+			nmsg++;
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+
+		// one message is enough in case of blocking reads
+		if (!slurp && !PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE))
+			break;
 	}
+
+	return nmsg;
 }
 
 // ==============================
@@ -679,8 +729,8 @@ void sys_main_c::Error(char *fmt, ...)
 
 	exitFlag = false;
 	while (exitFlag == false) {
-		RunMessages();
-		Sleep(50);
+		RunMessages(NULL, false, 1000);
+		//Sleep(50);
 	}
 
 #ifdef _MEMTRAK_H
@@ -763,21 +813,20 @@ bool sys_main_c::Run(int argc, char** argv)
 	con->Printf("\n");
 
 	initialised = true;
-
 	try {
 		// Enable translation to catch C exceptions if debugger is not present
 		if ( !debuggerRunning ) {
 			_set_se_translator(SE_ErrorTrans);
 		}
-
 		// Initialise engine
 		core->Init(argc, argv);
-
 		// Run frame loop
 		while (exitFlag == false) {
-			RunMessages();
+			int nsubscript = core->SubScriptCount();
+			int nmsg = RunMessages(NULL, false);
 
-			core->Frame();
+			if (nsubscript || nmsg)
+				core->Frame();
 
 			if (threadError) {
 				Error(threadError);
@@ -813,8 +862,8 @@ bool sys_main_c::Run(int argc, char** argv)
 			exitMsg = NULL;
 		}
 		while (exitFlag == false) {
-			RunMessages();
-			Sleep(50);
+			RunMessages(NULL, false);
+			//Sleep(50);
 		}
 	}	
 

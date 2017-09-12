@@ -27,6 +27,8 @@ public:
 	void	KeyEvent(int key, int type);
 	bool	CanExit();
 
+	int	SubScriptCount();
+
 	// Encapsulated
 	core_main_c(sys_IMain* sysHnd);
 
@@ -121,4 +123,9 @@ bool core_main_c::CanExit()
 	if ( !initialised ) return true;
 
 	return ui->CanExit();
+}
+
+int core_main_c::SubScriptCount()
+{
+	return ui->SubScriptCount();
 }

@@ -542,3 +542,15 @@ int ui_main_c::KeyForName(const char* keyName)
 	}
 	return 0;
 }
+
+int ui_main_c::SubScriptCount()
+{
+	int ret = 0;
+
+	for (unsigned k = 0; k < subScriptSize; k++)
+	{
+		if (subScriptList[k])
+			ret++;
+	}
+	return ret;
+}
