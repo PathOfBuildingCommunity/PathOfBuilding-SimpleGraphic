@@ -72,7 +72,7 @@ void core_main_c::Init(int argc, char** argv)
 	sys->con->ExecCommands(true);
 
 	// Hide the sysconsole
-	//sys->conWin->SetVisible(false);
+	sys->conWin->SetVisible(false);
 
 	// Initialise video
 	video = core_IVideo::GetHandle(sys);
