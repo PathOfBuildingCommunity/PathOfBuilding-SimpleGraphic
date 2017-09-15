@@ -1,3 +1,5 @@
+#if 0
+
 // MemTrak Memory Tracker v3
 // (c) David Gowor, 2005
 //
@@ -29,5 +31,7 @@ size_t _memTrak_getOverhead();
 
 #define new new(__FILE__, __LINE__)
 #define realloc(p, s) _memTrak_realloc(p, s, __FILE__, __LINE__)
+
+#endif
 
 #endif

@@ -2,6 +2,8 @@
 // (c) David Gowor, 2005
 //
 
+#if 0
+
 #include <windows.h>
 #include <stdio.h>
 
@@ -338,3 +340,5 @@ size_t _memTrak_getOverhead()
 {
 	return _memTrak.GetOverhead();
 }
+
+#endif
