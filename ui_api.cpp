@@ -493,6 +493,13 @@ static int l_GetAsyncCount(lua_State* L)
 	return 1;
 }
 
+static int l_RenderInit(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	lua_pushinteger(L, 1);
+	return 1;
+}
+
 // ==============
 // Search Handles
 // ==============
@@ -1177,6 +1184,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(DrawStringCursorIndex);
 	ADDFUNC(StripEscapes);
 	ADDFUNC(GetAsyncCount);
+	ADDFUNC(RenderInit);
 
 	// Search handles
 	lua_newtable(L);	// Search handle metatable
@@ -1240,3 +1248,4 @@ int ui_main_c::InitAPI(lua_State* L)
 
 	return 0;
 }
+
