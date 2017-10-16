@@ -101,11 +101,10 @@ set_target_properties(${PROJ} PROPERTIES
 )
 
 if(CMAKE_COMPILER_IS_GNUCC)
-	set(CMAKE_CXX_FLAGS_RELEASE "-ffunction-sections -fdata-sections ${CMAKE_CXX_FLAGS_RELEASE}")
-	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "-Wl,--gc-sections,--dynamicbase,--no-seh,--nxcompat ${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
+	set(CMAKE_CXX_FLAGS_RELEASE "-ffunction-sections -fdata-sections -s ${CMAKE_CXX_FLAGS_RELEASE}")
+	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "-Wl,--gc-sections,--as-needed,--dynamicbase,--no-seh,--nxcompat ${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
 
-	set(CMAKE_CXX_FLAGS "-Wno-write-strings ${CMAKE_CXX_FLAGS}")
-	set(CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bstatic -static-libgcc ${CMAKE_SHARED_LINKER_FLAGS}")
+	set(CMAKE_CXX_FLAGS "-Wno-write-strings -static-libgcc -static-libstdc++ ${CMAKE_CXX_FLAGS}")
 endif()
 
-target_link_libraries(${PROJ} tiff lzma luajit-5.1 z gif png jpeg winmm opengl32)
+target_link_libraries(${PROJ} -Wl,-Bstatic tiff lzma z gif png jpeg -Wl,-Bdynamic luajit-5.1 winmm opengl32)
