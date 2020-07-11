@@ -6,7 +6,7 @@
 //
 
 #include "system/win/sys_local.h"
-
+#if 0
 #pragma comment(lib, "winmm")
 #pragma comment(lib, "opengl32")
 #if defined(_WIN64) 
@@ -38,6 +38,7 @@
 #pragma comment(lib, "_lib\\tiff32MT")
 #pragma comment(lib, "_lib\\png32MT")
 #pragma comment(lib, "_lib\\gif32MT")
+#endif
 #endif
 
 extern "C" __declspec(dllexport) int RunLuaFileAsWin(int argc, char** argv)

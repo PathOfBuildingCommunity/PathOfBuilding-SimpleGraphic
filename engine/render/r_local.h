@@ -11,7 +11,7 @@
 
 #define WINGDIAPI
 #define APIENTRY __stdcall
-#include <gl/gl.h>
+#include <GL/gl.h>
 #include "_lib/glext.h"
 
 #include "core/core_image.h"

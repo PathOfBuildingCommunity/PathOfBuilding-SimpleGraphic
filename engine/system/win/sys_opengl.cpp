@@ -7,7 +7,7 @@
 
 #include "sys_local.h"
 
-#include <gl/gl.h>
+#include <GL/gl.h>
 
 // =====================
 // sys_IOpenGL Interface
