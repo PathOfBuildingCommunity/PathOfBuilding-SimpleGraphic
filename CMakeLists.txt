@@ -92,6 +92,9 @@ set(sources
 
 include_directories(engine .)
 
+link_directories(_lib)
+link_libraries(jpeg-static libpng16_static tiff zlibstatic giflib5 lua51 opengl32 winmm)
+
 add_library(${PROJ} SHARED ${sources})
 
 set_target_properties(${PROJ} PROPERTIES
@@ -100,11 +103,4 @@ set_target_properties(${PROJ} PROPERTIES
 	LINK_SEARCH_END_STATIC 1
 )
 
-if(CMAKE_COMPILER_IS_GNUCC)
-	set(CMAKE_CXX_FLAGS_RELEASE "-ffunction-sections -fdata-sections -s ${CMAKE_CXX_FLAGS_RELEASE}")
-	set(CMAKE_SHARED_LINKER_FLAGS_RELEASE "-Wl,--gc-sections,--as-needed,--dynamicbase,--no-seh,--nxcompat ${CMAKE_SHARED_LINKER_FLAGS_RELEASE}")
 
-	set(CMAKE_CXX_FLAGS "-Wno-write-strings -static-libgcc -static-libstdc++ ${CMAKE_CXX_FLAGS}")
-endif()
-
-target_link_libraries(${PROJ} -Wl,-Bstatic tiff lzma z gif png jpeg -Wl,-Bdynamic luajit-5.1 winmm opengl32)
