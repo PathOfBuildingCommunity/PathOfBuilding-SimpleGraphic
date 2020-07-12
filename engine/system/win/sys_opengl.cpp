@@ -166,7 +166,7 @@ void sys_openGL_c::Swap()
 
 void* sys_openGL_c::GetProc(char* name)
 {
-	return (void*) wglGetProcAddress(name);
+	return wglGetProcAddress(name);
 }
 
 bool sys_openGL_c::CaptureSecondary()

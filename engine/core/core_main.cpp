@@ -27,8 +27,6 @@ public:
 	void	KeyEvent(int key, int type);
 	bool	CanExit();
 
-	int	SubScriptCount();
-
 	// Encapsulated
 	core_main_c(sys_IMain* sysHnd);
 
@@ -83,8 +81,7 @@ void core_main_c::Init(int argc, char** argv)
 
 void core_main_c::Frame()
 {
-	// causes a livelock?
-	// sys->con->Printf("Messages...\n");
+	sys->con->Printf("Messages...\n");
 
 	// Execute commands
 	sys->con->ExecCommands();
@@ -124,9 +121,4 @@ bool core_main_c::CanExit()
 	if ( !initialised ) return true;
 
 	return ui->CanExit();
-}
-
-int core_main_c::SubScriptCount()
-{
-	return ui->SubScriptCount();
 }

@@ -482,7 +482,7 @@ static int l_StripEscapes(lua_State* L)
 	}
 	*p = 0;
 	lua_pushstring(L, strip);
-	delete strip;
+	delete[] strip;
 	return 1;
 }
 

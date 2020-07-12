@@ -75,7 +75,7 @@ void ui_IMain::FreeHandle(ui_IMain* hnd)
 }
 
 ui_main_c::ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd)
-	: sys(sysHnd), cfg(cfgHnd)
+	: sys(sysHnd), cfg(cfgHnd), framesSinceWindowHidden(0)
 {
 }
 
@@ -106,12 +106,8 @@ void ui_main_c::LAssert(lua_State* L, int cond, const char* fmt, ...)
 				break;
 			case 't':
 				*p = 's';
-#if defined __MINGW32__
-				(void) va_arg(va, char*);
-#else
 				int* arg = &va_arg(va, int);
 				*(char**)arg = (char*)luaL_typename(L, *arg);
-#endif
 				break;
 			}
 		}
@@ -355,6 +351,17 @@ void ui_main_c::ScriptInit()
 
 void ui_main_c::Frame()
 {
+	if (!sys->video->IsVisible() || sys->conWin->IsVisible() || restartFlag || didExit) {
+		framesSinceWindowHidden = 0;
+	}
+	else if (framesSinceWindowHidden <= 10) {
+		framesSinceWindowHidden++;
+	}
+	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow()) {
+		sys->Sleep(100);
+		return;
+	}
+
 	sys->con->Printf("BeginFrame...\n");
 
 	// Prepare for rendering
@@ -545,16 +552,4 @@ int ui_main_c::KeyForName(const char* keyName)
 		}
 	}
 	return 0;
-}
-
-int ui_main_c::SubScriptCount()
-{
-	int ret = 0;
-
-	for (unsigned k = 0; k < subScriptSize; k++)
-	{
-		if (subScriptList[k])
-			ret++;
-	}
-	return ret;
 }

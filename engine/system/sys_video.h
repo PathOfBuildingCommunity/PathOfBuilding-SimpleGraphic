@@ -55,8 +55,10 @@ public:
 	virtual void	PosChanged(int x, int y) = 0; // Respond to window position change
 	virtual void	GetMinSize(int &width, int &height) = 0; // Get minimum window size
 	virtual void	SetVisible(bool vis) = 0;		// Show/hide window
+	virtual bool	IsVisible() = 0; // Get whether the window is shown
 	virtual void	SetTitle(const char* title) = 0;// Change window title
 	virtual void*	GetWindowHandle() = 0;			// Get window handle
 	virtual void	GetRelativeCursor(int &x, int &y) = 0; // Get cursor position relative to window
 	virtual void	SetRelativeCursor(int x, int y) = 0; // Set cursor position relative to window
+	virtual bool	IsCursorOverWindow() = 0; // Get whether the cursor is over the window, including obstructions
 };

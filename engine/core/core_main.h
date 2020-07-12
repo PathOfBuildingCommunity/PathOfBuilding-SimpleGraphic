@@ -19,7 +19,5 @@ public:
 	virtual void	Shutdown() = 0;
 	virtual void	KeyEvent(int key, int type) = 0;
 	virtual bool	CanExit() = 0;
-
-	virtual int	SubScriptCount() = 0;
 };
 

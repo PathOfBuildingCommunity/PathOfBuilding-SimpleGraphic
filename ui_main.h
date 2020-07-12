@@ -18,8 +18,6 @@ public:
 	void	KeyEvent(int key, int type);
 	bool	CanExit();
 
-	int	SubScriptCount();
-
 	// Encapsulated
 	ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd);
 
@@ -46,6 +44,7 @@ public:
 	bool	renderEnable;
 	int		cursorX;
 	int		cursorY;
+	int		framesSinceWindowHidden;
 	volatile bool	inLua;
 
 	static int InitAPI(lua_State* L);

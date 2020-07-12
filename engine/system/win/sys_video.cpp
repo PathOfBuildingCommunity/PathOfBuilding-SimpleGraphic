@@ -22,10 +22,12 @@ public:
 	void	PosChanged(int x, int y);
 	void	GetMinSize(int &width, int &height);
 	void	SetVisible(bool vis);
+	bool	IsVisible();
 	void	SetTitle(const char* title);
 	void*	GetWindowHandle();
 	void	GetRelativeCursor(int &x, int &y);
 	void	SetRelativeCursor(int x, int y);
+	bool	IsCursorOverWindow();
 
 	// Encapsulated
 	sys_video_c(sys_IMain* sysHnd);
@@ -80,7 +82,7 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	wndClass.lpszClassName	= CFG_TITLE " Class";
 	wndClass.hInstance		= sys->hinst;
 	wndClass.lpfnWndProc	= sys_main_c::WndProc;
-	wndClass.hbrBackground	= (HBRUSH)(COLOR_WINDOW + 1);
+	wndClass.hbrBackground	= CreateSolidBrush(CFG_SCON_WINBG);
 	wndClass.hIcon			= sys->icon;
 	wndClass.hCursor		= LoadCursor(NULL, IDC_ARROW);
 	wndClass.style			= CS_DBLCLKS;
@@ -101,7 +103,7 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	ShowWindow(hwnd, SW_HIDE);
 
 	// Process any messages generated during creation
-	sys->RunMessages(NULL, true);
+	sys->RunMessages();
 }
 
 sys_video_c::~sys_video_c()
@@ -262,7 +264,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 
 	// Process any messages generated during application
-	sys->RunMessages(NULL, true);
+	sys->RunMessages();
 
 	initialised = true;
 	return 0;
@@ -349,6 +351,12 @@ void sys_video_c::SetVisible(bool vis)
 	ShowWindow(hwnd, vis? SW_SHOW : SW_HIDE);
 }
 
+bool sys_video_c::IsVisible()
+{
+	if ( !initialised || !hwnd ) return false;
+	return IsWindowVisible(hwnd);
+}
+
 void sys_video_c::SetTitle(const char* title)
 {
 	SetWindowText(hwnd, (title && *title)? title : CFG_TITLE);
@@ -375,6 +383,20 @@ void sys_video_c::SetRelativeCursor(int x, int y)
 	POINT cp = {x, y};
 	ClientToScreen(hwnd, &cp);
 	SetCursorPos(cp.x, cp.y);
+}
+
+bool sys_video_c::IsCursorOverWindow()
+{
+	if (initialised && hwnd && IsWindowVisible(hwnd))
+	{
+		POINT mousePoint;
+		if (GetCursorPos(&mousePoint)) {
+			if (WindowFromPoint(mousePoint) != hwnd) {
+				return false;
+			}
+		}
+	}
+	return true;
 }
 
 BOOL __stdcall sys_video_c::MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT rect, LPARAM data)

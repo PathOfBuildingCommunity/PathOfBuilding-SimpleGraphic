@@ -24,6 +24,7 @@ class sys_console_c: public sys_IConsole, public conPrintHook_c, public thread_c
 public:
 	// Interface
 	void	SetVisible(bool show);
+	bool	IsVisible();
 	void	SetTitle(const char* title);
 
 	// Encapsulated
@@ -69,8 +70,7 @@ sys_console_c::sys_console_c(sys_IMain* sysHnd)
 	doRun = true;
 
 	ThreadStart(true);
-	while ( !isRunning )
-		Sleep(15);
+	while ( !isRunning );
 }
 
 void sys_console_c::ThreadProc()
@@ -132,17 +132,16 @@ void sys_console_c::ThreadProc()
 	bBackground = CreateSolidBrush(CFG_SCON_TEXTBG);
 
 	// Flush any messages created
-	sys->RunMessages(NULL, true);
+	sys->RunMessages();
 
 	shown = true;
 
 	InstallPrintHook();
 	
 	isRunning = true;
-
 	while (doRun) {
-		sys->RunMessages(NULL, false, 100);
-		//sys->Sleep(1);
+		sys->RunMessages(hwMain);
+		sys->Sleep(1);
 	}
 
 	RemovePrintHook();
@@ -161,8 +160,7 @@ void sys_console_c::ThreadProc()
 sys_console_c::~sys_console_c()
 {
 	doRun = false;
-	while (isRunning)
-		Sleep(15);
+	while (isRunning);
 }
 
 // ========================
@@ -214,7 +212,7 @@ void sys_console_c::SetVisible(bool show)
 			Print(buffer);
 			delete buffer;
 	
-			sys->RunMessages(NULL, true);
+			sys->RunMessages(hwMain);
 		}
 	} else {
 		shown = false;
@@ -222,6 +220,11 @@ void sys_console_c::SetVisible(bool show)
 		// Hide the window
 		ShowWindow(hwMain, SW_HIDE);
 	}
+}
+
+bool sys_console_c::IsVisible()
+{
+	return IsWindowVisible(hwMain);
 }
 
 void sys_console_c::SetTitle(const char* title)
@@ -272,7 +275,7 @@ void sys_console_c::Print(const char* text)
 	Edit_SetSel(hwOut, Edit_GetTextLength(hwOut), -1);
 	Edit_ReplaceSel(hwOut, winText);
 	Edit_Scroll(hwOut, 0xFFFF, 0);
-	sys->RunMessages(NULL, true);
+	sys->RunMessages(hwMain);
 	delete winText;
 }
 
