@@ -209,9 +209,9 @@ void t_manager_c::ThreadProc()
 
 class t_sampleDim_c {
 public:
-	int		max;
-	int		i1, i2;
-	double	w1, w2;
+	int		max = 0;
+	int		i1 = 0, i2 = 0;
+	double	w1 = 0.0, w2 = 0.0;
 
 	t_sampleDim_c(int imax)
 	{

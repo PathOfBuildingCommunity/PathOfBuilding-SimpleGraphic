@@ -313,7 +313,7 @@ bool targa_c::Save(char* fileName)
 			}
 			line.MemOutput(&out);
 		}
-		delete packet;
+		delete[] packet;
 	} else {
 		// Raw
 		for (int y = height - 1; y >= 0; y--) {
@@ -382,8 +382,8 @@ struct jpegError_s: public jpeg_error_mgr {
 // JPEG Reading
 
 struct jpegRead_s: public jpeg_source_mgr {
-	ioStream_c* in;
-	byte buffer[1024];
+	ioStream_c* in = nullptr;
+	byte buffer[1024] = {};
 	jpegRead_s(ioStream_c* in)
 		: in(in)
 	{
@@ -486,7 +486,7 @@ bool jpeg_c::Load(char* fileName)
 	} 
 	catch (...) {
 	}
-	delete rows;
+	delete[] rows;
 
 	jpeg_destroy_decompress(&jdecomp);
 	return false;
@@ -495,8 +495,8 @@ bool jpeg_c::Load(char* fileName)
 // JPEG Writing
 
 struct jpegWrite_s: public jpeg_destination_mgr {
-	ioStream_c* out;
-	byte buffer[1024];
+	ioStream_c* out = nullptr;
+	byte buffer[1024] = {};
 	jpegWrite_s(ioStream_c* out)
 		: out(out)
 	{
@@ -580,7 +580,7 @@ bool jpeg_c::Save(char* fileName)
 	catch (...) {
 		dst.Term(&jcomp);
 	}
-	delete rows;
+	delete[] rows;
 
 	jpeg_destroy_compress(&jcomp);
 	return false;
@@ -907,7 +907,7 @@ bool png_c::Save(char* fileName)
 	}
 	png_set_rows(png, pnginfo, rows);
 	png_write_png(png, pnginfo, PNG_TRANSFORM_IDENTITY, NULL);
-	delete rows;
+	delete[] rows;
 
 	png_destroy_write_struct(&png, &pnginfo);
 	return false;
@@ -1113,7 +1113,7 @@ bool blp_c::Load(char* fileName)
 
 	// Read image
 	int isize = 0;
-	int numMip;
+	int numMip = 0;
 	for (int c = 0; c < 16; c++) {
 		if (mip.size[c] == 0) {
 			numMip = c;

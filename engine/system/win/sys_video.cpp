@@ -33,30 +33,30 @@ public:
 	sys_video_c(sys_IMain* sysHnd);
 	~sys_video_c();
 
-	sys_main_c* sys;
+	sys_main_c* sys = nullptr;
 
-	bool	initialised;
-	HWND	hwnd;			// Window handle
+	bool	initialised = false;
+	HWND	hwnd = nullptr;			// Window handle
 
 	static BOOL __stdcall MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT rect, LPARAM data);
 	bool	AddMonitor(HMONITOR hMonitor);
 	void	RefreshMonitorInfo();
 
-	int		numMon;			// Number of monitors
-	int		priMon;			// Index of primary monitor
+	int		numMon = 0;			// Number of monitors
+	int		priMon = 0;			// Index of primary monitor
 	struct {
-		HMONITOR hnd;
-		int		left;
-		int		top;
-		int		width;
-		int		height;
-		char	devName[CCHDEVICENAME];
-	} mon[16];				// Array of monitor specs
+		HMONITOR hnd = nullptr;
+		int		left = 0;
+		int		top = 0;
+		int		width = 0;
+		int		height = 0;
+		char	devName[CCHDEVICENAME] = {};
+	} mon[16];					// Array of monitor specs
 
-	int		defRes[2];		// Default resolution
-	sys_vidSet_s cur;		// Current settings
-	int		scrSize[2];		// Screen size
-	int		minSize[2];		// Minimum window size
+	int		defRes[2] = {};		// Default resolution
+	sys_vidSet_s cur;			// Current settings
+	int		scrSize[2] = {};	// Screen size
+	int		minSize[2] = {};	// Minimum window size
 };
 
 sys_IVideo* sys_IVideo::GetHandle(sys_IMain* sysHnd)

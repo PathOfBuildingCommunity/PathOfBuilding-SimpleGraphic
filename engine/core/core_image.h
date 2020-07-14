@@ -33,11 +33,11 @@ struct imageInfo_s {
 // Image
 class image_c {
 public:
-	byte*	dat;
-	dword	width;
-	dword	height;
-	int		comp;
-	int		type;
+	byte*	dat = nullptr;
+	dword	width = 0;
+	dword	height = 0;
+	int		comp = 0;
+	int		type = 0;
 
 	image_c(IConsole* conHnd = NULL);
 	~image_c();

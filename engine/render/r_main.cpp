@@ -424,7 +424,7 @@ void r_renderer_c::EndFrame()
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l]->Render();
 	}
-	delete layerSort;
+	delete[] layerSort;
 
 	glFlush();
 
@@ -744,7 +744,7 @@ void r_renderer_c::DoScreenshot(image_c* i, char* ext)
 	for (int y = 0; y < ys; y++, p1+= span, p2-= span) {
 		memcpy(p2, p1, span);
 	}
-	delete sbuf;
+	delete[] sbuf;
 
 	// Set image info
 	i->dat = ss;

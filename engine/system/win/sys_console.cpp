@@ -31,13 +31,13 @@ public:
 	sys_console_c(sys_IMain* sysHnd);
 	~sys_console_c();
 
-	sys_main_c* sys;
+	sys_main_c* sys = nullptr;
 
-	bool	shown;		// Is currently shown?
-	HWND	hwMain;		// Main window
-	HWND	hwOut;		// Output
-	HFONT	font;		// Font handle
-	HBRUSH	bBackground;// Background brush
+	bool	shown = false;			// Is currently shown?
+	HWND	hwMain = nullptr;		// Main window
+	HWND	hwOut = nullptr;		// Output
+	HFONT	font = nullptr;			// Font handle
+	HBRUSH	bBackground = nullptr;	// Background brush
 
 	static LRESULT __stdcall WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 

@@ -27,11 +27,11 @@ public:
 	// Encapsulated
 	ui_console_c(ui_main_c* ui);
 
-	ui_main_c* ui;
-	sys_IMain* sys;
-	r_IRenderer* renderer;
+	ui_main_c* ui = nullptr;
+	sys_IMain* sys = nullptr;
+	r_IRenderer* renderer = nullptr;
 
-	conVar_c* con_fontSize;
+	conVar_c* con_fontSize = nullptr;
 
 	enum {	
 		MODE_UP,		// Up (hidden)
@@ -39,10 +39,10 @@ public:
 		MODE_DOWN,		// Down (shown)
 		MODE_MV_UP		// Moving up
 	} mode;
-	int		moveStart;
+	int		moveStart = 0;
 
-	char	input[1024];
-	int		caret;
+	char	input[1024] = {};
+	int		caret = 0;
 	void	SetConInput(char* newInput, int newCaret);
 };
 

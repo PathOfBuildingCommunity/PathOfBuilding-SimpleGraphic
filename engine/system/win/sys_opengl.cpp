@@ -32,13 +32,13 @@ public:
 
 	sys_main_c* sys;
 
-	PFNWGLGETEXTENSIONSTRINGEXTPROC wglGetExtensionsStringEXT;
-	PFNWGLSWAPINTERVALEXTPROC		wglSwapIntervalEXT;
+	PFNWGLGETEXTENSIONSTRINGEXTPROC wglGetExtensionsStringEXT = nullptr;
+	PFNWGLSWAPINTERVALEXTPROC		wglSwapIntervalEXT = nullptr;
 
-	HDC		hdc;				// Device contexts
-	HDC		hdc2;
-	HGLRC	hglrc;				// Rendering contexts
-	HGLRC	hglrc2;
+	HDC		hdc = nullptr;				// Device contexts
+	HDC		hdc2 = nullptr;
+	HGLRC	hglrc = nullptr;			// Rendering contexts
+	HGLRC	hglrc2 = nullptr;
 };
 
 sys_IOpenGL* sys_IOpenGL::GetHandle(sys_IMain* sysHnd)

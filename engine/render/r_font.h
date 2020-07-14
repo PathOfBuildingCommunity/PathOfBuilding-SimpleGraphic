@@ -25,9 +25,9 @@ private:
 	const char*	StringCursorInternal(struct f_fontHeight_s* fh, const char* str, int curX);
 	void	DrawTextLine(scp_t pos, int align, int height, col4_t col, const char* str);
 
-	class r_renderer_c* renderer;
-	int		numFontHeight;
-	struct f_fontHeight_s* fontHeights[32];
-	int		maxHeight;
-	int*	fontHeightMap;
+	class r_renderer_c* renderer = nullptr;
+	int		numFontHeight = 0;
+	struct f_fontHeight_s *fontHeights[32] = {};
+	int		maxHeight = 0;
+	int*	fontHeightMap = nullptr;
 };
