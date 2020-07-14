@@ -44,14 +44,14 @@ public:
 
 	IConsole* con;
 
-	virtual bool Load(char* fileName);
-	virtual bool Save(char* fileName);
-	virtual bool ImageInfo(char* fileName, imageInfo_s* info);
+	virtual bool Load(const char* fileName);
+	virtual bool Save(const char* fileName);
+	virtual bool ImageInfo(const char* fileName, imageInfo_s* info);
 
 	void CopyRaw(int type, dword width, dword height, const byte* dat);
 	void Free();
 
-	static image_c* LoaderForFile(IConsole* conHnd, char* fileName);
+	static image_c* LoaderForFile(IConsole* conHnd, const char* fileName);
 };
 
 // Targa Image
@@ -59,9 +59,9 @@ class targa_c: public image_c {
 public:
 	bool	rle;
 	targa_c(IConsole* conHnd): image_c(conHnd) { rle = true; }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // JPEG Image
@@ -69,43 +69,43 @@ class jpeg_c: public image_c {
 public:
 	int		quality;
 	jpeg_c(IConsole* conHnd): image_c(conHnd) { quality = 80; }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // TIFF Image
 class tiff_c: public image_c {
 public:
 	tiff_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // PNG Image
 class png_c: public image_c {
 public:
 	png_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // GIF Image
 class gif_c: public image_c {
 public:
 	gif_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // BLP Image
 class blp_c: public image_c {
 public:
 	blp_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(char* fileName);
-	bool	Save(char* fileName);
-	bool	ImageInfo(char* fileName, imageInfo_s* info);
+	bool	Load(const char* fileName) override;
+	bool	Save(const char* fileName) override;
+	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };

@@ -362,7 +362,7 @@ void ui_main_c::Frame()
 		return;
 	}
 
-	sys->con->Printf("BeginFrame...\n");
+	//sys->con->Printf("BeginFrame...\n");
 
 	// Prepare for rendering
 	renderer->BeginFrame();
@@ -382,7 +382,7 @@ void ui_main_c::Frame()
 	}
 
 	// Run script
-	sys->con->Printf("OnFrame...\n");
+	//sys->con->Printf("OnFrame...\n");
 	int extraArgs = PushCallback("OnFrame");
 	if (extraArgs >= 0) {
 		PCall(extraArgs, 0);
@@ -391,15 +391,15 @@ void ui_main_c::Frame()
 	renderEnable = false;
 
 	// Render console
-	sys->con->Printf("Render console...\n");
+	//sys->con->Printf("Render console...\n");
 	renderer->SetDrawLayer(10000);
 	conUI->Render();
 
 	// Finish up
-	sys->con->Printf("EndFrame...\n");
+	//sys->con->Printf("EndFrame...\n");
 	renderer->EndFrame();
 
-	sys->con->Printf("Finishing up...\n");
+	//sys->con->Printf("Finishing up...\n");
 	if ( !sys->video->IsActive() ) {
 		sys->Sleep(100);
 	}

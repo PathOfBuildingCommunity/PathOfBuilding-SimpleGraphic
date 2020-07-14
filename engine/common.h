@@ -15,6 +15,7 @@
 #include <math.h>
 #include <io.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #ifdef _DEBUG
 #include "common/memtrak3.h"

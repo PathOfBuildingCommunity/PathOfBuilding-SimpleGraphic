@@ -57,7 +57,7 @@ public:
 	void	BeginFrame();
 	void	EndFrame();
 	
-	r_shaderHnd_c* RegisterShader(char* shname, int flags);
+	r_shaderHnd_c* RegisterShader(const char* shname, int flags);
 	r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags);
 	void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height);
 	void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri);
@@ -121,7 +121,7 @@ public:
 	struct r_layerCmd_s** layerCmdBin = nullptr;
 
 	int		takeScreenshot = 0;
-	void	DoScreenshot(image_c* i, char* ext);
+	void	DoScreenshot(image_c* i, const char* ext);
 
 	void	C_Screenshot(IConsole* conHnd, args_c &args);
 };

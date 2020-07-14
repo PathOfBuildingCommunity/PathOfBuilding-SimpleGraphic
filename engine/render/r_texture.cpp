@@ -4,6 +4,9 @@
 // Module: Render Texture
 //
 
+#include <mutex>
+#include <vector>
+#include <atomic>
 #include "r_local.h"
 
 // ===================
@@ -39,8 +42,8 @@ static const byte t_defaultTexture[64] = {
 class t_manager_c: public r_ITexManager, public thread_c {
 public:
 	// Interface
-	int		GetAsyncCount();
-	bool	GetImageInfo(char* fileName, imageInfo_s* info);
+	int		GetAsyncCount() override;
+	bool	GetImageInfo(const char* fileName, imageInfo_s* info) override;
 
 	// Encapsulated
 	t_manager_c(r_renderer_c* renderer);
@@ -54,12 +57,11 @@ public:
 	bool	AsyncRemove(r_tex_c* tex);
 
 private:
-	volatile bool	doRun;
-	volatile bool	isRunning;
-	volatile bool	doLock;
-	volatile bool	isLocked;
-	volatile int	isWorking;
-	r_tex_c* queue[1024];
+	std::atomic<bool> doRun;
+	std::atomic<bool> isRunning;
+
+	std::vector<r_tex_c *> textureQueue;
+	std::mutex mutex;
 
 	void	ThreadProc();
 };
@@ -81,24 +83,22 @@ t_manager_c::t_manager_c(r_renderer_c* renderer)
 
 	doRun = true;
 	isRunning = false;
-	doLock = false;
-	isLocked = false;
-	isWorking = -1;
-	memset(queue, 0, sizeof(queue));
 	ThreadStart();
-	while ( !isRunning );
+	while (!isRunning) {
+		renderer->sys->Sleep( 1 );
+	}
 }
 
 t_manager_c::~t_manager_c()
 {
 	doRun = false;
-	while (isRunning);
-	for (int i = 0; i < 1024; i++) {
-		if (queue[i]) {
-			delete queue[i];
-		}
+	while (isRunning) {
+		renderer->sys->Sleep( 1 );
 	}
-
+	for (auto tex : textureQueue)
+	{
+		delete tex;
+	}
 	delete whiteTex;
 }
 
@@ -108,14 +108,11 @@ t_manager_c::~t_manager_c()
 
 int t_manager_c::GetAsyncCount()
 {
-	int c = 0;
-	for (int i = 0; i < 1024; i++) {
-		if (queue[i]) c++;
-	}
-	return c;
+	std::lock_guard<std::mutex> lock ( mutex );
+	return textureQueue.size();
 }
 
-bool t_manager_c::GetImageInfo(char* fileName, imageInfo_s* info)
+bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
 {
 	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName);
 	if (img) {
@@ -128,38 +125,34 @@ bool t_manager_c::GetImageInfo(char* fileName, imageInfo_s* info)
 
 bool t_manager_c::AsyncAdd(r_tex_c* tex)
 {
+	std::lock_guard<std::mutex> lock( mutex );
 	if ( !isRunning ) {
 		return true;
 	}
-	for (int i = 0; i < 1024; i++) {
-		if ( !queue[i] ) {
-			// Place in queue
-			tex->loading = i;
-			queue[i] = tex;
-			return false;
-		}
-	}
-	return true;
+	textureQueue.push_back( tex );
+	tex->status = r_tex_c::IN_QUEUE;
+	return false;
 }
 
 bool t_manager_c::AsyncRemove(r_tex_c* tex)
 {
-	doLock = true;
-	while ( !isLocked && isWorking == -1 );
-	// Thread is now either locked or loading something
-	// If it somehow finishes before the next check it will just lock anyway
-	if (isWorking == tex->loading || tex->loading == -1) {
-		// Texture is either being loaded or has already been loaded
-		// If it is being loaded now then it cannot be removed yet
-		doLock = false;
-		return tex->loading >= 0;
+	{
+		std::lock_guard<std::mutex> lock( mutex );
+		if (tex->status == r_tex_c::IN_QUEUE) {
+			for (auto itr = textureQueue.begin(); itr != textureQueue.end(); ++itr) {
+				if (*itr == tex) {
+					textureQueue.erase( itr );
+					tex->status = r_tex_c::INIT;
+					return false;
+				}
+			}
+		}
 	}
-	// Thread is now either locked or loading another texture
-	// So it is safe to remove this one and release the lock
-	queue[tex->loading] = NULL;
-	tex->loading = -1;
-	doLock = false;
-	return false;
+	while (tex->status == r_tex_c::PROCESSING) {
+		renderer->sys->Sleep( 1 );
+	}
+	
+	return true;
 }
 
 void t_manager_c::ThreadProc()
@@ -167,33 +160,32 @@ void t_manager_c::ThreadProc()
 	renderer->openGL->CaptureSecondary();
 	isRunning = true;
 	while (doRun) {
-		if (doLock) {
-			// Lock!
-			isLocked = true;
-			while (doLock);
-			isLocked = false;
-		}
+		r_tex_c *doTex = nullptr;
+		{
+			std::lock_guard<std::mutex> lock( mutex );
 
-		// Find a texture with the highest loading priority
-		int maxPri = 0;
-		int doNum = -1;
-		for (int i = 0; i < 1024; i++) {
-			if (queue[i]) {
-				if (queue[i]->loadPri > maxPri) {
-					maxPri = queue[i]->loadPri;
-					doNum = i;
-				} else if (queue[i]->loadPri >= maxPri && doNum == -1) {
-					doNum = i;
+			// Find a texture with the highest loading priority
+			int maxPri = 0;
+			auto doTexItr = textureQueue.end();
+			for (auto curTexItr = textureQueue.begin(); curTexItr != textureQueue.end(); ++curTexItr) {
+				auto curTex = *curTexItr;
+				if (doTexItr == textureQueue.end() || curTex->loadPri > maxPri) {
+					maxPri = curTex->loadPri;
+					doTexItr = curTexItr;
 				}
+			}
+
+			if (doTexItr != textureQueue.end()) {
+				doTex = *doTexItr;
+				textureQueue.erase(doTexItr);
+				doTex->status = r_tex_c::PROCESSING;
 			}
 		}
 	
-		if (doNum > -1) {
+		if (doTex != nullptr) {
 			// Load this texture
-			isWorking = doNum;
-			queue[doNum]->LoadFile();
-			queue[doNum] = NULL;
-			isWorking = -1;
+			doTex->LoadFile();
+			doTex = nullptr;
 		} else {
 			// Idle
 			renderer->sys->Sleep(1);
@@ -266,12 +258,12 @@ static void T_ResampleImage(byte* in, dword in_w, dword in_h, int in_comp, byte*
 // OpenGL Texture Class
 // ====================
 
-r_tex_c::r_tex_c(r_ITexManager* manager, char* fileName, int flags)
+r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
 {
 	Init(manager, fileName, flags);
 
 	StartLoad();
-	if (loading == -1) {
+	if (status == INIT) {
 		// Load it now
 		LoadFile();
 	}
@@ -287,11 +279,9 @@ r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
 
 r_tex_c::~r_tex_c()
 {
-	if (loading >= 0) { 
+	if (status == IN_QUEUE || status == PROCESSING) {
 		manager->AsyncRemove(this);
-		while (loading >= 0);
 	}
-	FreeString(fileName);
 	glDeleteTextures(1, &texId);
 }
 
@@ -312,16 +302,16 @@ int r_tex_c::GLTypeForImgType(int type)
 	return gt[type >> 4];
 }
 
-void r_tex_c::Init(r_ITexManager* i_manager, char* i_fileName, int i_flags)
+void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags)
 {
 	manager = (t_manager_c*)i_manager;
 	renderer = manager->renderer;
 	error = 0;
-	loading = -1;
+	status = INIT;
 	loadPri = 0;
 	texId = 0;
 	flags = i_flags;
-	fileName = AllocString(i_fileName);
+	fileName = i_fileName;
 	fileWidth = 0;
 	fileHeight = 0;
 }
@@ -354,26 +344,23 @@ void r_tex_c::Disable()
 
 void r_tex_c::StartLoad()
 {
-	if (flags & TF_ASYNC && loading == -1 && fileWidth == 0) {
+	if ((flags & TF_ASYNC) != 0 && status == INIT && fileWidth == 0) {
 		manager->AsyncAdd(this);
 	}
 }
 
 void r_tex_c::AbortLoad()
 {
-	if (loading >= 0) {
-		manager->AsyncRemove(this);
-	}
+	manager->AsyncRemove(this);
 }
 
 void r_tex_c::ForceLoad()
 {
-	if (loading >= 0) {
-		if ( !manager->AsyncRemove(this) ) {
-			// Successfully removed, load manually
-			flags&= ~TF_ASYNC;
-			LoadFile();
-		}
+	manager->AsyncRemove( this );
+
+	if (status == INIT) {
+		flags &= ~TF_ASYNC;
+		LoadFile();
 	} else if (fileWidth == 0) {
 		// Load not pending, do it now
 		LoadFile();
@@ -382,23 +369,23 @@ void r_tex_c::ForceLoad()
 
 void r_tex_c::LoadFile()
 {
-	if (_stricmp(fileName, "@white") == 0) {
+	if (_stricmp(fileName.c_str(), "@white") == 0) {
 		// Upload an 8x8 white image
 		image_c raw;
 		raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_whiteImage);
 		Upload(&raw, TF_NOMIPMAP);
-		loading = -1;
+		status = DONE;
 		return;
 	}
 
 	// Try to load image file using appropriate loader
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName);
+	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName.c_str() );
 	if (img) {
-		error = img->Load(fileName);
+		error = img->Load(fileName.c_str());
 		if ( !error ) {
 			Upload(img, flags);
 			delete img;
-			loading = -1;
+			status = DONE;
 			return;
 		}
 		delete img;
@@ -407,7 +394,7 @@ void r_tex_c::LoadFile()
 	image_c raw;
 	raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
 	Upload(&raw, TF_NOMIPMAP);
-	loading = -1;
+	status = DONE;
 }
 
 void r_tex_c::Upload(image_c* image, int flags)

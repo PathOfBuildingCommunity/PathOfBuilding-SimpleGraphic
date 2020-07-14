@@ -11,9 +11,6 @@
 #include "_lib/jpeglib.h"
 #include "_lib/tiffio.h"
 #include "_lib/png.h"
-#ifndef __bool_true_false_are_defined
-#define __bool_true_false_are_defined
-#endif
 #include "_lib/gif_lib.h"
 
 // =======
@@ -61,22 +58,22 @@ void image_c::Free()
 	dat = NULL;
 }
 
-bool image_c::Load(char* fileName) 
+bool image_c::Load(const char* fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::Save(char* fileName) 
+bool image_c::Save(const char* fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool image_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	return true; // o_O
 }
 
-image_c* image_c::LoaderForFile(IConsole* conHnd, char* fileName)
+image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 {
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
@@ -131,7 +128,7 @@ struct tgaHeader_s {
 };
 #pragma pack(pop)
 
-bool targa_c::Load(char* fileName)
+bool targa_c::Load(const char* fileName)
 {
 	Free();
 
@@ -214,7 +211,7 @@ bool targa_c::Load(char* fileName)
 	return false;
 }
 
-bool targa_c::Save(char* fileName)
+bool targa_c::Save(const char* fileName)
 {
 	// Find a suitable image type
 	int ittable[3][3] = {
@@ -324,7 +321,7 @@ bool targa_c::Save(char* fileName)
 	return false;
 }
 
-bool targa_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -432,7 +429,7 @@ struct jpegRead_s: public jpeg_source_mgr {
 	}
 };
 
-bool jpeg_c::Load(char* fileName)
+bool jpeg_c::Load(const char* fileName)
 {
 	Free();
 
@@ -525,7 +522,7 @@ struct jpegWrite_s: public jpeg_destination_mgr {
 	}
 };
 
-bool jpeg_c::Save(char* fileName)
+bool jpeg_c::Save(const char* fileName)
 {
 	// JPEG only supports RGB and grayscale images
 	if (type != IMGTYPE_RGB && type != IMGTYPE_GRAY) {
@@ -588,7 +585,7 @@ bool jpeg_c::Save(char* fileName)
 
 // JPEG Image Info
 
-bool jpeg_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -677,7 +674,7 @@ static toff_t ITIFF_SizeProc(thandle_t clientData)
 	return cd->io->GetLen();
 }
 
-bool tiff_c::Load(char* fileName)
+bool tiff_c::Load(const char* fileName)
 {
 	Free();
 
@@ -712,7 +709,7 @@ bool tiff_c::Load(char* fileName)
 	return ret;
 }
 
-bool tiff_c::Save(char* fileName)
+bool tiff_c::Save(const char* fileName)
 {
 	// Only save RGB or RGBA
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
@@ -753,7 +750,7 @@ bool tiff_c::Save(char* fileName)
 	return false;
 }
 
-bool tiff_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool tiff_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -804,7 +801,7 @@ static void IPNG_ReadProc(png_structp png, png_bytep data, png_size_t len)
 	}
 }
 
-bool png_c::Load(char* fileName)
+bool png_c::Load(const char* fileName)
 {
 	Free();
 
@@ -875,7 +872,7 @@ static void IPNG_FlushProc(png_structp png)
 	out->FileFlush();
 }
 
-bool png_c::Save(char* fileName)
+bool png_c::Save(const char* fileName)
 {
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
 		return true;
@@ -915,7 +912,7 @@ bool png_c::Save(char* fileName)
 
 // PNG Image Info
 
-bool png_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	// Open file and check signature
 	fileInputStream_c in;
@@ -973,7 +970,7 @@ static int IGIF_ReadProc(GifFileType* gif, GifByteType* buf, int len)
 	return len;
 }
 
-bool gif_c::Load(char* fileName)
+bool gif_c::Load(const char* fileName)
 {
 	// Open file
 	fileInputStream_c in;
@@ -1025,13 +1022,13 @@ bool gif_c::Load(char* fileName)
 	return false;
 }
 
-bool gif_c::Save(char* fileName)
+bool gif_c::Save(const char* fileName)
 {
 	// HELL no.
 	return true;
 }
 
-bool gif_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool gif_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	return true;
 }
@@ -1063,7 +1060,7 @@ struct blpMipmapHeader_s {
 };
 #pragma pack(pop)
 
-bool blp_c::Load(char* fileName)
+bool blp_c::Load(const char* fileName)
 {
 	Free();
 
@@ -1134,13 +1131,13 @@ bool blp_c::Load(char* fileName)
 	return false;
 }
 
-bool blp_c::Save(char* fileName)
+bool blp_c::Save(const char* fileName)
 {
 	// No.
 	return true;
 }
 
-bool blp_c::ImageInfo(char* fileName, imageInfo_s* info)
+bool blp_c::ImageInfo(const char* fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;

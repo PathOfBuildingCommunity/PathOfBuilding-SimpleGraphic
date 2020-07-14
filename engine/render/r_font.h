@@ -11,7 +11,7 @@
 // Font
 class r_font_c {
 public:
-	r_font_c(class r_renderer_c* renderer, char* fontName);
+	r_font_c(class r_renderer_c* renderer, const char* fontName);
 	~r_font_c();
 
 	int		StringWidth(int height, const char* str);

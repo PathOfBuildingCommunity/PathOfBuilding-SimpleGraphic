@@ -23,7 +23,7 @@ public:
 	bool	Shutdown();
 	void	Swap();
 
-	void*	GetProc(char* name);
+	void*	GetProc(const char* name);
 	bool	CaptureSecondary();
 	bool	ReleaseSecondary();
 
@@ -164,7 +164,7 @@ void sys_openGL_c::Swap()
 	SwapBuffers(hdc);
 }
 
-void* sys_openGL_c::GetProc(char* name)
+void* sys_openGL_c::GetProc(const char* name)
 {
 	return wglGetProcAddress(name);
 }

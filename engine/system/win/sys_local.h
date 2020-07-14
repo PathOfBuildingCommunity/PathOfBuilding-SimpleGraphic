@@ -34,7 +34,7 @@ public:
 	bool	SetWorkDir(const char* newCwd = NULL);
 	void	SpawnProcess(const char* cmdName, const char* argList);
 	void	OpenURL(const char* url);
-	void	Error(char* fmt, ...);
+	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
 	void	Restart();
 

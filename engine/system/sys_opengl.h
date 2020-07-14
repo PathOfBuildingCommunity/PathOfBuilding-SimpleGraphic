@@ -30,7 +30,7 @@ public:
 	virtual	bool	Shutdown() = 0;	// Shutdown
 	virtual	void	Swap() = 0; // Swap buffers
 
-	virtual void*	GetProc(char* name) = 0; // Get extension function address
+	virtual void*	GetProc(const char* name) = 0; // Get extension function address
 	virtual bool	CaptureSecondary() = 0; // Capture secondary context
 	virtual bool	ReleaseSecondary() = 0; // Release secondary content
 };

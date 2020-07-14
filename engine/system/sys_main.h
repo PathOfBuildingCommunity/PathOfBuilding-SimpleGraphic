@@ -77,7 +77,7 @@ public:
 	virtual bool	SetWorkDir(const char* newCwd = NULL) = 0;
 	virtual void	SpawnProcess(const char* cmdName, const char* argList) = 0;
 	virtual void	OpenURL(const char* url) = 0;
-	virtual void	Error(char* fmt, ...) = 0;
+	virtual void	Error(const char* fmt, ...) = 0;
 	virtual void	Exit(const char* msg = NULL) = 0;
 	virtual void	Restart() = 0;
 };
