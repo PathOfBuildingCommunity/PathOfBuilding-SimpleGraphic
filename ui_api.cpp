@@ -6,7 +6,7 @@
 
 #include "ui_local.h"
 
-#include "_lib\zlib.h"
+#include <zlib.h>
 
 /* OnFrame()
 ** OnChar("<char>")

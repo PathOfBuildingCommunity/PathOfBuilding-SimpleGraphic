@@ -8,10 +8,10 @@
 
 #include "core_image.h"
 
-#include "_lib/jpeglib.h"
-#include "_lib/tiffio.h"
-#include "_lib/png.h"
-#include "_lib/gif_lib.h"
+#include <jpeglib.h>
+#include <tiffio.h>
+#include <png.h>
+#include <gif_lib.h>
 
 // =======
 // Classes

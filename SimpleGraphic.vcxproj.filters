@@ -1,0 +1,178 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="UI">
+      <UniqueIdentifier>{a5dff788-b233-499b-9e81-9fd39c493de0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Win">
+      <UniqueIdentifier>{71122fe1-d7dd-4c44-a4f0-149e4c5ee8a4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{e44884bc-bdda-4d69-9f46-6eff5fcf8134}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Common">
+      <UniqueIdentifier>{25926adf-b288-4582-bb6a-1a8b2ce97756}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Core">
+      <UniqueIdentifier>{a8b5d6cd-7ecd-4ee5-8502-0bfc23dff6d5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\Render">
+      <UniqueIdentifier>{f10a3e32-3443-4814-95bf-158ba1986306}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engine\System">
+      <UniqueIdentifier>{887ce48e-d31e-4e4c-8172-61c124d26893}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="config.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_console.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_debug.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_local.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_main.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="ui_subscript.h">
+      <Filter>UI</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\common\console.h">
+      <Filter>Engine\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\common\keylist.h">
+      <Filter>Engine\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\common\memtrak3.h">
+      <Filter>Engine\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\common\streams.h">
+      <Filter>Engine\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\core_config.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\core_image.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\core_main.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\core\core_video.h">
+      <Filter>Engine\Core</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system\sys_console.h">
+      <Filter>Engine\System</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system\sys_main.h">
+      <Filter>Engine\System</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system\sys_opengl.h">
+      <Filter>Engine\System</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system\sys_video.h">
+      <Filter>Engine\System</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system\win\sys_local.h">
+      <Filter>Engine\System</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render\r_font.h">
+      <Filter>Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render\r_local.h">
+      <Filter>Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render\r_main.h">
+      <Filter>Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render\r_texture.h">
+      <Filter>Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\system.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\common.h">
+      <Filter>Engine</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ui_api.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_console.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_debug.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_main.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_subscript.cpp">
+      <Filter>UI</Filter>
+    </ClCompile>
+    <ClCompile Include="win\entry.cpp">
+      <Filter>Win</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\common\common.cpp">
+      <Filter>Engine\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\common\console.cpp">
+      <Filter>Engine\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\common\memtrak3.cpp">
+      <Filter>Engine\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\common\streams.cpp">
+      <Filter>Engine\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\core_config.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\core_image.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\core_main.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\core\core_video.cpp">
+      <Filter>Engine\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_console.cpp">
+      <Filter>Engine\System</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_main.cpp">
+      <Filter>Engine\System</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_opengl.cpp">
+      <Filter>Engine\System</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_video.cpp">
+      <Filter>Engine\System</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\render\r_font.cpp">
+      <Filter>Engine\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\render\r_main.cpp">
+      <Filter>Engine\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\render\r_texture.cpp">
+      <Filter>Engine\Render</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>
