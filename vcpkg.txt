@@ -1,4 +1,3 @@
-install
 giflib:x86-windows-static
 libjpeg-turbo:x86-windows-static
 liblzma:x86-windows-static
