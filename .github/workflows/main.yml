@@ -1,3 +1,4 @@
+name: Build DLL
 on:
         workflow_dispatch:
         
@@ -20,11 +21,11 @@ jobs:
                         vcpkgDirectory: # optional, default is ${{ github.workspace }}/vcpkg
                         # Specify entries to append to the .artifactignore file. This file specifies which directory to ignore or to include by the Cache task. For more info: https://docs.microsoft.com/en-us/azure/devops/artifacts/reference/artifactignore?view=azure-devops . The file is created if not already existing.
                         vcpkgArtifactIgnoreEntries: # optional, default is !.git
-                        **/*
-                        !installed
-                        !/vcpkg
-                        !vcpkg.exe
-                        !vcpkgArtifactIgnoreEntries
+                                **/*
+                                !installed
+                                !/vcpkg
+                                !vcpkg.exe
+                                !vcpkgArtifactIgnoreEntries
 
                         # Specify the URL Git repository to download vcpkg from. Defaults to https://github.com/microsoft/vcpkg.git
                         vcpkgGitURL: # optional, default is https://github.com/microsoft/vcpkg.git
