@@ -16,7 +16,7 @@ jobs:
                   - name: Setup MSBuild
                     uses: microsoft/setup-msbuild@v1.0.0
                   - name: Copy Dependencies
-                    run: 'cp ${{ github.workspace }}/vcpkg/packages ${{ github.workspace }}/dependencies'
+                    run: 'cp ${{ github.workspace }}/vcpkg/packages/* ${{ github.workspace }}/dependencies/'
                   - name: Build DLL
                     run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
                   - name: Archive DLL
