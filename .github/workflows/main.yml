@@ -6,6 +6,8 @@ jobs:
           steps:
                   - name: Checkout
                     uses: actions/checkout@v2
+                    with:
+                      submodules: 'recursive'
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
                     with:
