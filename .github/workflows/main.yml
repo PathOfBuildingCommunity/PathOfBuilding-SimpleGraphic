@@ -2,7 +2,7 @@ name: Build DLL
 on: push     
 jobs:
   build_dll:
-          runs-on: x86-windows
+          runs-on: windows-latest
           steps:
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
