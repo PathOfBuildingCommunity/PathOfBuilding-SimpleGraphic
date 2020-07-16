@@ -16,12 +16,10 @@ The following 3rd party libraries are required to build SimpleGraphics.dll. Usua
 ## Using vcpgk to install dependencies on Windows for building with Visual Studio
 
 vcpgk is an open-source tool by Microsoft which can easily download and build all of the required dependencies. This is the recommended method for retrieving the dependencies when building for Visual Studio.
-
-1) Clone the vcpgk git repository somewhere on your drive: https://github.com/microsoft/vcpkg.git
-2) Open a console window and change directory to the new vcpkg checkout  
-   * `cd C:\vcpkg`
+vcpkg is included as a submodule of this project, so installing it should be relatively simple
+1) 'cd vcpkgRun'
+2) Run 'git submodule update'
 3) Type the following commands:
    1) `bootstrap-vcpkg.bat`
-   2) `vcpkg install giflib:x86-windows-static libjpeg-turbo:x86-windows-static liblzma:x86-windows-static libpng:x86-windows-static luajit:x86-windows-static tiff:x86-windows-static zlib:x86-windows-static`
-4) Copy all folders in the `packages` folder into the `dependencies` folder within the SimpleGraphics checkout.
-5) The SimpleGraphics solution and vcproj are already configured to look in this location for the dependencies, so it should now build as-is.
+   2) `vcpkg install @../vcpkg.txt
+4) The SimpleGraphics solution and vcproj are already configured to look in this location for the dependencies, so it should now build as-is.
