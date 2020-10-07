@@ -33,6 +33,7 @@
 ** width, height = GetScreenSize()
 ** SetClearColor(red, green, blue[, alpha])
 ** SetDrawLayer({layer|nil}[, subLayer)
+** GetDrawLayer()
 ** SetViewport([x, y, width, height])
 ** SetDrawColor(red, green, blue[, alpha]) / SetDrawColor("<escapeStr>")
 ** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])
@@ -306,6 +307,13 @@ static int l_SetDrawLayer(lua_State* L)
 		ui->renderer->SetDrawLayer(lua_tointeger(L, 1));
 	}
 	return 0;
+}
+
+static int l_GetDrawLayer(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	lua_pushinteger(L, ui->renderer->GetDrawLayer());
+	return 1;
 }
 
 static int l_SetViewport(lua_State* L)
@@ -1175,6 +1183,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(GetScreenSize);
 	ADDFUNC(SetClearColor);
 	ADDFUNC(SetDrawLayer);
+	ADDFUNC(GetDrawLayer);
 	ADDFUNC(SetViewport);
 	ADDFUNC(SetDrawColor);
 	ADDFUNC(DrawImage);

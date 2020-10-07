@@ -69,6 +69,7 @@ public:
 	virtual void	SetClearColor(const col4_t col) = 0;
 	virtual void	SetDrawLayer(int layer, int subLayer = 0) = 0;
 	virtual void	SetDrawSubLayer(int subLayer) = 0;
+	virtual int		GetDrawLayer() = 0;
 	virtual void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0) = 0;
 	virtual void	DrawColor(const col4_t col = NULL) = 0;
 	virtual void	DrawColor(dword col) = 0;

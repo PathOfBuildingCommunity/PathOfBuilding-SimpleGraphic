@@ -60,6 +60,6 @@ public:
 	volatile bool	restartFlag = false;
 	char*	exitMsg = nullptr;
 	char*	threadError = nullptr;
-	bool	errorRaised = nullptr;
+	bool	errorRaised = false;
 	int		baseTime = 0;
 };
