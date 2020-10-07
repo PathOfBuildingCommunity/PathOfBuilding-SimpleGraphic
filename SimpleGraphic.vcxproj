@@ -112,14 +112,14 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)engine;$(SolutionDir)dependencies\giflib_x86-windows-static\include;$(SolutionDir)dependencies\libjpeg-turbo_x86-windows-static\include;$(SolutionDir)dependencies\liblzma_x86-windows-static\include;$(SolutionDir)dependencies\libpng_x86-windows-static\include;$(SolutionDir)dependencies\luajit_x86-windows-static\include;$(SolutionDir)dependencies\tiff_x86-windows-static\include;$(SolutionDir)dependencies\zlib_x86-windows-static\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)engine;$(SolutionDir)vcpkg\installed\x86-windows-static\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)dependencies\giflib_x86-windows-static\lib;$(SolutionDir)dependencies\libjpeg-turbo_x86-windows-static\lib;$(SolutionDir)dependencies\liblzma_x86-windows-static\lib;$(SolutionDir)dependencies\libpng_x86-windows-static\lib;$(SolutionDir)dependencies\luajit_x86-windows-static\lib;$(SolutionDir)dependencies\tiff_x86-windows-static\lib;$(SolutionDir)dependencies\zlib_x86-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vcpkg\installed\x86-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>gif.lib;jpeg.lib;lzma.lib;libpng16.lib;lua51.lib;tiff.lib;zlib.lib;opengl32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -134,7 +134,7 @@
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>
       </PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)engine;$(SolutionDir)dependencies\giflib_x86-windows-static\include;$(SolutionDir)dependencies\libjpeg-turbo_x86-windows-static\include;$(SolutionDir)dependencies\liblzma_x86-windows-static\include;$(SolutionDir)dependencies\libpng_x86-windows-static\include;$(SolutionDir)dependencies\luajit_x86-windows-static\include;$(SolutionDir)dependencies\tiff_x86-windows-static\include;$(SolutionDir)dependencies\zlib_x86-windows-static\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir);$(SolutionDir)engine;$(SolutionDir)vcpkg\installed\x86-windows-static\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996</DisableSpecificWarnings>
     </ClCompile>
     <Link>
@@ -143,7 +143,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableUAC>false</EnableUAC>
-      <AdditionalLibraryDirectories>$(SolutionDir)dependencies\giflib_x86-windows-static\lib;$(SolutionDir)dependencies\libjpeg-turbo_x86-windows-static\lib;$(SolutionDir)dependencies\liblzma_x86-windows-static\lib;$(SolutionDir)dependencies\libpng_x86-windows-static\lib;$(SolutionDir)dependencies\luajit_x86-windows-static\lib;$(SolutionDir)dependencies\tiff_x86-windows-static\lib;$(SolutionDir)dependencies\zlib_x86-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(SolutionDir)vcpkg\installed\x86-windows-static\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>gif.lib;jpeg.lib;lzma.lib;libpng16.lib;lua51.lib;tiff.lib;zlib.lib;opengl32.lib;winmm.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
