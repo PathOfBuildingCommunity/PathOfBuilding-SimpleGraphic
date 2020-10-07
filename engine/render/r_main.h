@@ -67,6 +67,7 @@ public:
 	void	SetClearColor(const col4_t col);
 	void	SetDrawLayer(int layer, int subLayer = 0);
 	void	SetDrawSubLayer(int subLayer);
+	int		GetDrawLayer();
 	void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0);
 	void	DrawColor(const col4_t col = NULL);
 	void	DrawColor(dword col);

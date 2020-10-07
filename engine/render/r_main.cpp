@@ -600,6 +600,11 @@ void r_renderer_c::SetDrawSubLayer(int subLayer)
 	SetDrawLayer(curLayer->layer, subLayer);
 }
 
+int r_renderer_c::GetDrawLayer()
+{
+	return curLayer->subLayer;
+}
+
 void r_renderer_c::SetViewport(int x, int y, int width, int height)
 {
 	if (height == 0) {
