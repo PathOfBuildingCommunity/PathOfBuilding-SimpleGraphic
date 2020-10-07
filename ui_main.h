@@ -21,31 +21,31 @@ public:
 	// Encapsulated
 	ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd);
 
-	sys_IMain* sys;
-	core_IConfig* cfg;
+	sys_IMain* sys = nullptr;
+	core_IConfig* cfg = nullptr;
 
-	r_IRenderer* renderer;
+	r_IRenderer* renderer = nullptr;
 
-	ui_IConsole* conUI;
-	ui_IDebug* debug;
+	ui_IConsole* conUI = nullptr;
+	ui_IDebug* debug = nullptr;
 
-	dword	subScriptSize;
-	ui_ISubScript** subScriptList;
+	dword	subScriptSize = 0;
+	ui_ISubScript** subScriptList = nullptr;
 
-	lua_State* L;
-	char*	scriptName;
-	char*	scriptCfg;
-	char*	scriptPath;
-	char*	scriptWorkDir;
-	int		scriptArgc;
-	char**	scriptArgv;
-	bool	restartFlag;
-	bool	didExit;
-	bool	renderEnable;
-	int		cursorX;
-	int		cursorY;
-	int		framesSinceWindowHidden;
-	volatile bool	inLua;
+	lua_State* L = nullptr;
+	char*	scriptName = nullptr;
+	char*	scriptCfg = nullptr;
+	char*	scriptPath = nullptr;
+	char*	scriptWorkDir = nullptr;
+	int		scriptArgc = 0;
+	char**	scriptArgv = nullptr;
+	bool	restartFlag = false;
+	bool	didExit = false;
+	bool	renderEnable = false;
+	int		cursorX = 0;
+	int		cursorY = 0;
+	int		framesSinceWindowHidden = 0;
+	volatile bool	inLua = false;
 
 	static int InitAPI(lua_State* L);
 

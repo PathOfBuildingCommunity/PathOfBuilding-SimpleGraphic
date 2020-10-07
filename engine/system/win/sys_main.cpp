@@ -660,7 +660,7 @@ void sys_main_c::PrintLastError(const char* msg)
 	con->Printf("%s: code %d, %s\n", msg, code, buf);
 }
 
-void sys_main_c::Error(char *fmt, ...)
+void sys_main_c::Error(const char *fmt, ...)
 {
 	if (errorRaised) return;
 	errorRaised = true;

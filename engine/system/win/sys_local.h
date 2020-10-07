@@ -34,7 +34,7 @@ public:
 	bool	SetWorkDir(const char* newCwd = NULL);
 	void	SpawnProcess(const char* cmdName, const char* argList);
 	void	OpenURL(const char* url);
-	void	Error(char* fmt, ...);
+	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
 	void	Restart();
 
@@ -50,16 +50,16 @@ public:
 	int		KeyToVirtual(byte key);
 	byte	VirtualToKey(int virt);
 
-	HINSTANCE hinst;
-	HICON	icon;
+	HINSTANCE hinst = nullptr;
+	HICON	icon = nullptr;
 
-	class core_IMain* core;
+	class core_IMain* core = nullptr;
 
-	bool	initialised;
-	volatile bool	exitFlag;
-	volatile bool	restartFlag;
-	char*	exitMsg;
-	char*	threadError;
-	bool	errorRaised;
-	int		baseTime;
+	bool	initialised = false;
+	volatile bool	exitFlag = false;
+	volatile bool	restartFlag = false;
+	char*	exitMsg = nullptr;
+	char*	threadError = nullptr;
+	bool	errorRaised = false;
+	int		baseTime = 0;
 };

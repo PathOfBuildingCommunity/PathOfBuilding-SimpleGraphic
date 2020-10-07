@@ -35,12 +35,12 @@ private:
 // File finder
 class find_c {
 public:
-	char	fileName[512];
-	bool	isDirectory;
-	dword	fileSize;
-	unsigned long long modified;
-	char	modifiedDate[256];
-	char	modifiedTime[256];
+	char	fileName[512] = {};
+	bool	isDirectory = false;
+	dword	fileSize = 0;
+	unsigned long long modified = 0;
+	char	modifiedDate[256] = {};
+	char	modifiedTime[256] = {};
 
 	find_c();
 	~find_c();
@@ -57,16 +57,16 @@ private:
 // System Main
 class sys_IMain {
 public:
-	IConsole* con;
-	sys_IConsole* conWin;
-	sys_IVideo* video;
+	IConsole* con = nullptr;
+	sys_IConsole* conWin = nullptr;
+	sys_IVideo* video = nullptr;
 
-	bool	x64;
-	bool	debug;
-	bool	debuggerRunning;
-	int		processorCount;
-	char	basePath[512];
-	char	userPath[512];
+	bool	x64 = false;
+	bool	debug = false;
+	bool	debuggerRunning = false;
+	int		processorCount = 0;
+	char	basePath[512] = {};
+	char	userPath[512] = {};
 
 	virtual int		GetTime() = 0;
 	virtual void	Sleep(int msec) = 0;
@@ -77,7 +77,7 @@ public:
 	virtual bool	SetWorkDir(const char* newCwd = NULL) = 0;
 	virtual void	SpawnProcess(const char* cmdName, const char* argList) = 0;
 	virtual void	OpenURL(const char* url) = 0;
-	virtual void	Error(char* fmt, ...) = 0;
+	virtual void	Error(const char* fmt, ...) = 0;
 	virtual void	Exit(const char* msg = NULL) = 0;
 	virtual void	Restart() = 0;
 };

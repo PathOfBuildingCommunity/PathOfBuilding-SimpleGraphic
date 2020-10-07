@@ -40,24 +40,24 @@ public:
 	ui_debug_c(ui_main_c* ui);
 	~ui_debug_c();
 
-	ui_main_c* ui;
+	ui_main_c* ui = nullptr;
 
-	volatile bool	doRun;
-	volatile bool	isRunning;
+	volatile bool	doRun = false;
+	volatile bool	isRunning = false;
 
-	volatile bool	profiling;
+	volatile bool	profiling = false;
 
-	volatile bool	hookHold;
-	volatile bool	hookHolding;
+	volatile bool	hookHold = false;
+	volatile bool	hookHolding = false;
 
-	volatile int	lineHitNum;
-	int		lineHitSz;
-	d_lineHit_s* lineHits;
+	volatile int	lineHitNum = 0;
+	int		lineHitSz = 0;
+	d_lineHit_s* lineHits = nullptr;
 
-	volatile int	callHitNum;
-	int		callHitSz;
-	int		callHitInitCount;
-	d_callHit_s* callHits;
+	volatile int	callHitNum = 0;
+	int		callHitSz = 0;
+	int		callHitInitCount = 0;
+	d_callHit_s* callHits = nullptr;
 
 	void	ThreadProc();
 };

@@ -26,9 +26,9 @@ struct ssTweenData_s {
 };
 
 struct ssCall_s {
-	ssCall_s* next;
-	const char* name;
-	ssTweenData_s* data;
+	ssCall_s* next = nullptr;
+	const char* name = nullptr;
+	ssTweenData_s* data = nullptr;
 };
 
 // =======================
@@ -47,17 +47,17 @@ public:
 	ui_subscript_c(ui_main_c* ui, dword id);
 	~ui_subscript_c();
 
-	ui_main_c* ui;
-	dword	id;
+	ui_main_c* ui = nullptr;
+	dword	id = 0;
 
-	lua_State* L;
-	bool	running;
-	bool	finished;
-	bool	subWriting;
-	ssCall_s* subCalls;
-	bool	funcWaiting;
+	lua_State* L = nullptr;
+	bool	running = false;
+	bool	finished = false;
+	bool	subWriting = false;
+	ssCall_s* subCalls = nullptr;
+	bool	funcWaiting = false;
 	ssCall_s funcCall;
-	char*	errorStr;
+	char*	errorStr = nullptr;
 
 	void	Stop();
 

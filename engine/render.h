@@ -59,7 +59,7 @@ public:
 	virtual void	BeginFrame() = 0;
 	virtual void	EndFrame() = 0;
 	
-	virtual r_shaderHnd_c* RegisterShader(char* name, int flags) = 0;
+	virtual r_shaderHnd_c* RegisterShader(const char* name, int flags) = 0;
 	virtual r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags) = 0;
 	virtual void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height) = 0;
 	virtual void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri) = 0;

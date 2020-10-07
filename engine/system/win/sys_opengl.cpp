@@ -23,7 +23,7 @@ public:
 	bool	Shutdown();
 	void	Swap();
 
-	void*	GetProc(char* name);
+	void*	GetProc(const char* name);
 	bool	CaptureSecondary();
 	bool	ReleaseSecondary();
 
@@ -32,13 +32,13 @@ public:
 
 	sys_main_c* sys;
 
-	PFNWGLGETEXTENSIONSTRINGEXTPROC wglGetExtensionsStringEXT;
-	PFNWGLSWAPINTERVALEXTPROC		wglSwapIntervalEXT;
+	PFNWGLGETEXTENSIONSTRINGEXTPROC wglGetExtensionsStringEXT = nullptr;
+	PFNWGLSWAPINTERVALEXTPROC		wglSwapIntervalEXT = nullptr;
 
-	HDC		hdc;				// Device contexts
-	HDC		hdc2;
-	HGLRC	hglrc;				// Rendering contexts
-	HGLRC	hglrc2;
+	HDC		hdc = nullptr;				// Device contexts
+	HDC		hdc2 = nullptr;
+	HGLRC	hglrc = nullptr;			// Rendering contexts
+	HGLRC	hglrc2 = nullptr;
 };
 
 sys_IOpenGL* sys_IOpenGL::GetHandle(sys_IMain* sysHnd)
@@ -164,7 +164,7 @@ void sys_openGL_c::Swap()
 	SwapBuffers(hdc);
 }
 
-void* sys_openGL_c::GetProc(char* name)
+void* sys_openGL_c::GetProc(const char* name)
 {
 	return wglGetProcAddress(name);
 }

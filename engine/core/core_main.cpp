@@ -30,13 +30,13 @@ public:
 	// Encapsulated
 	core_main_c(sys_IMain* sysHnd);
 
-	sys_IMain*		sys;
+	sys_IMain*		sys = nullptr;
 
-	core_IConfig*	config;
-	core_IVideo*	video;
-	ui_IMain*		ui;
+	core_IConfig*	config = nullptr;
+	core_IVideo*	video = nullptr;
+	ui_IMain*		ui = nullptr;
 
-	bool			initialised;
+	bool			initialised = false;
 };
 
 core_IMain* core_IMain::GetHandle(sys_IMain* sysHnd)

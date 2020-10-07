@@ -193,7 +193,7 @@ bool core_config_c::LoadConfig(const char* cfgName)
 		}
 	}
 
-	delete cfg;
+	delete[] cfg;
 	return false;
 }
 

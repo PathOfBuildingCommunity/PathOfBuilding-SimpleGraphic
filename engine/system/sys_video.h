@@ -19,19 +19,19 @@ enum vidFlags_e {
 
 // Saved video state structure
 struct sys_vidSave_s {
-	int		size[2];
-	int		pos[2];
-	bool	maximised;
+	int		size[2] = {};
+	int		pos[2] = {};
+	bool	maximised = false;
 };
 
 // Video settings structure
 struct sys_vidSet_s {
-	bool	shown;		// Show window?
-	int		flags;		// Flags
-	int		display;	// Display number
-	int		mode[2];	// Resolution or window size
-	int		depth;		// Bit depth
-	int		minSize[2];	// Minimum size for resizable windows
+	bool	shown = false;		// Show window?
+	int		flags = 0;		// Flags
+	int		display = 0;	// Display number
+	int		mode[2] = {};	// Resolution or window size
+	int		depth = 0;		// Bit depth
+	int		minSize[2] = {};	// Minimum size for resizable windows
 	sys_vidSave_s save; // Saved state
 };
 

@@ -33,7 +33,7 @@ struct f_fontHeight_s {
 // Font Loader
 // ===========
 
-r_font_c::r_font_c(r_renderer_c* renderer, char* fontName)
+r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	: renderer(renderer)
 {
 	numFontHeight = 0;

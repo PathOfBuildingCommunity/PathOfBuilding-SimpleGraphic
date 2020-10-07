@@ -57,7 +57,7 @@ public:
 	void	BeginFrame();
 	void	EndFrame();
 	
-	r_shaderHnd_c* RegisterShader(char* shname, int flags);
+	r_shaderHnd_c* RegisterShader(const char* shname, int flags);
 	r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags);
 	void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height);
 	void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri);
@@ -81,48 +81,48 @@ public:
 	// Encapsulated
 	r_renderer_c(sys_IMain* sysHnd);
 
-	sys_IMain* sys;
+	sys_IMain* sys = nullptr;
 
-	sys_IOpenGL* openGL;
+	sys_IOpenGL* openGL = nullptr;
 
-	r_ITexManager* texMan;	// Texture manager interface
+	r_ITexManager* texMan = nullptr;	// Texture manager interface
 
-	const char*	st_vendor;	// Vendor string
-	const char*	st_renderer;// Renderer string
-	const char*	st_ver;		// Version string
-	const char*	st_ext;		// Exntension string
+	const char*	st_vendor = nullptr;	// Vendor string
+	const char*	st_renderer = nullptr;	// Renderer string
+	const char*	st_ver = nullptr;		// Version string
+	const char*	st_ext = nullptr;		// Exntension string
 
-	bool	texNonPOT;		// Non power-of-2 textures supported?
-	dword	texMaxDim;		// Maximum texture dimension
+	bool	texNonPOT = false;			// Non power-of-2 textures supported?
+	dword	texMaxDim = 0;				// Maximum texture dimension
 
-	PFNGLCOMPRESSEDTEXIMAGE2DARBPROC	glCompressedTexImage2DARB;
+	PFNGLCOMPRESSEDTEXIMAGE2DARBPROC	glCompressedTexImage2DARB = nullptr;
 	
-	conVar_c*	r_compress;
-	conVar_c*	r_screenshotFormat;
-	conVar_c*	r_layerDebug;
+	conVar_c*	r_compress = nullptr;
+	conVar_c*	r_screenshotFormat = nullptr;
+	conVar_c*	r_layerDebug = nullptr;
 
-	r_shaderHnd_c* whiteImage;	// White image
+	r_shaderHnd_c* whiteImage = nullptr;	// White image
 
-	r_font_c* fonts[F_NUMFONTS]; // Font objects
+	r_font_c* fonts[F_NUMFONTS] = {}; // Font objects
 
-	col4_t	drawColor;		// Current draw color
+	col4_t	drawColor = {};		// Current draw color
 
 	r_viewport_s curViewport; // Current viewport
 
-	int		numShader;
-	class r_shader_c* shaderList[R_MAXSHADERS];
+	int		numShader = 0;
+	class r_shader_c *shaderList[R_MAXSHADERS] = {};
 
-	int		numLayer;
-	int		layerListSize;
-	r_layer_c** layerList;
-	r_layer_c* curLayer;
+	int		numLayer = 0;
+	int		layerListSize = 0;
+	r_layer_c** layerList = nullptr;
+	r_layer_c* curLayer = nullptr;
 
-	int		layerCmdBinCount;
-	int		layerCmdBinSize;
-	struct r_layerCmd_s** layerCmdBin;
+	int		layerCmdBinCount = 0;
+	int		layerCmdBinSize = 0;
+	struct r_layerCmd_s** layerCmdBin = nullptr;
 
-	int		takeScreenshot;
-	void	DoScreenshot(image_c* i, char* ext);
+	int		takeScreenshot = 0;
+	void	DoScreenshot(image_c* i, const char* ext);
 
 	void	C_Screenshot(IConsole* conHnd, args_c &args);
 };

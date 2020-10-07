@@ -30,12 +30,12 @@ public:
 	int			refCount;
 	r_tex_c*	tex;
 
-	r_shader_c(r_renderer_c* renderer, char* shname, int flags);
-	r_shader_c(r_renderer_c* renderer, char* shname, int flags, int width, int height, int type, byte* dat);
+	r_shader_c(r_renderer_c* renderer, const char* shname, int flags);
+	r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat);
 	~r_shader_c();
 };
 
-r_shader_c::r_shader_c(r_renderer_c* renderer, char* shname, int flags)
+r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags)
 	: renderer(renderer)
 {
 	name = AllocString(shname);
@@ -47,7 +47,7 @@ r_shader_c::r_shader_c(r_renderer_c* renderer, char* shname, int flags)
 	}
 }
 
-r_shader_c::r_shader_c(r_renderer_c* renderer, char* shname, int flags, int width, int height, int type, byte* dat)
+r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat)
 	: renderer(renderer)
 {
 	name = AllocString(shname);
@@ -424,7 +424,7 @@ void r_renderer_c::EndFrame()
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l]->Render();
 	}
-	delete layerSort;
+	delete[] layerSort;
 
 	glFlush();
 
@@ -475,14 +475,14 @@ void r_renderer_c::PurgeShaders()
 {
 	// Delete released shaders
 	for (int s = 0; s < numShader; s++) {
-		if (shaderList[s] && shaderList[s]->refCount == 0 && shaderList[s]->tex->loading == -1) {
+		if (shaderList[s] && shaderList[s]->refCount == 0 && shaderList[s]->tex->status == r_tex_c::DONE) {
 			delete shaderList[s];
 			shaderList[s] = NULL;
 		}
 	}
 }
 
-r_shaderHnd_c* r_renderer_c::RegisterShader(char* shname, int flags)
+r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
 {
 	if (*shname == 0) {
 		return NULL;
@@ -540,7 +540,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int t
 
 void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height)
 {
-	if (hnd && hnd->sh->tex->loading == -1) {
+	if (hnd && hnd->sh->tex->status == r_tex_c::DONE) {
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;
 	} else {
@@ -551,7 +551,7 @@ void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &heigh
 
 void r_renderer_c::SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri)
 {
-	if (hnd && hnd->sh->tex->loading >= 0) {
+	if (hnd && hnd->sh->tex->status != r_tex_c::DONE) {
 		hnd->sh->tex->loadPri = pri;
 	}
 }
@@ -728,7 +728,7 @@ void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c &args)
 	}
 }
 
-void r_renderer_c::DoScreenshot(image_c* i, char* ext)
+void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 {
 	int xs = sys->video->vid.size[0];
 	int ys = sys->video->vid.size[1];
@@ -749,7 +749,7 @@ void r_renderer_c::DoScreenshot(image_c* i, char* ext)
 	for (int y = 0; y < ys; y++, p1+= span, p2-= span) {
 		memcpy(p2, p1, span);
 	}
-	delete sbuf;
+	delete[] sbuf;
 
 	// Set image info
 	i->dat = ss;

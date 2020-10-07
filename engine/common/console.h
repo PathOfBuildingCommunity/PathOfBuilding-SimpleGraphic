@@ -40,16 +40,16 @@ enum conVarFlags_e {
 // Cvar
 class conVar_c {
 public:
-	char*	name;		// Cvar name
-	int		flags;		// Flags
-	bool	mod;		// Modified?
+	char*	name = nullptr;		// Cvar name
+	int		flags = 0;			// Flags
+	bool	mod = false;		// Modified?
 
-	int		intVal;		// Integer value
-	float	floatVal;	// Float value
-	char*	strVal;		// String value
+	int		intVal = 0;			// Integer value
+	float	floatVal = 0.f;		// Float value
+	char*	strVal = nullptr;	// String value
 
-	char*	defVal;		// Default string
-	int		min, max;	// Clamp limits
+	char*	defVal = nullptr;	// Default string
+	int		min = 0, max = 0;	// Clamp limits
 
 	conVar_c(IConsole* conHnd);
 	~conVar_c();
