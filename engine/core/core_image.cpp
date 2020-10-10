@@ -9,7 +9,6 @@
 #include "core_image.h"
 
 #include <jpeglib.h>
-#include <tiffio.h>
 #include <png.h>
 #include <gif_lib.h>
 
@@ -19,7 +18,7 @@
 
 #define BLP2_MAGIC	0x32504C42	// "BLP2"
 
-// Generic client data structure, used by JPEG, TIFF and PNG
+// Generic client data structure, used by JPEG and PNG
 struct clientData_s {
 	IConsole* con;
 	const char* fileName;
@@ -89,9 +88,6 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	if (dat[0] == 0xFF && dat[1] == 0xD8) {
 		// JPEG Start Of Image marker
 		return new jpeg_c(conHnd);
-	} else if (*(dword*)dat == 0x002A4949 || *(dword*)dat == 0x2A004D4D) {
-		// Little-endian / Big-endian marker + version
-		return new tiff_c(conHnd);
 	} else if (*(dword*)dat == 0x474E5089) {
 		// 0x89 P N G
 		return new png_c(conHnd);
@@ -622,163 +618,6 @@ bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 
 	jpeg_destroy_decompress(&jdecomp);
 	return (comp != 1 && comp != 3);
-}
-
-// ==========
-// TIFF Image
-// ==========
-
-static void ITIFF_ErrorProc(thandle_t clientData, const char* module, const char* fmt, va_list va)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	char text[1024];
-	vsprintf(text, fmt, va);
-	cd->con->Warning("TIFF '%s': Error in '%.20s%s': %s", cd->fileName, module, strlen(module)>20?"...":"", text);
-}
-
-static void ITIFF_WarningProc(thandle_t clientData, const char* module, const char* fmt, va_list va)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	char text[1024];
-	vsprintf(text, fmt, va);
-	cd->con->Warning("TIFF '%s': Warning in '%.20s%s': %s", cd->fileName, module, strlen(module)>20?"...":"", text);
-}
-
-static tsize_t ITIFF_ReadProc(thandle_t clientData, tdata_t data, tsize_t len)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	return cd->io->Read(data, len)? 0 : len;
-}
-
-static tsize_t ITIFF_WriteProc(thandle_t clientData, tdata_t data, tsize_t len)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	return cd->io->Write(data, len)? 0 : len;
-}
-
-static toff_t ITIFF_SeekProc(thandle_t clientData, toff_t pos, int mode)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	cd->io->Seek((size_t)pos, mode);
-	return cd->io->GetPos();
-}
-
-static int ITIFF_CloseProc(thandle_t clientData)
-{
-	return 0;
-}
-
-static toff_t ITIFF_SizeProc(thandle_t clientData)
-{
-	clientData_s* cd = (clientData_s*)clientData;
-	return cd->io->GetLen();
-}
-
-bool tiff_c::Load(const char* fileName)
-{
-	Free();
-
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Initialise TIFF
-	TIFFSetErrorHandler(NULL);
-	TIFFSetErrorHandlerExt(ITIFF_ErrorProc);
-	TIFFSetWarningHandler(NULL);
-	TIFFSetWarningHandlerExt(ITIFF_WarningProc);
-	clientData_s cd;
-	cd.con = con;
-	cd.fileName = fileName;
-	cd.io = &in;
-	TIFF* t = TIFFClientOpen(fileName, "r", &cd, ITIFF_ReadProc, ITIFF_WriteProc, ITIFF_SeekProc, ITIFF_CloseProc, ITIFF_SizeProc, NULL, NULL);
-	if ( !t ) {
-		return true;
-	}
-
-	// Get image info and read image
-	TIFFGetField(t, TIFFTAG_IMAGEWIDTH, &width);
-	TIFFGetField(t, TIFFTAG_IMAGELENGTH, &height);
-	dat = new byte[width * height * 4];
-	comp = 4;
-	type = IMGTYPE_RGBA;
-	bool ret = !TIFFReadRGBAImageOriented(t, width, height, (dword*)dat, ORIENTATION_TOPLEFT, 0);
-	TIFFClose(t);
-	return ret;
-}
-
-bool tiff_c::Save(const char* fileName)
-{
-	// Only save RGB or RGBA
-	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
-		return true;
-	}
-
-	// Open the file
-	fileOutputStream_c out;
-	if (out.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Initialise TIFF
-	TIFFSetErrorHandler(NULL);
-	TIFFSetErrorHandlerExt(ITIFF_ErrorProc);
-	TIFFSetWarningHandler(NULL);
-	TIFFSetWarningHandlerExt(ITIFF_WarningProc);
-	clientData_s cd;
-	cd.con = con;
-	cd.fileName = fileName;
-	cd.io = &out;
-	TIFF* t = TIFFClientOpen(fileName, "w", &cd, ITIFF_ReadProc, ITIFF_WriteProc, ITIFF_SeekProc, ITIFF_CloseProc, ITIFF_SizeProc, NULL, NULL);
-	if ( !t ) {
-		return true;
-	}
-
-	// Save image
-	TIFFSetField(t, TIFFTAG_IMAGEWIDTH, width);
-	TIFFSetField(t, TIFFTAG_BITSPERSAMPLE, 8);
-	TIFFSetField(t, TIFFTAG_SAMPLESPERPIXEL, comp);
-	TIFFSetField(t, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
-	TIFFSetField(t, TIFFTAG_COMPRESSION, COMPRESSION_LZW);
-	TIFFSetField(t, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
-	for (dword r = 0; r < height; r++) {
-		TIFFWriteScanline(t, dat + r*width*comp, r);
-	}
-	TIFFClose(t);
-	return false;
-}
-
-bool tiff_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Initialise TIFF
-	TIFFSetErrorHandler(NULL);
-	TIFFSetErrorHandlerExt(ITIFF_ErrorProc);
-	TIFFSetWarningHandler(NULL);
-	TIFFSetWarningHandlerExt(ITIFF_WarningProc);
-	clientData_s cd;
-	cd.con = con;
-	cd.fileName = fileName;
-	cd.io = &in;
-	TIFF* t = TIFFClientOpen(fileName, "r", &cd, ITIFF_ReadProc, ITIFF_WriteProc, ITIFF_SeekProc, ITIFF_CloseProc, ITIFF_SizeProc, NULL, NULL);
-	if ( !t ) {
-		return true;
-	}
-
-	// Get image info
-	TIFFGetField(t, TIFFTAG_IMAGEWIDTH, &info->width);
-	TIFFGetField(t, TIFFTAG_IMAGELENGTH, &info->height);
-	TIFFGetField(t, TIFFTAG_SAMPLESPERPIXEL, &info->comp);
-	info->alpha = info->comp == 4;
-	TIFFClose(t);
-	return false;
 }
 
 // =========

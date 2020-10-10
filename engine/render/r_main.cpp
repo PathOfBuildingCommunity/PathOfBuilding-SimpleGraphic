@@ -14,7 +14,6 @@ enum r_takeScreenshot_e {
 	R_SSNONE,
 	R_SSTGA,
 	R_SSJPEG,
-	R_SSTIFF,
 	R_SSPNG
 };
 
@@ -447,13 +446,6 @@ void r_renderer_c::EndFrame()
 			DoScreenshot(&i, "jpg");
 		}
 		break;
-	case R_SSTIFF:
-		{
-			tiff_c i(sys->con);
-			i.type = IMGTYPE_RGB;
-			DoScreenshot(&i, "tiff");
-		}
-		break;
 	case R_SSPNG:
 		{
 			png_c i(sys->con);
@@ -721,10 +713,8 @@ void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c &args)
 		takeScreenshot = R_SSJPEG;
 	} else if ( !_stricmp(fmtName, "png") ) {
 		takeScreenshot = R_SSPNG;
-	} else if ( !_stricmp(fmtName, "tiff") ) {
-		takeScreenshot = R_SSTIFF;
 	} else {
-		conHnd->Warning("Unknown screenshot format '%s', valid formats: jpg, tga, png, tiff", fmtName);
+		conHnd->Warning("Unknown screenshot format '%s', valid formats: jpg, tga, png", fmtName);
 	}
 }
 

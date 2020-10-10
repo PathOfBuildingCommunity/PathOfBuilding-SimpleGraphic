@@ -3,7 +3,7 @@
   <ItemGroup>
     <Filter Include="Resource Files">
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;png;wav;mfcribbon-ms</Extensions>
     </Filter>
     <Filter Include="UI">
       <UniqueIdentifier>{a5dff788-b233-499b-9e81-9fd39c493de0}</UniqueIdentifier>
