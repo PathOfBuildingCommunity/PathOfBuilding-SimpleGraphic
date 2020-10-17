@@ -14,7 +14,6 @@ PathOfBuildingCommunity org are as follows:
 * libjpeg-turbo 2.0.4
 * libpng 1.6.37-9
 * giflib 5.1.4-6
-* tiff 4.0.10-9
 * liblzma 5.2.4-5
 
 These libraries are also listed in vcpkg.txt

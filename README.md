@@ -42,3 +42,10 @@ to debug it, run `PathOfBuilding.exe` and then attach to that process using the
 
 If debugging of the initialization is desired, then adding a `MessageBox`
 or some other pause at the start will give you time to attach and continue.
+
+## Licence
+
+[MIT](https://opensource.org/licenses/MIT)
+
+For 3rd-party licences, see [LICENSE](LICENSE).
+The licencing information is considered to be part of the documentation.
