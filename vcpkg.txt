@@ -3,5 +3,4 @@ libjpeg-turbo:x86-windows-static
 liblzma:x86-windows-static
 libpng:x86-windows-static
 luajit:x86-windows-static
-tiff:x86-windows-static
 zlib:x86-windows-static

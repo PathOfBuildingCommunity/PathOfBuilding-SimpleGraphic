@@ -74,15 +74,6 @@ public:
 	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
-// TIFF Image
-class tiff_c: public image_c {
-public:
-	tiff_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
-};
-
 // PNG Image
 class png_c: public image_c {
 public:
