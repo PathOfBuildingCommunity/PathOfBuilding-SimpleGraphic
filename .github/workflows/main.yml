@@ -8,6 +8,9 @@ jobs:
                     uses: actions/checkout@v2
                     with:
                       submodules: 'recursive'
+                  - name: Build LuaJIT
+                    uses: ilammy/msvc-dev-cmd@v1
+                    working-directory: LuaJIT
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
                     with:

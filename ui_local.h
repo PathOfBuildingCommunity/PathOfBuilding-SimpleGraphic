@@ -12,10 +12,10 @@
 #include "ui.h"
 
 extern "C" {
-#include <luajit/lua.h>
-#include <luajit/lauxlib.h>
-#include <luajit/lualib.h>
-#include <luajit/luajit.h>
+#include <lua.h>
+#include <lauxlib.h>
+#include <lualib.h>
+#include <luajit.h>
 }
 
 #include "ui_console.h"
