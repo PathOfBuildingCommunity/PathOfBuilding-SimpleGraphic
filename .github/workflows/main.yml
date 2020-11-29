@@ -16,13 +16,13 @@ jobs:
                     run: '.\msvcbuild.bat'
                     working-directory: LuaJIT/src
                   - name: run-vcpkg
-                    uses: lukka/run-vcpkg@v3.2
+                    uses: lukka/run-vcpkg@v6.0
                     with:
                         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
                         vcpkgArguments: '@${{ github.workspace }}/vcpkg.txt'
                         cleanAfterBuild: false
                   - name: Setup MSBuild
-                    uses: microsoft/setup-msbuild@v1.0.0
+                    uses: microsoft/setup-msbuild@v1
                   - name: Check dependencies
                     run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static; ls ${{ github.workspace }}/LuaJIT/src/lua*'
                   - name: Build DLL
