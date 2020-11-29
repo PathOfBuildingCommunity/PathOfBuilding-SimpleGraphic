@@ -10,7 +10,8 @@ jobs:
                       submodules: 'recursive'
                   - name: Build LuaJIT
                     uses: ilammy/msvc-dev-cmd@v1
-                    working-directory: LuaJIT
+                    arch: 'x86'
+                    working-directory: LuaJIT/src
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
                     with:
@@ -20,7 +21,7 @@ jobs:
                   - name: Setup MSBuild
                     uses: microsoft/setup-msbuild@v1.0.0
                   - name: Check dependencies
-                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static'
+                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static; ls ${{ github.workspace }}/LuaJIT/src/lua*'
                   - name: Build DLL
                     run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
                   - name: Archive DLL
