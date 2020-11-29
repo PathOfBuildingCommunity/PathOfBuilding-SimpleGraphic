@@ -13,7 +13,7 @@ jobs:
                     with:
                         arch: 'x86'
                   - name: Build LuaJIT
-                    run: msvcbuild
+                    run: '.\msvcbuild.bat'
                     working-directory: LuaJIT/src
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
