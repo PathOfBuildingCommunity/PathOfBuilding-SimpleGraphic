@@ -10,7 +10,10 @@ jobs:
                       submodules: 'recursive'
                   - name: Build LuaJIT
                     uses: ilammy/msvc-dev-cmd@v1
-                    arch: 'x86'
+                    with:
+                        arch: 'x86'
+                  - name: Build LuaJIT
+                    run: msvcbuild
                     working-directory: LuaJIT/src
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v3.2
