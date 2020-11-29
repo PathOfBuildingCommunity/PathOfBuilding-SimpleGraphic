@@ -3,5 +3,5 @@
 	url = https://github.com/microsoft/vcpkg
 [submodule "LuaJIT"]
 	path = LuaJIT
-	url = https://luajit.org/git/luajit-2.0.git
+	url = https://github.com/LuaJIT/LuaJIT.git
 	branch = v2.1

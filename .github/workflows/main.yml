@@ -7,7 +7,7 @@ jobs:
                   - name: Checkout
                     uses: actions/checkout@v2
                     with:
-                      submodules: 'true'
+                      submodules: 'recursive'
                   - name: Setup Windows Dev env
                     uses: ilammy/msvc-dev-cmd@v1
                     with:
