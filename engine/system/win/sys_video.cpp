@@ -89,10 +89,9 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	if (RegisterClass(&wndClass) == 0) {
 		sys->Error("Unable to register main window class");
 	}
-
 	// Create the window
 	hwnd = CreateWindowEx(
-		0, CFG_TITLE " Class", CFG_TITLE, WS_POPUP | WS_VISIBLE,/* | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_SIZEBOX | WS_MAXIMIZEBOX, */
+		0, CFG_TITLE " Class", CFG_TITLE, WS_POPUP,/* | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_SIZEBOX | WS_MAXIMIZEBOX, */
 		0, 0, 500, 500,
 		NULL, NULL, sys->hinst, NULL
 	);
@@ -100,8 +99,6 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 		sys->Error("Unable to create window");
 	}
 	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)sys);
-	ShowWindow(hwnd, SW_HIDE);
-
 	// Process any messages generated during creation
 	sys->RunMessages();
 }
