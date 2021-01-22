@@ -7,7 +7,7 @@
 #include "common.h"
 #include "system.h"
 #include "render.h"
-#include "core/core_config.h"
+#include "core.h"
 
 #include "ui.h"
 

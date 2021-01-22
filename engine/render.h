@@ -33,6 +33,13 @@ enum r_texFlag_e {
 	TF_ASYNC	= 0x08	// Asynchronous loading
 };
 
+// Blend modes
+enum r_blendMode_e {
+	RB_ALPHA,
+	RB_PRE_ALPHA,
+	RB_ADDITIVE
+};
+
 // Shader handle
 class r_shaderHnd_c {
 	friend class r_renderer_c;
@@ -71,6 +78,7 @@ public:
 	virtual void	SetDrawSubLayer(int subLayer) = 0;
 	virtual int		GetDrawLayer() = 0;
 	virtual void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0) = 0;
+	virtual void	SetBlendMode(int mode) = 0;
 	virtual void	DrawColor(const col4_t col = NULL) = 0;
 	virtual void	DrawColor(dword col) = 0;
 	virtual void	DrawImage(r_shaderHnd_c* hnd, float x, float y, float w, float h, float s1 = 0.0f, float t1 = 0.0f, float s2 = 1.0f, float t2 = 1.0f) = 0;

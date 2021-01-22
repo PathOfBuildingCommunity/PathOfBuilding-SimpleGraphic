@@ -17,6 +17,7 @@ public:
 	int		Apply(sys_vidSet_s* set);
 
 	void	SetActive(bool active);
+	void	SetForeground();
 	bool	IsActive();
 	void	SizeChanged(int width, int height, bool max);
 	void	PosChanged(int x, int y);
@@ -57,6 +58,7 @@ public:
 	sys_vidSet_s cur;			// Current settings
 	int		scrSize[2] = {};	// Screen size
 	int		minSize[2] = {};	// Minimum window size
+	char	curTitle[512] = {};	// Window title
 };
 
 sys_IVideo* sys_IVideo::GetHandle(sys_IMain* sysHnd)
@@ -76,6 +78,8 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 
 	minSize[0] = minSize[1] = 0;
 
+	strcpy(curTitle, CFG_TITLE);
+
 	// Register the window class
 	WNDCLASS wndClass;
 	ZeroMemory(&wndClass, sizeof(WNDCLASS));
@@ -89,32 +93,22 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	if (RegisterClass(&wndClass) == 0) {
 		sys->Error("Unable to register main window class");
 	}
-	// Create the window
-	hwnd = CreateWindowEx(
-		0, CFG_TITLE " Class", CFG_TITLE, WS_POPUP,/* | WS_VISIBLE | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX | WS_SIZEBOX | WS_MAXIMIZEBOX, */
-		0, 0, 500, 500,
-		NULL, NULL, sys->hinst, NULL
-	);
-	if (hwnd == NULL) {
-		sys->Error("Unable to create window");
-	}
-	SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)sys);
-	// Process any messages generated during creation
-	sys->RunMessages();
 }
 
 sys_video_c::~sys_video_c()
 {
-	// Destroy the window
-	DestroyWindow(hwnd);
+	if (initialised) {
+		// Destroy the window
+		DestroyWindow(hwnd);
 	
-	// Unregister the window class
-	UnregisterClass(CFG_TITLE " Class", sys->hinst);
-
-	if (initialised && (cur.flags & VID_FULLSCREEN)) {
+		if (cur.flags & VID_FULLSCREEN) {
 		// Reset resolution
 		ChangeDisplaySettingsEx(mon[cur.display].devName, NULL, NULL, 0, NULL);
 	}
+}
+
+	// Unregister the window class
+	UnregisterClass(CFG_TITLE " Class", sys->hinst);
 }
 
 // ==================
@@ -181,9 +175,6 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 	int exStyle = (cur.flags & VID_TOPMOST)? WS_EX_TOPMOST : 0;
 
-	SetWindowLong(hwnd, GWL_STYLE, style);
-	SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-
 	// Get window rectangle
 	RECT wrec;
 	if (cur.flags & VID_USESAVED) {
@@ -222,23 +213,43 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	wrec.right = wrec.left + cur.mode[0];
 	wrec.bottom = wrec.top + cur.mode[1];
 	AdjustWindowRectEx(&wrec, style, FALSE, exStyle);
-	SetWindowPos(hwnd, NULL, wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top, SWP_FRAMECHANGED);
 
-	if (cur.shown) {
-		ShowWindow(hwnd, SW_SHOW);
-		SetFocus(hwnd);
-		HWND fgHwnd = GetForegroundWindow();
-		if (fgHwnd) {
-			DWORD processId = 0;
-			GetWindowThreadProcessId(fgHwnd, &processId);
-			if (processId == GetCurrentProcessId()) {
-				SetForegroundWindow(hwnd);
+	if (initialised) {
+		SetWindowLong(hwnd, GWL_STYLE, style);
+		SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
+		SetWindowPos(hwnd, NULL, wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top, SWP_FRAMECHANGED);
+		SetWindowText(hwnd, curTitle);
+		if (cur.shown) {
+			ShowWindow(hwnd, SW_SHOW);
+			SetFocus(hwnd);
+			HWND fgHwnd = GetForegroundWindow();
+			if (fgHwnd) {
+				DWORD processId = 0;
+				GetWindowThreadProcessId(fgHwnd, &processId);
+				if (processId == GetCurrentProcessId()) {
+					SetForegroundWindow(hwnd);
+				} else {
+					FlashWindow(hwnd, FALSE);
+				}
 			} else {
-				FlashWindow(hwnd, FALSE);
+				SetForegroundWindow(hwnd);
 			}
-		} else {
-			SetForegroundWindow(hwnd);
+			sys->conWin->SetForeground();
 		}
+	} else {
+		if (cur.shown) {
+			style|= WS_VISIBLE;
+		}
+		hwnd = CreateWindowEx(
+			exStyle, CFG_TITLE " Class", curTitle, style,
+			wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top,
+			NULL, NULL, sys->hinst,  NULL
+		);
+		if (hwnd == NULL) {
+			sys->Error("Unable to create window");
+		}
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)sys);
+		sys->conWin->SetForeground();
 	}
 	
 	// Calculate minimum size
@@ -255,10 +266,11 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 
 	if (cur.flags & VID_MAXIMIZE) {
 		ShowWindow(hwnd, SW_MAXIMIZE);
-		GetClientRect(hwnd, &wrec);
-		vid.size[0] = wrec.right;
-		vid.size[1] = wrec.bottom;
 	}
+
+	GetClientRect(hwnd, &wrec);
+	vid.size[0] = wrec.right;
+	vid.size[1] = wrec.bottom;
 
 	// Process any messages generated during application
 	sys->RunMessages();
@@ -318,6 +330,13 @@ void sys_video_c::SetActive(bool active)
 	}
 }
 
+void sys_video_c::SetForeground()
+{
+	if (initialised) {
+		SetForegroundWindow(hwnd);
+	}
+}
+
 bool sys_video_c::IsActive()
 {
 	return GetForegroundWindow() == hwnd;
@@ -356,7 +375,10 @@ bool sys_video_c::IsVisible()
 
 void sys_video_c::SetTitle(const char* title)
 {
-	SetWindowText(hwnd, (title && *title)? title : CFG_TITLE);
+	strcpy(curTitle, (title && *title)? title : CFG_TITLE);
+	if (initialised) {
+		SetWindowText(hwnd, curTitle);
+	}
 }
 
 void* sys_video_c::GetWindowHandle()

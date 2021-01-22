@@ -25,6 +25,7 @@ public:
 	// Interface
 	void	SetVisible(bool show);
 	bool	IsVisible();
+	void	SetForeground();
 	void	SetTitle(const char* title);
 
 	// Encapsulated
@@ -220,6 +221,13 @@ void sys_console_c::SetVisible(bool show)
 	
 		// Hide the window
 		ShowWindow(hwMain, SW_HIDE);
+	}
+}
+
+void sys_console_c::SetForeground()
+{
+	if (shown) {
+		SetForegroundWindow(hwMain);
 	}
 }
 
