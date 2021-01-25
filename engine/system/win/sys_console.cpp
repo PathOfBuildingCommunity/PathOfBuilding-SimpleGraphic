@@ -130,6 +130,7 @@ void sys_console_c::ThreadProc()
 
 	// Create the output window background brush
 	bBackground = CreateSolidBrush(CFG_SCON_TEXTBG);
+	InvalidateRect(hwOut, nullptr, TRUE);
 
 	// Flush any messages created
 	sys->RunMessages();
