@@ -238,7 +238,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		}
 	} else {
 		if (cur.shown) {
-			style|= WS_VISIBLE;
+			style |= WS_VISIBLE;
+		}
+		if (cur.flags & VID_MAXIMIZE) {
+			style |= WS_MAXIMIZE;
 		}
 		hwnd = CreateWindowEx(
 			exStyle, CFG_TITLE " Class", curTitle, style,
@@ -247,9 +250,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		);
 		if (hwnd == NULL) {
 			sys->Error("Unable to create window");
+			return 0;
 		}
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)sys);
-		sys->conWin->SetForeground();
 	}
 	
 	// Calculate minimum size
@@ -264,7 +267,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		minSize[1] = rec.bottom - rec.top;
 	}
 
-	if (cur.flags & VID_MAXIMIZE) {
+	if (initialised && (cur.flags & VID_MAXIMIZE)) {
 		ShowWindow(hwnd, SW_MAXIMIZE);
 	}
 
