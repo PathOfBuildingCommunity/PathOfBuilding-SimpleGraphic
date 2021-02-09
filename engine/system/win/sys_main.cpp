@@ -7,7 +7,7 @@
 
 #include "sys_local.h"
 
-#include "core/core_main.h"
+#include "core.h"
 
 #include <eh.h>
 

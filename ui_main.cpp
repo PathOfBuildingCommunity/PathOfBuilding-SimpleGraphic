@@ -64,9 +64,9 @@ static struct {
 // ui_IMain Interface
 // ==================
 
-ui_IMain* ui_IMain::GetHandle(sys_IMain* sysHnd, core_IConfig* cfgHnd)
+ui_IMain* ui_IMain::GetHandle(sys_IMain* sysHnd, core_IMain* coreHnd)
 {
-	return new ui_main_c(sysHnd, cfgHnd);
+	return new ui_main_c(sysHnd, coreHnd);
 }
 
 void ui_IMain::FreeHandle(ui_IMain* hnd)
@@ -74,9 +74,10 @@ void ui_IMain::FreeHandle(ui_IMain* hnd)
 	delete (ui_main_c*)hnd;
 }
 
-ui_main_c::ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd)
-	: sys(sysHnd), cfg(cfgHnd), framesSinceWindowHidden(0)
+ui_main_c::ui_main_c(sys_IMain* sysHnd, core_IMain* coreHnd)
+	: sys(sysHnd), core(coreHnd), framesSinceWindowHidden(0)
 {
+	renderer = NULL;
 }
 
 // =======================
@@ -185,7 +186,7 @@ void ui_main_c::DoError(const char* msg, const char* error)
 static int traceback (lua_State *L) {
   if (!lua_isstring(L, 1))  /* 'message' not a string? */
     return 1;  /* keep it intact */
-  lua_getfield(L, LUA_GLOBALSINDEX, "debug");
+  lua_getglobal(L, "debug");
   if (!lua_istable(L, -1)) {
     lua_pop(L, 1);
     return 1;
@@ -247,13 +248,33 @@ void ui_main_c::Init(int argc, char** argv)
 	}
 
 	// Load config files
-	cfg->LoadConfig("SimpleGraphic/SimpleGraphic.cfg");
-	cfg->LoadConfig("SimpleGraphic/SimpleGraphicAuto.cfg");
-	if (cfg->LoadConfig(scriptCfg)) {
+	core->config->LoadConfig("SimpleGraphic/SimpleGraphic.cfg");
+	core->config->LoadConfig("SimpleGraphic/SimpleGraphicAuto.cfg");
+	if (core->config->LoadConfig(scriptCfg)) {
 		FreeString(scriptCfg);
 		scriptCfg = NULL;
 	}
+
+	// Initialise script
+	ScriptInit();
+	while (restartFlag && !didExit) {
+		ScriptShutdown();
+		ScriptInit();
+	}
+}
+
+void ui_main_c::RenderInit()
+{
+	if (renderer) {
+		return;
+	}
+
+	sys->SetWorkDir(NULL);
+
 	sys->con->ExecCommands(true);
+
+	// Initialise window
+	core->video->Apply();
 
 	// Initialise renderer
 	renderer = r_IRenderer::GetHandle(sys);
@@ -262,12 +283,8 @@ void ui_main_c::Init(int argc, char** argv)
 	// Create UI console handler
 	conUI = ui_IConsole::GetHandle(this);
 
-	// Initialise script
-	ScriptInit();
-	while (restartFlag && !didExit) {
-		ScriptShutdown();
-		ScriptInit();
-	}
+	sys->con->Printf("\n");
+	sys->SetWorkDir(scriptWorkDir);
 }
 
 void ui_main_c::ScriptInit()
@@ -295,10 +312,13 @@ void ui_main_c::ScriptInit()
 	lua_pushcfunction(L, traceback);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "traceback");
+	lua_pushboolean(L, 1);
+	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
 
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);
-	int err = lua_cpcall(L, InitAPI, NULL);
+	lua_pushcfunction(L, InitAPI);
+	int err = lua_pcall(L, 0, 0, 0);
 	if (err) sys->Error("Error initialising Lua environment: \n%s\n", lua_tostring(L, -1));
 	lua_gc(L, LUA_GCRESTART, -1);
 
@@ -332,10 +352,12 @@ void ui_main_c::ScriptInit()
 	lua_setglobal(L, "arg");
 	PCall(scriptArgc, 0);
 
-	// Run initialisation callback
-	int extraArgs = PushCallback("OnInit");
-	if (extraArgs >= 0) {
-		PCall(extraArgs, 0);
+	if ( !didExit && !restartFlag ) {
+		// Run initialisation callback
+		int extraArgs = PushCallback("OnInit");
+		if (extraArgs >= 0) {
+			PCall(extraArgs, 0);
+		}
 	}
 	if ( !didExit && !restartFlag ) {
 		// Check for frame callback
@@ -360,15 +382,16 @@ void ui_main_c::Frame()
 	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow()) {
 		sys->Sleep(100);
 		return;
+	}	
+	
+	if (renderer) {
+		// Prepare for rendering
+		renderer->BeginFrame();
+
+		sys->video->GetRelativeCursor(cursorX, cursorY);
 	}
 
-	//sys->con->Printf("BeginFrame...\n");
-
-	// Prepare for rendering
-	renderer->BeginFrame();
-
 	renderEnable = true;
-	sys->video->GetRelativeCursor(cursorX, cursorY);
 
 	// Run subscript system
 	for (dword i = 0; i < subScriptSize; i++) {
@@ -390,14 +413,16 @@ void ui_main_c::Frame()
 
 	renderEnable = false;
 
-	// Render console
-	//sys->con->Printf("Render console...\n");
-	renderer->SetDrawLayer(10000);
-	conUI->Render();
+	if (renderer) {
+		// Render console
+		//sys->con->Printf("Render console...\n");
+		renderer->SetDrawLayer(10000);
+		conUI->Render();
 
-	// Finish up
-	//sys->con->Printf("EndFrame...\n");
-	renderer->EndFrame();
+		// Finish up
+		//sys->con->Printf("EndFrame...\n");
+		renderer->EndFrame();
+	}
 
 	//sys->con->Printf("Finishing up...\n");
 	if ( !sys->video->IsActive() ) {
@@ -406,7 +431,9 @@ void ui_main_c::Frame()
 
 	while (restartFlag) {
 		ScriptShutdown();
-		renderer->PurgeShaders();
+		if (renderer) {
+			renderer->PurgeShaders();
+		}
 		ScriptInit();
 	}
 }
@@ -438,11 +465,23 @@ void ui_main_c::Shutdown()
 	// Shutdown script
 	ScriptShutdown();
 
+	if (renderer) {
+		ui_IConsole::FreeHandle(conUI);
+
+		// Shutdown renderer
+		renderer->Shutdown();
+		r_IRenderer::FreeHandle(renderer);	
+
+		// Shutdown window
+		sys->video->SetVisible(false);
+		core->video->Save();
+	}
+
 	// Save config
 	if (scriptCfg) {
-		cfg->SaveConfig(scriptCfg);
+		core->config->SaveConfig(scriptCfg);
 	} else {
-		cfg->SaveConfig("SimpleGraphic/SimpleGraphic.cfg");
+		core->config->SaveConfig("SimpleGraphic/SimpleGraphic.cfg");
 	}
 
 	FreeString(scriptName);
@@ -453,12 +492,6 @@ void ui_main_c::Shutdown()
 		FreeString(scriptArgv[a]);
 	}
 	delete scriptArgv;
-
-	ui_IConsole::FreeHandle(conUI);
-
-	// Shutdown renderer
-	renderer->Shutdown();
-	r_IRenderer::FreeHandle(renderer);
 }
 
 bool ui_main_c::CanExit()

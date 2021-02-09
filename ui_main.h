@@ -19,10 +19,10 @@ public:
 	bool	CanExit();
 
 	// Encapsulated
-	ui_main_c(sys_IMain* sysHnd, core_IConfig* cfgHnd);
+	ui_main_c(sys_IMain* sysHnd, core_IMain* coreHnd);
 
 	sys_IMain* sys = nullptr;
-	core_IConfig* cfg = nullptr;
+	core_IMain* core = nullptr;
 
 	r_IRenderer* renderer = nullptr;
 
@@ -49,6 +49,7 @@ public:
 
 	static int InitAPI(lua_State* L);
 
+	void	RenderInit();
 	void	ScriptInit();
 	void	ScriptShutdown();
 

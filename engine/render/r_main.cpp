@@ -93,14 +93,15 @@ r_shaderHnd_c::~r_shaderHnd_c()
 struct r_layerCmd_s {
 	enum {
 		VIEWPORT,
+		BLEND,
 		BIND,
 		COLOR,
 		QUAD,
 	} cmd;
 	union {
 		r_viewport_s viewport;
+		int blendMode;
 		r_tex_c* tex;
-		GLenum mode;
 		col4_t col;
 		struct {
 			double s[4];
@@ -150,6 +151,13 @@ void r_layer_c::SetViewport(r_viewport_s* viewport)
 	cmd->viewport.height = viewport->height;
 }
 
+void r_layer_c::SetBlendMode(int mode)
+{
+	r_layerCmd_s* cmd = NewCommand();
+	cmd->cmd = r_layerCmd_s::BLEND;
+	cmd->blendMode = mode;
+}
+
 void r_layer_c::Bind(r_tex_c* tex)
 {
 	r_layerCmd_s* cmd = NewCommand();
@@ -177,6 +185,7 @@ void r_layer_c::Quad(double s0, double t0, double x0, double y0, double s1, doub
 void r_layer_c::Render()
 {
 	r_viewport_s curViewPort = {-1, -1, -1, -1};
+	int curBlendMode = -1;
 	r_tex_c* curTex = NULL;
 	for (int i = 0; i < numCmd; i++) {
 		r_layerCmd_s* cmd = cmdList[i];
@@ -189,6 +198,21 @@ void r_layer_c::Render()
 				glOrtho(0, (float)cmd->viewport.width, (float)cmd->viewport.height, 0, -9999, 9999);
 				glMatrixMode(GL_MODELVIEW);
 				glLoadIdentity();
+			}
+			break;
+		case r_layerCmd_s::BLEND:
+			if (cmd->blendMode != curBlendMode) {
+				switch (cmd->blendMode) {
+				case RB_ALPHA:
+					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+					break;
+				case RB_PRE_ALPHA:
+					glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+					break;
+				case RB_ADDITIVE:
+					glBlendFunc(GL_ONE, GL_ONE);
+					break;
+				}
 			}
 			break;
 		case r_layerCmd_s::BIND:
@@ -278,7 +302,6 @@ void r_renderer_c::Init()
 	glEnable(GL_TEXTURE_2D);
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	// Load extensions
 	sys->con->Printf("Loading OpenGL extensions...\n");
@@ -372,11 +395,12 @@ void r_renderer_c::Shutdown()
 
 void r_renderer_c::BeginFrame()
 {
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	curLayer = layerList[0];
 
 	SetViewport();
+	SetBlendMode(RB_ALPHA);
 	DrawColor();
 }
 
@@ -585,6 +609,7 @@ void r_renderer_c::SetDrawLayer(int layer, int subLayer)
 	}
 	curLayer = newCurLayer;
 	curLayer->SetViewport(&curViewport);
+	curLayer->SetBlendMode(curBlendMode);
 }
 
 void r_renderer_c::SetDrawSubLayer(int subLayer)
@@ -608,6 +633,12 @@ void r_renderer_c::SetViewport(int x, int y, int width, int height)
 	curViewport.width = width;
 	curViewport.height = height;
 	curLayer->SetViewport(&curViewport);
+}
+
+void r_renderer_c::SetBlendMode(int mode)
+{
+	curBlendMode = mode;
+	curLayer->SetBlendMode(mode);
 }
 
 void r_renderer_c::DrawColor(const col4_t col)

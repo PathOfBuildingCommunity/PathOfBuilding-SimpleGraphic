@@ -36,6 +36,7 @@ public:
 	~r_layer_c();
 
 	void	SetViewport(r_viewport_s* viewport);
+	void	SetBlendMode(int mode);
 	void	Bind(r_tex_c* tex);
 	void	Color(col4_t col);
 	void	Quad(double s0, double t0, double x0, double y0, double s1, double t1, double x1, double y1, double s2, double t2, double x2, double y2, double s3, double t3, double x3, double y3);
@@ -69,6 +70,7 @@ public:
 	void	SetDrawSubLayer(int subLayer);
 	int		GetDrawLayer();
 	void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0);
+	void	SetBlendMode(int mode);
 	void	DrawColor(const col4_t col = NULL);
 	void	DrawColor(dword col);
 	void	DrawImage(r_shaderHnd_c* hnd, float x, float y, float w, float h, float s1 = 0.0f, float t1 = 0.0f, float s2 = 1.0f, float t2 = 1.0f);
@@ -108,6 +110,7 @@ public:
 	col4_t	drawColor = {};		// Current draw color
 
 	r_viewport_s curViewport; // Current viewport
+	int		curBlendMode = 0;	// Current blend mode
 
 	int		numShader = 0;
 	class r_shader_c *shaderList[R_MAXSHADERS] = {};

@@ -6,11 +6,7 @@
 
 #include "common.h"
 #include "system.h"
-
-#include "core_config.h"
-#include "core_video.h"
-
-#include "core_main.h"
+#include "core.h"
 
 #include "ui.h"
 
@@ -32,8 +28,6 @@ public:
 
 	sys_IMain*		sys = nullptr;
 
-	core_IConfig*	config = nullptr;
-	core_IVideo*	video = nullptr;
 	ui_IMain*		ui = nullptr;
 
 	bool			initialised = false;
@@ -63,26 +57,22 @@ void core_main_c::Init(int argc, char** argv)
 {
 	// Initialise config system
 	config = core_IConfig::GetHandle(sys);
+	video = core_IVideo::GetHandle(sys);
 
 	// Initialise UI Manager
-	ui = ui_IMain::GetHandle(sys, config);
+	ui = ui_IMain::GetHandle(sys, this);
 	ui->Init(argc, argv);
 	sys->con->ExecCommands(true);
 
 	// Hide the sysconsole
 	sys->conWin->SetVisible(false);
-
-	// Initialise video
-	video = core_IVideo::GetHandle(sys);
-	video->Apply();
+	sys->video->SetForeground();
 
 	initialised = true;
 }
 
 void core_main_c::Frame()
 {
-	// sys->con->Printf("Messages...\n");
-
 	// Execute commands
 	sys->con->ExecCommands();
 
@@ -94,16 +84,12 @@ void core_main_c::Shutdown()
 {	
 	initialised = false;
 
-	// Shutdown video
-	sys->video->SetVisible(false);
-	video->Save();
-	core_IVideo::FreeHandle(video);
-
 	// Shutdown UI Manager
 	ui->Shutdown();
 	ui_IMain::FreeHandle(ui);
 
 	// Shutdown config system
+	core_IVideo::FreeHandle(video);
 	core_IConfig::FreeHandle(config);
 
 	sys->con->Printf("Engine shutdown complete.\n");

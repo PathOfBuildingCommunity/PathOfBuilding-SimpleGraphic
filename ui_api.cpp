@@ -30,6 +30,7 @@
 ** imgHandle:SetLoadingPriority(pri)
 ** width, height = imgHandle:ImageSize()
 **
+** RenderInit()
 ** width, height = GetScreenSize()
 ** SetClearColor(red, green, blue[, alpha])
 ** SetDrawLayer({layer|nil}[, subLayer)
@@ -176,6 +177,7 @@ static int l_imgHandleGC(lua_State* L)
 static int l_imgHandleLoad(lua_State* L) 
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "Load", false);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
@@ -200,6 +202,8 @@ static int l_imgHandleLoad(lua_State* L)
 			flags|= TF_CLAMP;
 		} else if ( !strcmp(flag, "MIPMAP") ) {
 			flags&= ~TF_NOMIPMAP;
+		} else if ( !strcmp(flag, "NEAREST") ) {
+			flags|= TF_NEAREST;
 		} else {
 			ui->LAssert(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
 		}
@@ -261,6 +265,13 @@ static int l_imgHandleImageSize(lua_State* L)
 // Rendering
 // =========
 
+static int l_RenderInit(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->RenderInit();
+	return 0;
+}
+
 static int l_GetScreenSize(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -272,6 +283,7 @@ static int l_GetScreenSize(lua_State* L)
 static int l_SetClearColor(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 3, "Usage: SetClearColor(red, green, blue[, alpha])");
 	col4_t color;
@@ -292,6 +304,8 @@ static int l_SetClearColor(lua_State* L)
 static int l_SetDrawLayer(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LAssert(L, ui->renderEnable, "SetDrawLayer() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetDrawLayer({layer|nil}[, subLayer])");
 	ui->LAssert(L, lua_isnumber(L, 1) || lua_isnil(L, 1), "SetDrawLayer() argument 1: expected number or nil, got %t", 1);
@@ -300,11 +314,11 @@ static int l_SetDrawLayer(lua_State* L)
 	}
 	if (lua_isnil(L, 1)) {
 		ui->LAssert(L, n >= 2, "SetDrawLayer(): must provide subLayer if layer is nil");
-		ui->renderer->SetDrawSubLayer(lua_tointeger(L, 2));
+		ui->renderer->SetDrawSubLayer((int)lua_tointeger(L, 2));
 	} else if (n >= 2) {
-		ui->renderer->SetDrawLayer(lua_tointeger(L, 1), lua_tointeger(L, 2));
+		ui->renderer->SetDrawLayer((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2));
 	} else {
-		ui->renderer->SetDrawLayer(lua_tointeger(L, 1));
+		ui->renderer->SetDrawLayer((int)lua_tointeger(L, 1));
 	}
 	return 0;
 }
@@ -319,6 +333,8 @@ static int l_GetDrawLayer(lua_State* L)
 static int l_SetViewport(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LAssert(L, ui->renderEnable, "SetViewport() called outside of OnFrame");
 	int n = lua_gettop(L);
 	if (n) {
 		ui->LAssert(L, n >= 4, "Usage: SetViewport([x, y, width, height])");
@@ -332,9 +348,22 @@ static int l_SetViewport(lua_State* L)
 	return 0;
 }
 
+static int l_SetBlendMode(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LAssert(L, ui->renderEnable, "SetViewport() called outside of OnFrame");
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: SetBlendMode(mode)");
+	static const char* modeMap[6] = { "ALPHA", "PREALPHA", "ADDITIVE", NULL };
+	ui->renderer->SetBlendMode(luaL_checkoption(L, 1, "ALPHA", modeMap));
+	return 0;
+}
+
 static int l_SetDrawColor(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "SetDrawColor() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetDrawColor(red, green, blue[, alpha]) or SetDrawColor(escapeStr)");
@@ -363,6 +392,7 @@ static int l_SetDrawColor(lua_State* L)
 static int l_DrawImage(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImage() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 5, "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])");
@@ -394,6 +424,7 @@ static int l_DrawImage(lua_State* L)
 static int l_DrawImageQuad(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImageQuad() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 9, "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])");
@@ -425,6 +456,7 @@ static int l_DrawImageQuad(lua_State* L)
 static int l_DrawString(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawString() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 6, "Usage: DrawString(left, top, align, height, font, text)");
@@ -446,6 +478,7 @@ static int l_DrawString(lua_State* L)
 static int l_DrawStringWidth(lua_State* L) 
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 3, "Usage: DrawStringWidth(height, font, text)");
 	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringWidth() argument 1: expected number, got %t", 1);
@@ -459,6 +492,7 @@ static int l_DrawStringWidth(lua_State* L)
 static int l_DrawStringCursorIndex(lua_State* L) 
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 5, "Usage: DrawStringCursorIndex(height, font, text, cursorX, cursorY)");
 	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringCursorIndex() argument 1: expected number, got %t", 1);
@@ -497,14 +531,8 @@ static int l_StripEscapes(lua_State* L)
 static int l_GetAsyncCount(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	lua_pushinteger(L, ui->renderer->GetTexAsyncCount());
-	return 1;
-}
-
-static int l_RenderInit(lua_State* L)
-{
-	ui_main_c* ui = GetUIPtr(L);
-	lua_pushinteger(L, 1);
 	return 1;
 }
 
@@ -914,7 +942,7 @@ static int l_LoadModule(lua_State* L)
 	ui->sys->SetWorkDir(ui->scriptPath);
 	int err = luaL_loadfile(L, fileName);
 	ui->sys->SetWorkDir(ui->scriptWorkDir);
-	ui->LAssert(L, err == 0, "LoadModule() error loading '%s':\n%s", fileName, lua_tostring(L, -1));
+	ui->LAssert(L, err == 0, "LoadModule() error loading '%s' (%d):\n%s", fileName, err, lua_tostring(L, -1));
 	lua_replace(L, 1);	// Replace module name with module main chunk
 	lua_call(L, n - 1, LUA_MULTRET);
 	return lua_gettop(L);
@@ -1180,11 +1208,13 @@ int ui_main_c::InitAPI(lua_State* L)
 	lua_setfield(L, LUA_REGISTRYINDEX, "uiimghandlemeta");
 
 	// Rendering
+	ADDFUNC(RenderInit);
 	ADDFUNC(GetScreenSize);
 	ADDFUNC(SetClearColor);
 	ADDFUNC(SetDrawLayer);
 	ADDFUNC(GetDrawLayer);
 	ADDFUNC(SetViewport);
+	ADDFUNC(SetBlendMode);
 	ADDFUNC(SetDrawColor);
 	ADDFUNC(DrawImage);
 	ADDFUNC(DrawImageQuad);
