@@ -11,6 +11,9 @@
 
 #include <eh.h>
 
+#include <chrono>
+#include <thread>
+
 // ======
 // Locals
 // ======
@@ -777,7 +780,15 @@ bool sys_main_c::Run(int argc, char** argv)
 		while (exitFlag == false) {
 			RunMessages();
 
+			const auto frameStart = std::chrono::high_resolution_clock::now();
 			core->Frame();
+			const auto frameEnd = std::chrono::high_resolution_clock::now();
+			using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
+			const auto frameDuration = std::chrono::duration_cast<FpMilliseconds>(frameEnd - frameStart);
+			const auto minimumFrameDuration = FpMilliseconds(1000.0f / video->vid.fgfps);
+			if (frameDuration < minimumFrameDuration) {
+				std::this_thread::sleep_for(minimumFrameDuration - frameDuration);
+			}
 
 			if (threadError) {
 				Error(threadError);
