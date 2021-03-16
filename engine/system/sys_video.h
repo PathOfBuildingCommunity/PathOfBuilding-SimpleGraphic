@@ -23,6 +23,7 @@ struct sys_vidSave_s {
 	int		pos[2] = {};
 	bool	maximised = false;
 	int		fgfps = 0;
+	int		bgfps = 0;
 };
 
 // Video settings structure
@@ -34,6 +35,7 @@ struct sys_vidSet_s {
 	int		depth = 0;		// Bit depth
 	int		minSize[2] = {};	// Minimum size for resizable windows
 	int		fgfps = 0;		// Foreground FPS limit
+	int		bgfps = 0;		// Background FPS limit
 	sys_vidSave_s save; // Saved state
 };
 

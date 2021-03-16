@@ -6,6 +6,9 @@
 
 #include "ui_local.h"
 
+#include <chrono>
+#include <thread>
+
 // ======
 // Locals
 // ======
@@ -373,6 +376,8 @@ void ui_main_c::ScriptInit()
 
 void ui_main_c::Frame()
 {
+	const auto frameStart = std::chrono::high_resolution_clock::now();
+	auto fpsLimit = sys->video->vid.fgfps;
 	if (!sys->video->IsVisible() || sys->conWin->IsVisible() || restartFlag || didExit) {
 		framesSinceWindowHidden = 0;
 	}
@@ -380,8 +385,7 @@ void ui_main_c::Frame()
 		framesSinceWindowHidden++;
 	}
 	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow()) {
-		sys->Sleep(100);
-		return;
+		fpsLimit = sys->video->vid.bgfps;
 	}	
 	
 	if (renderer) {
@@ -425,8 +429,8 @@ void ui_main_c::Frame()
 	}
 
 	//sys->con->Printf("Finishing up...\n");
-	if ( !sys->video->IsActive() ) {
-		sys->Sleep(100);
+	if ( sys->video->IsActive() ) {
+		fpsLimit = sys->video->vid.fgfps;
 	}
 
 	while (restartFlag) {
@@ -435,6 +439,14 @@ void ui_main_c::Frame()
 			renderer->PurgeShaders();
 		}
 		ScriptInit();
+	}
+	
+	using FpMilliseconds = std::chrono::duration<float, std::chrono::milliseconds::period>;
+	const auto minimumFrameDuration = FpMilliseconds(1000.0f / fpsLimit);
+	const auto frameEnd = std::chrono::high_resolution_clock::now();
+	const auto frameDuration = std::chrono::duration_cast<FpMilliseconds>(frameEnd - frameStart);
+	if (frameDuration < minimumFrameDuration) {
+	  std::this_thread::sleep_for(minimumFrameDuration - frameDuration);
 	}
 }
 

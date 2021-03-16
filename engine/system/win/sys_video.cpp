@@ -276,6 +276,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	vid.size[1] = wrec.bottom;
 
 	vid.fgfps = cur.fgfps;
+	vid.bgfps = cur.bgfps;
 
 	// Process any messages generated during application
 	sys->RunMessages();
