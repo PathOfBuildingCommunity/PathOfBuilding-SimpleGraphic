@@ -74,7 +74,7 @@ core_video_c::core_video_c(sys_IMain* sysHnd)
 	vid_resizable	= sys->con->Cvar_Add("vid_resizable", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFRESIZABLE, 0, 3);
 	vid_last		= sys->con->Cvar_Add("vid_last", CV_ARCHIVE, "");
 	vid_fgfps		= sys->con->Cvar_Add("vid_fgfps", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFFGFPS, 5, 120);
-	vid_bgfps		= sys->con->Cvar_Add("vid_bgfps", CV_ARCHIVE | CV_CLAMP, CFG_VID_DEFBGFPS, 5, 120);
+	vid_bgfps		= sys->con->Cvar_Add("vid_bgfps", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFBGFPS, 5, 120);
 
 	Cmd_Add("vid_apply", 0, "", this, &core_video_c::C_Vid_Apply);
 	Cmd_Add("vid_modeList", 0, "", this, &core_video_c::C_Vid_ModeList);
