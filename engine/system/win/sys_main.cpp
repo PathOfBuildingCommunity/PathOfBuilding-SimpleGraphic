@@ -732,7 +732,17 @@ sys_main_c::sys_main_c()
 	// Set the local system information
 	hinst = GetModuleHandle(NULL);
 	icon = LoadIcon(hinst, MAKEINTRESOURCE(1000));
-	GetModuleFileName(NULL, basePath, 512);
+	char longOrShortPath[512] = {};
+	GetModuleFileName(NULL, longOrShortPath, 512);
+	DWORD requiredLength = GetShortPathName(longOrShortPath, NULL, 0);
+	if (requiredLength == 0)
+	{
+		strcpy(basePath, longOrShortPath);
+	}
+	else
+	{
+		GetShortPathName(longOrShortPath, basePath, requiredLength);
+	}
 	*strrchr(basePath, '\\') = 0;
 	SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, userPath);
 }
