@@ -7,7 +7,9 @@
 
 #include "sys_local.h"
 
-#include <GL/gl.h>
+#include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 
 // =====================
 // sys_IOpenGL Interface
@@ -63,7 +65,8 @@ sys_openGL_c::sys_openGL_c(sys_IMain* sysHnd)
 bool sys_openGL_c::Init(sys_glSet_s* set)
 {
 	// Get device handles
-	HWND hwnd = (HWND)sys->video->GetWindowHandle();
+	auto wnd = (GLFWwindow*)sys->video->GetWindowHandle();
+	HWND hwnd = (HWND)glfwGetWin32Window(wnd);
 	hdc = GetDC(hwnd);
 	hdc2 = GetDC(hwnd);
 

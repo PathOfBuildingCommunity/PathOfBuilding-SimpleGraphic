@@ -11,6 +11,8 @@
 
 #include <eh.h>
 
+#include <GLFW/glfw3.h>
+
 // ======
 // Locals
 // ======
@@ -161,6 +163,56 @@ bool find_c::FindNext()
 // ===========
 // Key Mapping
 // ===========
+
+byte KeyRemapGLFW(int key) {
+	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
+		return '0' + (key - GLFW_KEY_0);
+	}
+	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
+		return 'a' + (key - GLFW_KEY_A);
+	}
+	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F15) {
+		return KEY_F1 + (key - GLFW_KEY_F1);
+	}
+	switch (key) {
+	case GLFW_KEY_BACKSPACE: return KEY_BACK;
+	case GLFW_KEY_TAB: return KEY_TAB;
+	case GLFW_KEY_ENTER: return KEY_RETURN;
+	case GLFW_KEY_LEFT_SHIFT:
+	case GLFW_KEY_RIGHT_SHIFT: return KEY_SHIFT;
+	case GLFW_KEY_LEFT_CONTROL:
+	case GLFW_KEY_RIGHT_CONTROL: return KEY_CTRL;
+	case GLFW_KEY_LEFT_ALT:
+	case GLFW_KEY_RIGHT_ALT: return KEY_ALT;
+	case GLFW_KEY_PAUSE: return KEY_PAUSE;
+	case GLFW_KEY_ESCAPE: return KEY_ESCAPE;
+	case GLFW_KEY_SPACE: return ' ';
+	case GLFW_KEY_PAGE_UP: return KEY_PGUP;
+	case GLFW_KEY_PAGE_DOWN: return KEY_PGDN;
+	case GLFW_KEY_END: return KEY_END;
+	case GLFW_KEY_HOME: return KEY_HOME;
+	case GLFW_KEY_LEFT: return KEY_LEFT;
+	case GLFW_KEY_UP: return KEY_UP;
+	case GLFW_KEY_RIGHT: return KEY_RIGHT;
+	case GLFW_KEY_DOWN: return KEY_DOWN;
+	case GLFW_KEY_PRINT_SCREEN: return KEY_PRINTSCRN;
+	case GLFW_KEY_INSERT: return KEY_INSERT;
+	case GLFW_KEY_DELETE: return KEY_DELETE;
+	case GLFW_KEY_NUM_LOCK: return KEY_NUMLOCK;
+	case GLFW_KEY_SCROLL_LOCK: return KEY_SCROLL;
+	case GLFW_KEY_SEMICOLON: return ';';
+	case GLFW_KEY_COMMA: return ',';
+	case GLFW_KEY_MINUS: return '-';
+	case GLFW_KEY_PERIOD: return '.';
+	case GLFW_KEY_SLASH: return '/';
+	case GLFW_KEY_GRAVE_ACCENT: return '`';
+	case GLFW_KEY_LEFT_BRACKET: return '[';
+	case GLFW_KEY_BACKSLASH: return '\\';
+	case GLFW_KEY_RIGHT_BRACKET: return ']';
+	case GLFW_KEY_APOSTROPHE: return '\'';
+	}
+	return 0;
+}
 
 static const byte sys_keyRemap[] = {
 	0,				// 00		Null
@@ -775,7 +827,12 @@ bool sys_main_c::Run(int argc, char** argv)
 
 		// Run frame loop
 		while (exitFlag == false) {
-			RunMessages();
+			glfwPollEvents();
+			auto wnd = (GLFWwindow*)video->GetWindowHandle();
+			if (glfwWindowShouldClose(wnd)) {
+				Exit();
+				break;
+			}
 
 			core->Frame();
 

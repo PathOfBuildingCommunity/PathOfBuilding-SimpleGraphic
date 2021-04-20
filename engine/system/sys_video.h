@@ -10,7 +10,6 @@
 
 // Video settings flags
 enum vidFlags_e {
-	VID_FULLSCREEN = 0x01,
 	VID_TOPMOST = 0x02,
 	VID_RESIZABLE = 0x04,
 	VID_MAXIMIZE = 0x08,

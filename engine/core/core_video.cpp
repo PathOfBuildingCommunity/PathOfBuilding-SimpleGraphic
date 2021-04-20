@@ -86,9 +86,7 @@ void core_video_c::Apply(bool shown)
 	sys_vidSet_s set;
 	set.shown = shown;
 	set.flags = 0;
-	if (vid_fullscreen->intVal) {
-		set.flags|= VID_FULLSCREEN;
-	} else if (vid_resizable->intVal) {
+	if (vid_resizable->intVal) {
 		set.flags|= VID_RESIZABLE;
 		if (vid_resizable->intVal == 2) {
 			set.flags|= VID_MAXIMIZE;

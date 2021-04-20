@@ -6,6 +6,11 @@
 //
 
 #include "sys_local.h"
+#include "core.h"
+
+#include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 
 // ====================
 // sys_IVideo Interface
@@ -37,21 +42,18 @@ public:
 	sys_main_c* sys = nullptr;
 
 	bool	initialised = false;
-	HWND	hwnd = nullptr;			// Window handle
+	GLFWwindow* wnd = nullptr;
 
-	static BOOL __stdcall MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT rect, LPARAM data);
-	bool	AddMonitor(HMONITOR hMonitor);
 	void	RefreshMonitorInfo();
 
 	int		numMon = 0;			// Number of monitors
 	int		priMon = 0;			// Index of primary monitor
 	struct {
-		HMONITOR hnd = nullptr;
+		GLFWmonitor* hnd = nullptr;
 		int		left = 0;
 		int		top = 0;
 		int		width = 0;
 		int		height = 0;
-		char	devName[CCHDEVICENAME] = {};
 	} mon[16];					// Array of monitor specs
 
 	int		defRes[2] = {};		// Default resolution
@@ -59,6 +61,8 @@ public:
 	int		scrSize[2] = {};	// Screen size
 	int		minSize[2] = {};	// Minimum window size
 	char	curTitle[512] = {};	// Window title
+
+	bool cursorInWindow = false;
 };
 
 sys_IVideo* sys_IVideo::GetHandle(sys_IMain* sysHnd)
@@ -80,35 +84,16 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 
 	strcpy(curTitle, CFG_TITLE);
 
-	// Register the window class
-	WNDCLASS wndClass;
-	ZeroMemory(&wndClass, sizeof(WNDCLASS));
-	wndClass.lpszClassName	= CFG_TITLE " Class";
-	wndClass.hInstance		= sys->hinst;
-	wndClass.lpfnWndProc	= sys_main_c::WndProc;
-	wndClass.hbrBackground	= CreateSolidBrush(CFG_SCON_WINBG);
-	wndClass.hIcon			= sys->icon;
-	wndClass.hCursor		= LoadCursor(NULL, IDC_ARROW);
-	wndClass.style			= CS_DBLCLKS;
-	if (RegisterClass(&wndClass) == 0) {
-		sys->Error("Unable to register main window class");
-	}
+	glfwInit();
 }
 
 sys_video_c::~sys_video_c()
 {
 	if (initialised) {
-		// Destroy the window
-		DestroyWindow(hwnd);
-	
-		if (cur.flags & VID_FULLSCREEN) {
-		// Reset resolution
-		ChangeDisplaySettingsEx(mon[cur.display].devName, NULL, NULL, 0, NULL);
+		glfwDestroyWindow(wnd);
 	}
-}
 
-	// Unregister the window class
-	UnregisterClass(CFG_TITLE " Class", sys->hinst);
+	glfwTerminate();
 }
 
 // ==================
@@ -119,10 +104,15 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 {
 	cur = *set;
 
-	// Enumerate monitors
-	priMon = -1;
-	numMon = 0;
-	EnumDisplayMonitors(NULL, NULL, &sys_video_c::MonitorEnumProc, (LPARAM)this);
+	GLFWmonitor** monitors = glfwGetMonitors(&numMon);
+	for (int i = 0; i < numMon; ++i) {
+		mon[i].hnd = monitors[i];
+		glfwGetMonitorPos(monitors[i], &mon[i].left, &mon[i].top);
+		GLFWvidmode const* mode = glfwGetVideoMode(monitors[i]);
+		mon[i].width = mode->width;
+		mon[i].height = mode->height;
+	}
+	priMon = 0;
 
 	// Determine which monitor to create window on
 	if (cur.display >= numMon) {
@@ -132,10 +122,11 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		// Use monitor containing the mouse cursor 
 		POINT curPos;
 		GetCursorPos(&curPos);
-		HMONITOR curMon = MonitorFromPoint(curPos, MONITOR_DEFAULTTOPRIMARY);
 		cur.display = 0;
-		for (int m = 0; m < numMon; m++) {
-			if (mon[m].hnd == curMon) {
+		for (int m = 0; m < numMon; ++m) {
+			int right = mon[m].left + mon[m].width;
+			int bottom = mon[m].top + mon[m].height;
+			if (curPos.x >= mon[m].left && curPos.y >= mon[m].top && curPos.x < right && curPos.y < bottom) {
 				cur.display = m;
 				break;
 			}
@@ -155,47 +146,13 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		Vector2Copy(defRes, cur.mode);
 	}
 	Vector2Copy(cur.mode, vid.size);
-	if (cur.flags & VID_FULLSCREEN) {
-		Vector2Copy(cur.mode, scrSize);
-		if (cur.shown) {
-			// Change screen resolution
-			SetActive(true);
-		}
-	} else {
-		Vector2Copy(defRes, scrSize);
-	}
-
-	// Select window styles
-	int style = WS_POPUP;
-	if ( !(cur.flags & VID_FULLSCREEN) && (cur.flags & VID_USESAVED || cur.flags & VID_RESIZABLE || cur.mode[0] < defRes[0] || cur.mode[1] < defRes[1]) ) {
-		style|= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-		if (cur.flags & VID_RESIZABLE) {
-			style|= WS_SIZEBOX | WS_MAXIMIZEBOX;
-		}
-	}
-	int exStyle = (cur.flags & VID_TOPMOST)? WS_EX_TOPMOST : 0;
+	Vector2Copy(defRes, scrSize);
 
 	// Get window rectangle
 	RECT wrec;
 	if (cur.flags & VID_USESAVED) {
 		POINT savePos = { cur.save.pos[0], cur.save.pos[1] };
-		HMONITOR winMon = MonitorFromPoint(savePos, MONITOR_DEFAULTTONULL);
-		if (winMon == NULL) {
-			// Window is offscreen, move it to the nearest monitor
-			winMon = MonitorFromPoint(savePos, MONITOR_DEFAULTTONEAREST);
-			for (int m = 0; m < numMon; m++) {
-				if (mon[m].hnd == winMon) {
-					wrec.left = 0;
-					wrec.top = 0;
-					wrec.right = 1000;
-					wrec.bottom = 1000;
-					AdjustWindowRectEx(&wrec, style, FALSE, exStyle);
-					cur.save.pos[0] = mon[m].left - wrec.left;
-					cur.save.pos[1] = mon[m].top - wrec.top;
-					break;
-				}
-			}
-		}
+		// TODO(LV): Move offscreen windows to a monitor.
 		wrec.left = cur.save.pos[0];
 		wrec.top = cur.save.pos[1];
 		if (cur.save.maximised) {
@@ -212,71 +169,87 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	vid.pos[1] = wrec.top;
 	wrec.right = wrec.left + cur.mode[0];
 	wrec.bottom = wrec.top + cur.mode[1];
-	AdjustWindowRectEx(&wrec, style, FALSE, exStyle);
+	// TODO(LV): Verify that stored coordinates are aligned right.
 
 	if (initialised) {
-		SetWindowLong(hwnd, GWL_STYLE, style);
-		SetWindowLong(hwnd, GWL_EXSTYLE, exStyle);
-		SetWindowPos(hwnd, NULL, wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top, SWP_FRAMECHANGED);
-		SetWindowText(hwnd, curTitle);
+		glfwSetWindowSize(wnd, cur.mode[0], cur.mode[1]);
 		if (cur.shown) {
-			ShowWindow(hwnd, SW_SHOW);
-			SetFocus(hwnd);
-			HWND fgHwnd = GetForegroundWindow();
-			if (fgHwnd) {
-				DWORD processId = 0;
-				GetWindowThreadProcessId(fgHwnd, &processId);
-				if (processId == GetCurrentProcessId()) {
-					SetForegroundWindow(hwnd);
-				} else {
-					FlashWindow(hwnd, FALSE);
-				}
-			} else {
-				SetForegroundWindow(hwnd);
-			}
+			glfwShowWindow(wnd);
 			sys->conWin->SetForeground();
 		}
-	} else {
-		if (cur.shown) {
-			style |= WS_VISIBLE;
-		}
-		if (cur.flags & VID_MAXIMIZE) {
-			style |= WS_MAXIMIZE;
-		}
-		hwnd = CreateWindowEx(
-			exStyle, CFG_TITLE " Class", curTitle, style,
-			wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top,
-			NULL, NULL, sys->hinst,  NULL
-		);
-		if (hwnd == NULL) {
-			sys->Error("Unable to create window");
-			return 0;
-		}
-		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)sys);
 	}
-	
-	// Calculate minimum size
-	if (cur.flags & VID_RESIZABLE && cur.minSize[0]) {
-		RECT rec;
-		rec.left = 0;
-		rec.top = 0;
-		rec.right = cur.minSize[0];
-		rec.bottom = cur.minSize[1];
-		AdjustWindowRectEx(&rec, style, FALSE, exStyle);
-		minSize[0] = rec.right - rec.left;
-		minSize[1] = rec.bottom - rec.top;
+	else {
+		glfwWindowHint(GLFW_RESIZABLE, !!(cur.flags & VID_RESIZABLE));
+		glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+		glfwWindowHint(GLFW_FLOATING, !!(cur.flags & VID_TOPMOST));
+		glfwWindowHint(GLFW_MAXIMIZED, !!(cur.flags & VID_MAXIMIZE));
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+		//glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+		//glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+		//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+		wnd = glfwCreateWindow(cur.mode[0], cur.mode[1], "PoB", nullptr, nullptr);
+		glfwSetWindowUserPointer(wnd, sys);
+		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			auto video = (sys_video_c*)sys->video;
+			video->cursorInWindow = !!entered;
+		});
+		glfwSetWindowCloseCallback(wnd, [](GLFWwindow* wnd) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			glfwSetWindowShouldClose(wnd, sys->initialised && sys->core->CanExit());
+		});
+		glfwSetWindowSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			bool maximized = glfwGetWindowAttrib(wnd, GLFW_MAXIMIZED);
+			sys->video->SizeChanged(width, height, maximized);
+		});
+		glfwSetWindowPosCallback(wnd, [](GLFWwindow* wnd, int x, int y) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->video->PosChanged(x, y);
+		});
+		glfwSetCharCallback(wnd, [](GLFWwindow* wnd, uint32_t codepoint) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->core->KeyEvent(codepoint, KE_CHAR);
+		});
+		glfwSetKeyCallback(wnd, [](GLFWwindow* wnd, int key, int scancode, int action, int mods) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (byte k = sys->VirtualToKey()) {
+				// TODO(LV): Route text properly, translation is broken
+				bool is_down = action == GLFW_PRESS || action == GLFW_REPEAT;
+				sys->core->KeyEvent(k, is_down ? KE_KEYDOWN : KE_KEYUP);
+			}
+		});
+		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			int sg_key;
+			switch(button) {
+			case GLFW_MOUSE_BUTTON_LEFT:
+				sg_key = KEY_LMOUSE;
+				break;
+			case GLFW_MOUSE_BUTTON_MIDDLE:
+				sg_key = KEY_MMOUSE;
+				break;
+			case GLFW_MOUSE_BUTTON_RIGHT:
+				sg_key = KEY_RMOUSE;
+				break;
+			case GLFW_MOUSE_BUTTON_4:
+				sg_key = KEY_MOUSE4;
+				break;
+			case GLFW_MOUSE_BUTTON_5:
+				sg_key = KEY_MOUSE5;
+				break;
+			default:
+				return;
+			}
+			sys->core->KeyEvent(sg_key, (action == GLFW_PRESS) ? KE_KEYDOWN : KE_KEYUP);
+		});
 	}
 
-	if (initialised && (cur.flags & VID_MAXIMIZE)) {
-		ShowWindow(hwnd, SW_MAXIMIZE);
-	}
+	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
 
-	GetClientRect(hwnd, &wrec);
-	vid.size[0] = wrec.right;
-	vid.size[1] = wrec.bottom;
-
-	// Process any messages generated during application
-	sys->RunMessages();
+	glfwSetWindowPos(wnd, vid.pos[0], vid.pos[1]);
+	glfwGetWindowSize(wnd, &vid.size[0], &vid.size[1]);
 
 	initialised = true;
 	return 0;
@@ -284,65 +257,21 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 
 void sys_video_c::SetActive(bool active)
 {
-	if ((cur.flags & VID_FULLSCREEN) && (cur.mode[0] != defRes[0] || cur.mode[1] != defRes[1] || cur.depth)) {
-		// Fullscreen and mode specified
-		if (active) {
-			// Change resolution		
-			DEVMODE dm;
-			ZeroMemory(&dm, sizeof(dm));
-			dm.dmSize		= sizeof(dm);
-			dm.dmPelsWidth  = cur.mode[0];
-			dm.dmPelsHeight = cur.mode[1];
-			dm.dmFields		= DM_PELSWIDTH | DM_PELSHEIGHT;
-			if (cur.depth)	{
-				dm.dmFields|= DM_BITSPERPEL;
-				dm.dmBitsPerPel = cur.depth;
-			}
-			if (ChangeDisplaySettingsEx(mon[cur.display].devName, &dm, NULL, CDS_FULLSCREEN, NULL) != DISP_CHANGE_SUCCESSFUL) {
-				sys->con->Warning("failed to change screen resolution");
-			}
-
-			// Make sure window is positioned correctly
-			RefreshMonitorInfo();
-			SetWindowPos(hwnd, NULL, mon[cur.display].left, mon[cur.display].top, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
-		} else {
-			// Change back to default
-			ChangeDisplaySettingsEx(mon[cur.display].devName, NULL, NULL, CDS_FULLSCREEN, NULL);
-		}
-	}
-
-	if (initialised && (cur.flags & VID_TOPMOST) && IsWindowVisible(hwnd)) {
-		if (active) {
-			// Make it topmost
-			SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-		} else {
-			if (cur.flags & VID_FULLSCREEN) {
-				// Just minimize it
-				ShowWindow(hwnd, SW_MINIMIZE);
-			} else {
-				HWND fghwnd = GetForegroundWindow();
-				if (GetWindowLong(fghwnd, GWL_EXSTYLE) & WS_EX_TOPMOST) {
-					// Switching to a topmost window, put our window at the top of all non-topmost windows
-					SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-				} else {
-					// Switching to a non-topmost window, put our window behind it
-					SetWindowPos(hwnd, fghwnd, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-				}
-			}
-		}
+	if (initialised) {
+		glfwFocusWindow(wnd);
 	}
 }
 
 void sys_video_c::SetForeground()
 {
 	if (initialised) {
-		SetForegroundWindow(hwnd);
+		glfwFocusWindow(wnd);
 	}
 }
 
 bool sys_video_c::IsActive()
 {
-	return GetForegroundWindow() == hwnd;
+	return glfwGetWindowAttrib(wnd, GLFW_FOCUSED);
 }
 
 void sys_video_c::SizeChanged(int width, int height, bool max)
@@ -367,99 +296,64 @@ void sys_video_c::GetMinSize(int &width, int &height)
 void sys_video_c::SetVisible(bool vis)
 {
 	if ( !initialised ) return;
-	ShowWindow(hwnd, vis? SW_SHOW : SW_HIDE);
+	if (vis) {
+		glfwShowWindow(wnd);
+	} else {
+		glfwHideWindow(wnd);
+	}
 }
 
 bool sys_video_c::IsVisible()
 {
-	if ( !initialised || !hwnd ) return false;
-	return IsWindowVisible(hwnd);
+	if ( !initialised || !wnd ) return false;
+	return !!glfwGetWindowAttrib(wnd, GLFW_VISIBLE);
 }
 
 void sys_video_c::SetTitle(const char* title)
 {
 	strcpy(curTitle, (title && *title)? title : CFG_TITLE);
 	if (initialised) {
-		SetWindowText(hwnd, curTitle);
+		glfwSetWindowTitle(wnd, curTitle);
 	}
 }
 
 void* sys_video_c::GetWindowHandle()
 {
-	return hwnd;
+	return wnd;
 }
 
 void sys_video_c::GetRelativeCursor(int &x, int &y)
 {
 	if ( !initialised ) return;
-	POINT cp;
-	GetCursorPos(&cp);
-	ScreenToClient(hwnd, &cp);
-	x = cp.x;
-	y = cp.y;
+	double xpos, ypos;
+	glfwGetCursorPos(wnd, &xpos, &ypos);
+	x = (int)floor(xpos);
+	y = (int)floor(ypos);
 }
 
 void sys_video_c::SetRelativeCursor(int x, int y)
 {
 	if ( !initialised ) return;
-	POINT cp = {x, y};
-	ClientToScreen(hwnd, &cp);
-	SetCursorPos(cp.x, cp.y);
+	glfwSetCursorPos(wnd, (double)x, (double)y);
 }
 
 bool sys_video_c::IsCursorOverWindow()
 {
-	if (initialised && hwnd && IsWindowVisible(hwnd))
+	if (initialised && wnd && IsVisible())
 	{
-		POINT mousePoint;
-		if (GetCursorPos(&mousePoint)) {
-			if (WindowFromPoint(mousePoint) != hwnd) {
-				return false;
-			}
-		}
+		return cursorInWindow;
 	}
 	return true;
 }
 
-BOOL __stdcall sys_video_c::MonitorEnumProc(HMONITOR hMonitor, HDC hdc, LPRECT rect, LPARAM data)
-{
-	sys_video_c* vid = (sys_video_c*)data;
-	return vid->AddMonitor(hMonitor);
-}
-
-bool sys_video_c::AddMonitor(HMONITOR hMonitor)
-{
-	MONITORINFOEX info;
-	info.cbSize = sizeof(MONITORINFOEX);
-	GetMonitorInfo(hMonitor, &info);
-	mon[numMon].hnd = hMonitor;
-	mon[numMon].left = info.rcMonitor.left;
-	mon[numMon].top = info.rcMonitor.top;
-	mon[numMon].width = info.rcMonitor.right - info.rcMonitor.left;
-	mon[numMon].height = info.rcMonitor.bottom - info.rcMonitor.top;
-	if (info.dwFlags & MONITORINFOF_PRIMARY) {
-		priMon = numMon;
-	}
-	strcpy(mon[numMon].devName, info.szDevice);
-	return ++numMon < 16;
-}
-
 void sys_video_c::RefreshMonitorInfo()
 {
+	GLFWmonitor** monitors = glfwGetMonitors(&numMon);
 	for (int m = 0; m < numMon; m++) {
-		MONITORINFO info;
-		info.cbSize = sizeof(MONITORINFO);
-		if (GetMonitorInfo(mon[m].hnd, &info)) {
-			mon[m].left = info.rcMonitor.left;
-			mon[m].top = info.rcMonitor.top;
-			mon[m].width = info.rcMonitor.right - info.rcMonitor.left;
-			mon[m].height = info.rcMonitor.bottom - info.rcMonitor.top;
-		} else {
-			if (m == priMon) sys->Error("Primary monitor no longer exists!");
-			mon[m].left = mon[priMon].left;
-			mon[m].top = mon[priMon].top;
-			mon[m].width = mon[priMon].width;
-			mon[m].height = mon[priMon].height;
-		}
+		mon[m].hnd = monitors[m];
+		glfwGetMonitorPos(monitors[m], &mon[m].left, &mon[m].top);
+		GLFWvidmode const* mode = glfwGetVideoMode(monitors[m]);
+		mon[m].width = mode->width;
+		mon[m].height = mode->height;
 	}
 }
