@@ -244,6 +244,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			}
 			sys->core->KeyEvent(sg_key, (action == GLFW_PRESS) ? KE_KEYDOWN : KE_KEYUP);
 		});
+		glfwSetScrollCallback(wnd, [](GLFWwindow* wnd, double xoffset, double yoffset) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (yoffset > 0) {
+				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYDOWN);
+				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYUP);
+			} else if (yoffset < 0) {
+				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYDOWN);
+				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYUP);
+			}
+		});
 	}
 
 	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
