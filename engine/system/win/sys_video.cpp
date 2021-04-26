@@ -184,7 +184,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwWindowHint(GLFW_FLOATING, !!(cur.flags & VID_TOPMOST));
 		glfwWindowHint(GLFW_MAXIMIZED, !!(cur.flags & VID_MAXIMIZE));
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+		//glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
 		//glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		//glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
 		//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
