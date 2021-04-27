@@ -12,6 +12,7 @@
 #include <eh.h>
 
 #include <GLFW/glfw3.h>
+#include <map>
 
 // ======
 // Locals
@@ -401,6 +402,83 @@ byte sys_main_c::VirtualToKey(int virt)
 	} else {
 		return 0;
 	}
+}
+
+byte sys_main_c::GlfwKeyToKey(int key) {
+	static std::map<int, byte> s_lookup = {
+		{GLFW_KEY_BACKSPACE, KEY_BACK},
+		{GLFW_KEY_TAB, KEY_TAB},
+		{GLFW_KEY_ENTER, KEY_RETURN},
+		{GLFW_KEY_LEFT_SHIFT, KEY_SHIFT},
+		{GLFW_KEY_RIGHT_SHIFT, KEY_SHIFT},
+		{GLFW_KEY_LEFT_CONTROL, KEY_CTRL},
+		{GLFW_KEY_RIGHT_CONTROL, KEY_CTRL},
+		{GLFW_KEY_LEFT_ALT, KEY_ALT},
+		{GLFW_KEY_RIGHT_ALT, KEY_ALT},
+		{GLFW_KEY_PAUSE, KEY_PAUSE},
+		{GLFW_KEY_ESCAPE, KEY_ESCAPE},
+		{GLFW_KEY_SPACE, ' '},
+		{GLFW_KEY_PAGE_UP, KEY_PGUP},
+		{GLFW_KEY_PAGE_DOWN, KEY_PGDN},
+		{GLFW_KEY_END, KEY_END},
+		{GLFW_KEY_HOME, KEY_HOME},
+		{GLFW_KEY_LEFT, KEY_LEFT},
+		{GLFW_KEY_UP, KEY_UP},
+		{GLFW_KEY_RIGHT, KEY_RIGHT},
+		{GLFW_KEY_DOWN, KEY_DOWN},
+		{GLFW_KEY_PRINT_SCREEN, KEY_PRINTSCRN},
+		{GLFW_KEY_INSERT, KEY_INSERT},
+		{GLFW_KEY_DELETE, KEY_DELETE},
+		{GLFW_KEY_NUM_LOCK, KEY_NUMLOCK},
+		{GLFW_KEY_SCROLL_LOCK, KEY_SCROLL},
+		{GLFW_KEY_SEMICOLON, ';'},
+		// GLFW defines no plus key
+		{GLFW_KEY_EQUAL, '+'},
+		{GLFW_KEY_COMMA, ','},
+		{GLFW_KEY_MINUS, '-'},
+		{GLFW_KEY_PERIOD, '.'},
+		{GLFW_KEY_SLASH, '/'},
+		{GLFW_KEY_GRAVE_ACCENT, '`'},
+		{GLFW_KEY_LEFT_BRACKET, '['},
+		{GLFW_KEY_BACKSLASH, '\\'},
+		{GLFW_KEY_RIGHT_BRACKET, ']'},
+		{GLFW_KEY_APOSTROPHE, '\''},
+	};
+
+	auto I = s_lookup.find(key);
+	if (I != s_lookup.end()) {
+		return I->second;
+	}
+
+	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F15) {
+		return KEY_F1 + (key - GLFW_KEY_F1);
+	}
+
+	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
+		return '0' + (key - GLFW_KEY_0);
+	}
+
+	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
+		return 'a' + (key - GLFW_KEY_A);
+	}
+
+	return 0;
+}
+
+char sys_main_c::GlfwKeyExtraChar(int key) {
+	static std::map<int, byte> s_lookup = {
+		{GLFW_KEY_BACKSPACE, 0x8},
+		{GLFW_KEY_TAB, 0x9},
+		{GLFW_KEY_ENTER, 0xd},
+		{GLFW_KEY_ESCAPE, 0x1b},
+	};
+
+	auto I = s_lookup.find(key);
+	if (I != s_lookup.end()) {
+		return I->second;
+	}
+
+	return 0;
 }
 
 // =====================

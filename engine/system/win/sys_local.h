@@ -49,6 +49,8 @@ public:
 
 	int		KeyToVirtual(byte key);
 	byte	VirtualToKey(int virt);
+	byte	GlfwKeyToKey(int key);
+	char	GlfwKeyExtraChar(int key);
 
 	HINSTANCE hinst = nullptr;
 	HICON	icon = nullptr;

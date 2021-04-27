@@ -214,10 +214,13 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetKeyCallback(wnd, [](GLFWwindow* wnd, int key, int scancode, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
-			if (byte k = sys->VirtualToKey()) {
-				// TODO(LV): Route text properly, translation is broken
+			if (byte k = sys->GlfwKeyToKey(key)) {
 				bool is_down = action == GLFW_PRESS || action == GLFW_REPEAT;
 				sys->core->KeyEvent(k, is_down ? KE_KEYDOWN : KE_KEYUP);
+				char ch = sys->GlfwKeyExtraChar(key);
+				if (is_down && ch) {
+					sys->core->KeyEvent(ch, KE_CHAR);
+				}
 			}
 		});
 		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
