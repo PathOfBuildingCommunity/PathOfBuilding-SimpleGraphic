@@ -157,7 +157,6 @@ bool t_manager_c::AsyncRemove(r_tex_c* tex)
 
 void t_manager_c::ThreadProc()
 {
-	renderer->openGL->CaptureSecondary();
 	isRunning = true;
 	while (doRun) {
 		r_tex_c *doTex = nullptr;
@@ -191,7 +190,6 @@ void t_manager_c::ThreadProc()
 			renderer->sys->Sleep(1);
 		}
 	}
-	renderer->openGL->ReleaseSecondary();
 	isRunning = false;
 }
 
@@ -343,11 +341,7 @@ void r_tex_c::Disable()
 }
 
 void r_tex_c::StartLoad()
-{
-	if ((flags & TF_ASYNC) != 0 && status == INIT && fileWidth == 0) {
-		manager->AsyncAdd(this);
-	}
-}
+{}
 
 void r_tex_c::AbortLoad()
 {
@@ -356,10 +350,7 @@ void r_tex_c::AbortLoad()
 
 void r_tex_c::ForceLoad()
 {
-	manager->AsyncRemove( this );
-
 	if (status == INIT) {
-		flags &= ~TF_ASYNC;
 		LoadFile();
 	} else if (fileWidth == 0) {
 		// Load not pending, do it now
@@ -463,10 +454,6 @@ void r_tex_c::Upload(image_c* image, int flags)
 			up_w = (up_w > 1)? up_w >> 1 : 1;
 			up_h = (up_h > 1)? up_h >> 1 : 1;
 			miplevel++;
-		}
-		if (flags & TF_ASYNC) {
-			// Needed to ensure texture is usable immediately
-			glFlush();
 		}
 		fileWidth = image->width;
 		fileHeight = image->height;
@@ -575,10 +562,6 @@ void r_tex_c::Upload(image_c* image, int flags)
 		delete mipBuf[2];
 	}
 
-	if (flags & TF_ASYNC) {
-		// Needed to ensure texture is usable immediately
-		glFlush();
-	}
 	fileWidth = image->width;
 	fileHeight = image->height;
 }

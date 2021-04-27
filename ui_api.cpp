@@ -197,7 +197,7 @@ static int l_imgHandleLoad(lua_State* L)
 		}
 		const char* flag = lua_tostring(L, f);
 		if ( !strcmp(flag, "ASYNC") ) {
-			flags|= TF_ASYNC;
+			// Async texture loading removed
 		} else if ( !strcmp(flag, "CLAMP") ) {
 			flags|= TF_CLAMP;
 		} else if ( !strcmp(flag, "MIPMAP") ) {

@@ -509,15 +509,10 @@ r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
 	for (int s = 0; s < numShader; s++) {
 		if ( !shaderList[s] ) {
 			newId = s;
-		} else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && (shaderList[s]->tex->flags & ~TF_ASYNC) == (flags & ~TF_ASYNC)) {
+		} else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && shaderList[s]->tex->flags == flags) {
 			// Shader already exists, return a new handle for it
-			if (flags & TF_ASYNC) {
-				// Ensure texture will be loaded sometime
-				shaderList[s]->tex->StartLoad();
-			} else {
-				// Ensure texture is loaded as soon as possible
-				shaderList[s]->tex->ForceLoad();
-			}
+			// Ensure texture is loaded as soon as possible
+			shaderList[s]->tex->ForceLoad();
 			return new r_shaderHnd_c(shaderList[s]);
 		}
 	}

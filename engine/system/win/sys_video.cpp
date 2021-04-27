@@ -183,12 +183,18 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
 		glfwWindowHint(GLFW_FLOATING, !!(cur.flags & VID_TOPMOST));
 		glfwWindowHint(GLFW_MAXIMIZED, !!(cur.flags & VID_MAXIMIZE));
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-		//glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-		//glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-		//glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
+		glfwWindowHint(GLFW_DEPTH_BITS, 24);
 		//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
-		wnd = glfwCreateWindow(cur.mode[0], cur.mode[1], "PoB", nullptr, nullptr);
+		wnd = glfwCreateWindow(cur.mode[0], cur.mode[1], curTitle, nullptr, nullptr);
+		if (!wnd) {
+			char const* errDesc = "Unknown error";
+			glfwGetError(&errDesc);
+			sys->con->Printf("Could not create window, %s\n", errDesc);
+		}
+		glfwMakeContextCurrent(wnd);
 		glfwSetWindowUserPointer(wnd, sys);
 		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
