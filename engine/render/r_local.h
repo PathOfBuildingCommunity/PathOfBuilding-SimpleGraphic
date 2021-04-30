@@ -9,10 +9,20 @@
 
 #include "render.h"
 
+#if __APPLE__ && __MACH__
+#define GL_GLEXT_PROTOTYPES
+#ifndef APIENTRY
+#define APIENTRY
+#endif
+#define GL_GLEXT_LEGACY
+#include <OpenGL/gl.h>
+#include <GL/glext.h>
+#else
 #define WINGDIAPI
 #define APIENTRY __stdcall
 #include <GL/gl.h>
 #include <GL/glext.h>
+#endif
 
 #include "core/core_image.h"
 

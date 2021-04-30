@@ -10,7 +10,8 @@
 
 #include <jpeglib.h>
 #include <png.h>
-#include <gif_lib.h>
+
+#include <algorithm>
 
 // =======
 // Classes
@@ -91,9 +92,6 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x474E5089) {
 		// 0x89 P N G
 		return new png_c(conHnd);
-	} else if (*(dword*)dat == 0x38464947) {
-		// G I F 8
-		return new gif_c(conHnd);
 	} else if (*(dword*)dat == BLP2_MAGIC) {
 		// B L P 2
 		return new blp_c(conHnd);
@@ -402,7 +400,7 @@ struct jpegRead_s: public jpeg_source_mgr {
 		size_t avail = jr->in->GetLen() - jr->in->GetPos();
 		if (avail) {
 			jr->next_input_byte = jr->buffer;
-			jr->bytes_in_buffer = __min(avail, 1024);
+			jr->bytes_in_buffer = (std::min<size_t>)(avail, 1024);
 			jr->in->Read(jr->buffer, jr->bytes_in_buffer);
 		} else {
 			jr->next_input_byte = dummyEOI;
@@ -417,7 +415,7 @@ struct jpegRead_s: public jpeg_source_mgr {
 			if (jr->bytes_in_buffer == 0) {
 				Fill(jdecomp);
 			}
-			long skip = __min(count, (long)jr->bytes_in_buffer);
+			long skip = (std::min<long>)(count, (long)jr->bytes_in_buffer);
 			jr->next_input_byte+= skip;
 			jr->bytes_in_buffer-= skip;
 			count-= skip;
@@ -794,82 +792,6 @@ bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 		return true;
 	}
 	return false;
-}
-
-// =========
-// GIF Image
-// =========
-
-static int IGIF_ReadProc(GifFileType* gif, GifByteType* buf, int len)
-{
-	ioStream_c* in = (ioStream_c*)gif->UserData;
-	if (in->Read(buf, len)) {
-		return 0;
-	}
-	return len;
-}
-
-bool gif_c::Load(const char* fileName)
-{
-	// Open file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Initialise GIF reader
-	int code;
-	GifFileType* gif = DGifOpen(&in, IGIF_ReadProc, &code);
-	if ( !gif ) {
-		con->Warning("'%s': error '%d' opening GIF", fileName, code);
-		in.FileClose();
-		return true;
-	}
-
-	// Read image
-	if (DGifSlurp(gif) != GIF_OK) {
-		con->Warning("'%s': error '%d' reading GIF", fileName, gif->Error);
-		DGifCloseFile(gif, NULL);
-		in.FileClose();
-		return true;
-	}
-
-	// Convert image
-	width = gif->SavedImages[0].ImageDesc.Width;
-	height = gif->SavedImages[0].ImageDesc.Height;
-	comp = 4;
-	type = IMGTYPE_RGBA;
-	dat = new byte[width * height * comp];
-	ColorMapObject* map = gif->SColorMap? gif->SColorMap : gif->SavedImages[0].ImageDesc.ColorMap;
-	GraphicsControlBlock gcb;
-	DGifSavedExtensionToGCB(gif, 0, &gcb);
-	byte* pix = dat;
-	for (dword p = 0; p < width * height; p++, pix+= 4) {
-		byte index = gif->SavedImages[0].RasterBits[p];
-		if (index == gcb.TransparentColor) {
-			pix[0] = pix[1] = pix[2] = pix[3] = 0;
-		} else {
-			pix[0] = map->Colors[index].Red;
-			pix[1] = map->Colors[index].Green;
-			pix[2] = map->Colors[index].Blue;
-			pix[3] = 255;
-		}
-	}
-	
-	DGifCloseFile(gif, NULL);
-	in.FileClose();
-	return false;
-}
-
-bool gif_c::Save(const char* fileName)
-{
-	// HELL no.
-	return true;
-}
-
-bool gif_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	return true;
 }
 
 // =========

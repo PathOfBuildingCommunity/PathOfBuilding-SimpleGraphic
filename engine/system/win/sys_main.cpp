@@ -5,6 +5,8 @@
 // Platform: Windows
 //
 
+#include <fmt/chrono.h>
+
 #include "sys_local.h"
 
 #include "core.h"
@@ -12,7 +14,11 @@
 #include <eh.h>
 
 #include <GLFW/glfw3.h>
+#include <filesystem>
 #include <map>
+#include <thread>
+
+#include <fmt/core.h>
 
 // ======
 // Locals
@@ -51,7 +57,7 @@ thread_c::thread_c(sys_IMain* sys)
 	_sysMain = (sys_main_c*)sys;
 }
 
-unsigned long __stdcall thread_c::statThreadProc(void* obj)
+unsigned long thread_c::statThreadProc(void* obj)
 {
 	thread_c* thread = (thread_c*)obj;
 	try {
@@ -85,26 +91,14 @@ unsigned long __stdcall thread_c::statThreadProc(void* obj)
 
 void thread_c::ThreadStart(bool lowPri)
 {
-	HANDLE thr = CreateThread(NULL, 0, statThreadProc, this, CREATE_SUSPENDED, NULL);
-	if (lowPri) {
+	std::thread t(statThreadProc, this);
+#ifdef _WIN32
+	HANDLE thr = t.native_handle();
+	if (thr && lowPri) {
 		SetThreadPriority(thr, THREAD_PRIORITY_BELOW_NORMAL);
 	}
-	ResumeThread(thr);
-}
-
-int thread_c::atomicInc(volatile int* val)
-{
-	return InterlockedIncrement((LONG*)val);
-}
-
-int thread_c::atomicDec(volatile int* val)
-{
-	return InterlockedDecrement((LONG*)val);
-}
-
-int thread_c::atomicExch(volatile int* out, int val)
-{
-	return InterlockedExchange((LONG*)out, val);
+#endif
+	t.detach();
 }
 
 // ===========
@@ -112,53 +106,63 @@ int thread_c::atomicExch(volatile int* out, int val)
 // ===========
 
 find_c::find_c()
-{
-	handle = NULL;
-}
+{}
 
 find_c::~find_c()
-{
-	if (handle) {
-		FindClose(handle);
+{}
+
+bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file) {
+	// TODO(LV): Future-proof to handle more than /* and /*.ext
+	if (glob == "*" || glob == "*.*") {
+		return true;
 	}
+	if (glob.stem() == "*" && glob.has_extension() && file.has_extension()) {
+		return glob.extension() == file.extension();
+	}
+	return glob == file;
 }
 
 bool find_c::FindFirst(const char* fileSpec)
 {
-	WIN32_FIND_DATA findData;
-	handle = FindFirstFile(fileSpec, &findData);
-	if (handle == INVALID_HANDLE_VALUE) {
-		handle = NULL;
-		return false;
+	std::filesystem::path p(fileSpec);
+	glob = p.filename();
+	{
+		OutputDebugStringA(fmt::format("\"{}\" - \"{}\"\n",
+			p.parent_path().string(),
+			glob.string()).c_str());
 	}
-	strcpy(fileName, findData.cFileName);
-	isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-	fileSize = findData.nFileSizeLow;
-	modified = ((unsigned long long)findData.ftLastWriteTime.dwLowDateTime + ((unsigned long long)findData.ftLastWriteTime.dwHighDateTime << 32)) / 10000000;
-	SYSTEMTIME sysTime;
-	FileTimeToSystemTime(&findData.ftLastWriteTime, &sysTime);
-	GetTimeFormat(LOCALE_USER_DEFAULT, 0, &sysTime, NULL, modifiedTime, 256);
-	GetDateFormat(LOCALE_USER_DEFAULT, 0, &sysTime, NULL, modifiedDate, 256);
-	return true;
+
+	std::error_code ec;
+	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
+		if (GlobMatch(glob, *iter)) {
+			fileName = iter->path().filename().string();
+			isDirectory = iter->is_directory();
+			fileSize = iter->file_size();
+			auto mod = iter->last_write_time();
+			modified = mod.time_since_epoch().count();
+			return true;
+		}
+	}
+	return false;
 }
 
 bool find_c::FindNext()
 {
-	WIN32_FIND_DATA findData;
-	if (FindNextFile(handle, &findData) == 0) {
-		FindClose(handle);
-		handle = NULL;
+	if (iter == std::filesystem::directory_iterator{}) {
 		return false;
 	}
-	strcpy(fileName, findData.cFileName);
-	isDirectory = (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-	fileSize = findData.nFileSizeLow;
-	modified = ((unsigned long long)findData.ftLastWriteTime.dwLowDateTime + ((unsigned long long)findData.ftLastWriteTime.dwHighDateTime << 32)) / 10000000;
-	SYSTEMTIME sysTime;
-	FileTimeToSystemTime(&findData.ftLastWriteTime, &sysTime);
-	GetTimeFormat(LOCALE_USER_DEFAULT, 0, &sysTime, NULL, modifiedTime, 256);
-	GetDateFormat(LOCALE_USER_DEFAULT, 0, &sysTime, NULL, modifiedDate, 256);
-	return true;
+
+	for (++iter; iter != std::filesystem::directory_iterator{}; ++iter) {
+		if (GlobMatch(glob, *iter)) {
+			fileName = iter->path().filename().string();
+			isDirectory = iter->is_directory();
+			fileSize = iter->file_size();
+			auto mod = iter->last_write_time();
+			modified = mod.time_since_epoch().count();
+			return true;
+		}
+	}
+	return false;
 }
 
 // ===========
@@ -514,30 +518,12 @@ void sys_main_c::ShowCursor(int doShow)
 
 void sys_main_c::ClipboardCopy(const char* str)
 {
-	size_t len = strlen(str);
-	HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len + 1);
-	if ( !hg ) return;
-	char* cp = (char*)GlobalLock(hg);
-	strcpy(cp, str);
-	GlobalUnlock(hg);
-	OpenClipboard((HWND)video->GetWindowHandle());
-	EmptyClipboard();
-	SetClipboardData(CF_TEXT, hg);
-	CloseClipboard();
+	glfwSetClipboardString(nullptr, str);
 }
 
 char* sys_main_c::ClipboardPaste()
 {
-	char* ret = NULL;
-	OpenClipboard((HWND)video->GetWindowHandle());
-	HANDLE clip = GetClipboardData(CF_TEXT);
-	if (clip) {
-		char* text = (char*)GlobalLock(clip);
-		ret = AllocString(text);
-		GlobalUnlock(clip);
-	}
-	CloseClipboard();
-	return ret;
+	return AllocString(glfwGetClipboardString(nullptr));
 }
 
 bool sys_main_c::SetWorkDir(const char* newCwd)

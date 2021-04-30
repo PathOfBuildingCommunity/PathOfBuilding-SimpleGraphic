@@ -6,6 +6,8 @@
 
 #include "r_local.h"
 
+#include <fmt/chrono.h>
+
 // =======
 // Classes
 // =======
@@ -731,7 +733,7 @@ int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, i
 
 void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c &args)
 {
-	const char* fmtName = args.argc >= 2? args.argv[1] : r_screenshotFormat->strVal;
+	const char* fmtName = args.argc >= 2? args.argv[1] : r_screenshotFormat->strVal.c_str();
 	takeScreenshot = R_SSNONE;
 	if ( !_stricmp(fmtName, "tga") ) {
 		takeScreenshot = R_SSTGA;
@@ -773,19 +775,17 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	i->height = ys;
 	i->comp = 3;
 
-	char ssname[260];
 	time_t curTime;
 	time(&curTime);
-	tm curTimeSt;
-	localtime_s(&curTimeSt, &curTime);
-	sprintf_s(ssname, 260, CFG_DATAPATH "Screenshots/%02d%02d%02d_%02d%02d%02d.%s", 
-		curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
-		curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
+	std::string ssname = fmt::format(CFG_DATAPATH "Screenshots/{%m%d%y_%H%M%S}.{}",
+	fmt::localtime(curTime), ext);
+		// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
+		// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
 
 	// Save image
-	if (i->Save(ssname)) {
-		sys->con->Printf("Couldn't write screenshot!\n");
+	if (i->Save(ssname.c_str())) {
+		sys->con->Print("Couldn't write screenshot!\n");
 	} else {
-		sys->con->Printf("Wrote screenshot to %s\n", ssname);
+		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
 	}
 }

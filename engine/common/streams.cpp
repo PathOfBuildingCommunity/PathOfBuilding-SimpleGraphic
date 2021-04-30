@@ -212,7 +212,14 @@ fileStreamBase_c::~fileStreamBase_c()
 
 size_t fileStreamBase_c::GetLen()
 {
-	return file? _filelength(_fileno(file)) : 0;
+	if (!file) {
+		return 0;
+	}
+	auto pos = ftell(file);
+	fseek(file, 0, SEEK_END);
+	auto size = ftell(file);
+	fseek(file, pos, SEEK_SET);
+	return size;
 }
 
 size_t fileStreamBase_c::GetPos()

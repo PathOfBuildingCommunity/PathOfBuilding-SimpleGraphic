@@ -6,6 +6,10 @@
 
 #include "common.h"
 
+#include <charconv>
+#include <string_view>
+#include <fmt/format.h>
+
 // =============
 // Configuration
 // =============
@@ -27,46 +31,32 @@
 
 conVar_c::conVar_c(IConsole* conHnd)
 	: con(conHnd)
-{
-	name = NULL;
-	strVal = NULL;
-	defVal = NULL;
-}
+{}
 
 conVar_c::~conVar_c()
-{
-	FreeString(name);
-	FreeString(strVal);
-	FreeString(defVal);
-}
+{}
 
 void conVar_c::Set(int in)
 {
-	char tmp[16];
-	_itoa_s(in, tmp, 16, 10);
-	Set(tmp);
+	Set(fmt::format("{}", in).c_str());
 }
 
 void conVar_c::Set(float in)
 {
-	char tmp[64];
-	sprintf_s(tmp, 64, "%f", in);
-	Set(tmp);
+	Set(fmt::format("{:f}", in).c_str());
 }
 
-void conVar_c::Set(const char* in)
+void conVar_c::Set(char const* in)
 {
-	if ( !strcmp(in, strVal) ) {
+	if (in == strVal) {
 		// No change
 		return;
 	}
 
-	FreeString(strVal);
-
 	mod = true;			// Flag as modified
-	intVal = atoi(in);	// Set values
-	floatVal = (float)atof(in);
-	strVal = AllocString(in);
+	std::from_chars(in, in + strlen(in), intVal); // Set values
+	floatVal = (float)strtod(in, nullptr);
+	strVal = in;
 
 	Clamp();			// Clamp value
 }
@@ -74,15 +64,6 @@ void conVar_c::Set(const char* in)
 void conVar_c::Toggle()
 {
 	Set(!intVal);
-}
-
-int conVar_c::Get(char* out, int outSz)
-{
-	if (out) {
-		strncpy_s(out, outSz, strVal, outSz-1);
-	}
-
-	return intVal;
 }
 
 bool conVar_c::GetMod()
@@ -94,10 +75,9 @@ bool conVar_c::GetMod()
 
 void conVar_c::Reset()
 {
-	FreeString(strVal);
-	intVal = atoi(defVal);
-	floatVal = (float)atof(defVal);
-	strVal = AllocString(defVal);
+	intVal = atoi(defVal.c_str());
+	floatVal = (float)atof(defVal.c_str());
+	strVal = defVal;
 }
 
 void conVar_c::Clamp()
@@ -114,7 +94,7 @@ void conVar_c::Clamp()
 		return;
 	}
 	
-	con->Printf("\"%s\" clamped to %d\n", name, intVal);
+	con->Print(fmt::format("\"{}\" clamped to {}\n", name, intVal).c_str());
 }
 
 // =======
@@ -155,8 +135,8 @@ public:
 	void	Executef(const char* fmt, ...);
 	void	ExecCommands(bool deferUnknown);
 
-	conVar_c* Cvar_Add(const char* name, int flags, const char* def, int minVal = 0, int maxVal = 0);
-	conVar_c* Cvar_Ptr(const char* name);
+	conVar_c* Cvar_Add(std::string_view name, int flags, std::string_view def, int minVal = 0, int maxVal = 0);
+	conVar_c* Cvar_Ptr(std::string_view name);
 
 	conCmd_c* EnumCmd(int* index);
 	conVar_c* EnumCvar(int* index);
@@ -184,11 +164,11 @@ public:
 
 	conCmd_c* cmdList[CON_MAXCMD];
 
-	conCmd_c* Cmd_Ptr(const char* name);
+	conCmd_c* Cmd_Ptr(std::string_view name);
 
 	conVar_c* cvarList[CON_MAXCVAR];
 
-	int		Cvar_Find(const char* name);
+	int		Cvar_Find(std::string_view name);
 
 	int		cmdBuf_numLine;
 	char*	cmdBuf_lines[CON_MAXCMDBUFFER];
@@ -348,9 +328,7 @@ void console_c::Printf(const char* fmt, ...)
 void console_c::PrintFunc(const char* func)
 {
 	// Print function title
-	char text[256];
-	sprintf_s(text, 256, "\n--- %s ---\n", func);
-	Print(text);
+	Print(fmt::format("\n--- {} ---\n", func).c_str());
 }
 
 void console_c::Warning(const char* fmt, ...)
@@ -358,10 +336,18 @@ void console_c::Warning(const char* fmt, ...)
 	// Print warning text
 	va_list va;
 	va_start(va, fmt);
-	char text[4096]; 
+#ifdef _WIN32
+	char text[4096];
 	vsprintf_s(text, 4096, fmt, va);
+#else
+	char* text{};
+	vasprintf(&text, fmt, va);
+#endif
 	va_end(va);
 	Printf("^4Warning: %s\n", text);
+#ifndef _WIN32
+	free(text);
+#endif
 }
 
 void console_c::Clear()
@@ -532,10 +518,11 @@ void conCmdHandler_c::Cmd_PrivAdd(const char* name, int minArgs, const char* usa
 	_con->Warning("Reached console command limit (CON_MAXCMD)");
 }
 
-conCmd_c* console_c::Cmd_Ptr(const char* name)
+conCmd_c* console_c::Cmd_Ptr(std::string_view name)
 {
+	std::string name_str(name);
 	for (int slot = 0; slot < CON_MAXCMD; slot++) {
-		if (cmdList[slot] && _stricmp(cmdList[slot]->name, name) == 0) {
+		if (cmdList[slot] && _stricmp(cmdList[slot]->name.c_str(), name_str.c_str()) == 0) {
 			return cmdList[slot];
 		}
 	}
@@ -562,14 +549,14 @@ conCmd_c* console_c::EnumCmd(int* index)
 // Console Variables
 // =================
 
-conVar_c* console_c::Cvar_Add(const char* name, int flags, const char* def, int minVal, int maxVal)
+conVar_c* console_c::Cvar_Add(std::string_view name, int flags, std::string_view def, int minVal, int maxVal)
 {
-	char* setVal = NULL;
+	std::optional<std::string> setVal;
 	int slot = Cvar_Find(name);
 	if (slot >= 0) {
 		if (cvarList[slot]->flags & CV_SET) {
 			// Has been set, take value and delete old cvar
-			setVal = AllocString(cvarList[slot]->strVal);
+			setVal = cvarList[slot]->strVal;
 			delete cvarList[slot];
 			cvarList[slot] = NULL;
 		} else {
@@ -591,9 +578,9 @@ conVar_c* console_c::Cvar_Add(const char* name, int flags, const char* def, int 
 	}
 
 	cvarList[slot] = new conVar_c(this);
-	cvarList[slot]->name = AllocString(name);
+	cvarList[slot]->name = (std::string)name;
 	cvarList[slot]->flags = flags;
-	cvarList[slot]->defVal = AllocString(def);
+	cvarList[slot]->defVal = (std::string)def;
 	if (flags & CV_CLAMP) {
 		cvarList[slot]->min = minVal;
 		cvarList[slot]->max = maxVal;
@@ -601,15 +588,14 @@ conVar_c* console_c::Cvar_Add(const char* name, int flags, const char* def, int 
 	cvarList[slot]->Reset();
 
 	if (setVal) {
-		cvarList[slot]->Set(setVal);
+		cvarList[slot]->Set(setVal->c_str());
 		cvarList[slot]->mod = false;
-		FreeString(setVal);
 	}
 
 	return cvarList[slot];
 }
 
-conVar_c* console_c::Cvar_Ptr(const char* name)
+conVar_c* console_c::Cvar_Ptr(std::string_view name)
 {
 	int slot = Cvar_Find(name);
 	if (slot >= 0) {
@@ -619,11 +605,12 @@ conVar_c* console_c::Cvar_Ptr(const char* name)
 	}
 }
 
-int console_c::Cvar_Find(const char* name)
+int console_c::Cvar_Find(std::string_view name)
 {
+	std::string name_str(name);
 	// Find the cvar and return the index
 	for (int slot = 0; slot < CON_MAXCVAR; slot++) {
-		if (cvarList[slot] && _stricmp(name, cvarList[slot]->name) == 0) {
+		if (cvarList[slot] && _stricmp(name_str.c_str(), cvarList[slot]->name.c_str()) == 0) {
 			return slot;
 		}
 	}
@@ -652,29 +639,41 @@ conVar_c* console_c::EnumCvar(int* index)
 
 void console_c::Execute(const char* cmd)
 {
-	char* newCmd = AllocString(cmd);
-	char* tk_context = NULL;
-	char* lp = strtok_s(newCmd, ";\n", &tk_context);
-	while (lp) {
+	std::string_view newCmd = cmd;
+	std::string_view sep = ";\n";
+	while (!newCmd.empty()) {
+		auto end = newCmd.find_first_of(sep);
+		if (end == newCmd.npos) {
+			end = newCmd.size();
+		}
+		std::string lp(newCmd.substr(0, end));
+		newCmd = newCmd.substr(end);
+
 		if (cmdBuf_numLine >= CON_MAXCMDBUFFER) {
 			Warning("console command buffer overflow");
 		} else {
-			cmdBuf_lines[cmdBuf_numLine++] = AllocString(lp);
+			cmdBuf_lines[cmdBuf_numLine++] = AllocString(lp.c_str());
 		}
-		lp = strtok_s(NULL, ";\n", &tk_context);
 	}
-	FreeString(newCmd);
 }
 
 void console_c::Executef(const char* fmt, ...)
 {
 	va_list va;
-	char cmd[4096];
 	va_start(va, fmt);
+#ifdef _WIN32
+	char cmd[4096];
 	vsnprintf_s(cmd, 4095, fmt, va);
 	cmd[4095] = 0;
+#else
+	char* cmd{};
+	vasprintf(&cmd, fmt, va);
+#endif
 	va_end(va);
 	Execute(cmd);
+#ifndef _WIN32
+	free(cmd);
+#endif
 }
 
 void console_c::ExecCommands(bool deferUnknown)
@@ -692,7 +691,7 @@ void console_c::ExecCommands(bool deferUnknown)
 		if (cmd) {
 			if (args.argc < cmd->minArgs + 1) {
 				// Too few arguments
-				Printf("Usage: %s %s\n", cmd->name, cmd->usage);
+				Print(fmt::format("Usage: {} {}\n", cmd->name, cmd->usage).c_str());
 			} else {
 				// We've got arguments, or the command doesn't care
 				(cmd->obj->*cmd->method)(this, args);
@@ -703,20 +702,20 @@ void console_c::ExecCommands(bool deferUnknown)
 				if (args.argc >= 2) {
 					// There are arguments, try and set cvar
 					if (cv->flags & CV_READONLY) {
-						Printf("'%s' is read only.\n", cv->name);
+						Print(fmt::format("'{}' is read only.\n", cv->name).c_str());
 					} else {
 						cv->Set(args[1]);
 					}
 				} else {
 					// No arguments, so print current value
-					Printf("'%s' is: \"%s\" default: \"%s\"\n", cv->name, cv->strVal, cv->defVal);
+					Print(fmt::format("'{}' is: \"{}\" default: \"{}\"\n", cv->name, cv->strVal, cv->defVal).c_str());
 				}
 			} else if (deferUnknown) {
 				// Defer execution of unknown commands
 				cmdBuf_lines[numDefer++] = cmdBuf_lines[l];
 				continue;
 			} else {
-				Printf("Unknown command '%s'\n", args[0]);	
+				Print(fmt::format("Unknown command '{}'\n", args[0]).c_str());
 			}
 		}
 		FreeString(cmdBuf_lines[l]);
@@ -782,27 +781,26 @@ void conInputHandler_c::ConInputKeyEvent(int key, int type)
 		// Tab completes or finds matches for input buffer text
 		case KEY_TAB:
 			if (_con->input.len) {
-				char comp[1024];
-				strcpy_s(comp, 1024, _con->input.buf);
-				int	compLen = (int)strlen(comp);
+				std::string comp = _con->input.buf;
+				int	compLen = comp.size();
 
 				// Build match list
 				int num = 0;
-				char* match[CON_MAXMATCH];
-				char args[CON_MAXMATCH][256];
+				std::string match[CON_MAXMATCH];
+				std::string args[CON_MAXMATCH];
 				for (int slot = 0; slot < CON_MAXCMD; slot++) {
 					conCmd_c* cmd = _con->cmdList[slot];
-					if (cmd && _strnicmp(cmd->name, comp, compLen) == 0) {
+					if (cmd && _strnicmp(cmd->name.c_str(), comp.c_str(), comp.size()) == 0) {
 						match[num] = cmd->name;
-						strcpy_s(args[num], 256, cmd->usage);
+						args[num] = cmd->usage;
 						num++;
 					}
 				}
 				for (int slot = 0; slot < CON_MAXCVAR; slot++) {
 					conVar_c* cv = _con->cvarList[slot];
-					if (cv && _strnicmp(cv->name, comp, compLen) == 0) {
+					if (cv && _strnicmp(cv->name.c_str(), comp.c_str(), comp.size()) == 0) {
 						match[num] = cv->name;
-						sprintf_s(args[num], 256, "= \"%s\"", cv->strVal);
+						args[num] = fmt::format("= \"{}\"", cv->strVal);
 						num++;
 					}
 				}
@@ -811,23 +809,26 @@ void conInputHandler_c::ConInputKeyEvent(int key, int type)
 					// Matches were found
 					if (num == 1) {
 						// Exact match
-						strcpy_s(comp, 1024, match[0]);
-						if (*args[0]) {
-							strcat_s(comp, 1024, " ");
+						comp = match[0];
+						if (!args[0].empty()) {
+							comp += " ";
 						}
 					} else {
+						size_t minMatchLen = ~0;
 						// Multiple matches, print them out
-						_con->Printf("]%s\n", comp);
+						_con->Print(fmt::format("]{}\n", comp).c_str());
 						for (int m = 0; m < num; m++) {
-							_con->Printf("  %s %s\n", match[m], args[m]);
+							_con->Print(fmt::format("  {} {}\n", match[m], args[m]).c_str());
+							minMatchLen = (std::min)(minMatchLen, match[m].size());
 						}
 
 						// Try to refine comparison string
-						while (compLen < 1024) {
-							char c = match[0][compLen];
+						comp.clear();
+						for (size_t compIdx = 0; compIdx < minMatchLen; ++compIdx) {
+							char c = match[0][compIdx];
 							bool fail = false;
 							for (int m = 1; m < num; m++) {
-								if (match[m][compLen] != c) {
+								if (match[m][compIdx] != c) {
 									fail = true;
 									break;
 								}
@@ -835,13 +836,12 @@ void conInputHandler_c::ConInputKeyEvent(int key, int type)
 							if (fail) {
 								break;
 							}
-							comp[compLen++] = c;
+							comp += c;
 						}
-						comp[compLen] = 0;
 					}
 
 					// Copy comparison string back into input buffer
-					_con->input = comp;
+					_con->input = comp.c_str();
 					RefreshConInput();
 				}
 			}

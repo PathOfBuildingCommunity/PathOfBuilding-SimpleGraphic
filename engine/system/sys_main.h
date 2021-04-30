@@ -4,6 +4,9 @@
 // System Main Header
 //
 
+#include <filesystem>
+#include <string>
+
 // =======
 // Classes
 // =======
@@ -23,31 +26,27 @@ class thread_c {
 public:
 	thread_c(class sys_IMain* sys);
 	void	ThreadStart(bool lowPri = false);
-	static int atomicInc(volatile int* val);
-	static int atomicDec(volatile int* val);
-	static int atomicExch(volatile int* out, int val);
 private:
 	class sys_main_c* _sysMain;
 	virtual void ThreadProc() = 0;
-	static unsigned long __stdcall statThreadProc(void* obj);
+	static unsigned long statThreadProc(void* obj);
 };
 
 // File finder
 class find_c {
 public:
-	char	fileName[512] = {};
+	std::string fileName;
 	bool	isDirectory = false;
-	dword	fileSize = 0;
+	uintmax_t	fileSize = 0;
 	unsigned long long modified = 0;
-	char	modifiedDate[256] = {};
-	char	modifiedTime[256] = {};
 
 	find_c();
 	~find_c();
 	bool	FindFirst(const char* fileSpec);
 	bool	FindNext();
 private:
-	void*	handle;
+	std::filesystem::path glob;
+	std::filesystem::directory_iterator iter;
 };
 
 // ==========

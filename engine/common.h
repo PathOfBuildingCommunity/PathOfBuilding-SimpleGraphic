@@ -10,10 +10,14 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#if _WIN32
 #include <process.h>
 #include <direct.h>
-#include <math.h>
 #include <io.h>
+#else
+#include <strings.h>
+#endif
+#include <math.h>
 #include <errno.h>
 #include <stdbool.h>
 
@@ -88,7 +92,9 @@ private:
 // Constants
 // =========
 
+#ifndef M_PI
 #define M_PI 3.14159265358979323846f
+#endif
 
 static const char axchr[] = {'X', 'Y', 'Z', 'W'};
 
@@ -477,6 +483,11 @@ char*	_AllocStringLen(size_t len, const char* file, int line);
 #define AllocStringLen(s) _AllocStringLen(s, __FILE__, __LINE__)
 void	FreeString(const char* str);
 dword	StringHash(const char* str, int mask);
+
+#ifndef _WIN32
+#define _stricmp strcasecmp
+#define _strnicmp strncasecmp
+#endif
 
 // =======
 // Headers

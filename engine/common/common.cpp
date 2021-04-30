@@ -91,7 +91,7 @@ textBuffer_c &textBuffer_c::operator=(const char* r)
 {
 	// Reallocate buffer and copy the string
 	Alloc((int)strlen(r));
-	strcpy_s(buf, len+1, r);
+	strcpy(buf, r);
 	return *this;
 }
 
@@ -99,7 +99,7 @@ void textBuffer_c::IncSize()
 {
 	len++;
 	char* tmp = new char[len+1];
-	strncpy_s(tmp, len+1, buf, len);
+	memcpy(tmp, buf, len);
 	tmp[len] = 0;
 	delete buf;
 	buf = tmp;	
@@ -109,7 +109,7 @@ void textBuffer_c::DecSize()
 {
 	len--;
 	char* tmp = new char[len+1];
-	strncpy_s(tmp, len+1, buf, len);
+	memcpy(tmp, buf, len);
 	tmp[len] = 0;
 	delete buf;
 	buf = tmp;
@@ -254,7 +254,7 @@ char* _AllocString(const char* str, const char* file, int line)
 
 	size_t aslen = strlen(str) + 1;
 	char* al = new(file, line) char[aslen];
-	strcpy_s(al, aslen, str);
+	strcpy(al, str);
 	return al;
 }
 

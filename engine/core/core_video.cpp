@@ -9,6 +9,8 @@
 
 #include "core_video.h"
 
+#include <algorithm>
+
 // ======
 // Locals
 // ======
@@ -91,7 +93,7 @@ void core_video_c::Apply(bool shown)
 		if (vid_resizable->intVal == 2) {
 			set.flags|= VID_MAXIMIZE;
 		} else if (vid_resizable->intVal == 3) {
-			if (sscanf(vid_last->strVal, "%d,%d,%d,%d,%d", set.save.size + 0, set.save.size + 1, set.save.pos + 0, set.save.pos + 1, (int*)&set.save.maximised) == 5) {
+			if (sscanf(vid_last->strVal.c_str(), "%d,%d,%d,%d,%d", set.save.size + 0, set.save.size + 1, set.save.pos + 0, set.save.pos + 1, (int*)&set.save.maximised) == 5) {
 				set.flags|= VID_USESAVED;
 			} else {
 				set.flags|= VID_MAXIMIZE;
@@ -100,8 +102,8 @@ void core_video_c::Apply(bool shown)
 	}
 	set.display = vid_display->intVal;
 	if (vid_mode->intVal >= 0) {
-		set.mode[0] = __max(vid_modeList[vid_mode->intVal][0], CFG_VID_MINWIDTH);
-		set.mode[1] = __max(vid_modeList[vid_mode->intVal][1], CFG_VID_MINHEIGHT);
+		set.mode[0] = (std::max)(vid_modeList[vid_mode->intVal][0], CFG_VID_MINWIDTH);
+		set.mode[1] = (std::max)(vid_modeList[vid_mode->intVal][1], CFG_VID_MINHEIGHT);
 	} else {
 		set.mode[0] = 0;
 		set.mode[1] = 0;

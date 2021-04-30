@@ -557,7 +557,7 @@ static int l_NewFileSearch(lua_State* L)
 		return 0;
 	}
 	bool dirOnly = lua_toboolean(L, 2) != 0;
-	while (find->isDirectory != dirOnly || !strcmp(find->fileName, ".") || !strcmp(find->fileName, "..")) {
+	while (find->isDirectory != dirOnly || find->fileName == "." || find->fileName == "..") {
 		if ( !find->FindNext() ) {
 			delete find;
 			return 0;
@@ -600,7 +600,7 @@ static int l_searchHandleNextFile(lua_State* L)
 			searchHandle->find = NULL;
 			return 0;
 		}
-	} while (searchHandle->find->isDirectory != searchHandle->dirOnly || !strcmp(searchHandle->find->fileName, ".") || !strcmp(searchHandle->find->fileName, ".."));
+	} while (searchHandle->find->isDirectory != searchHandle->dirOnly || searchHandle->find->fileName == "." || searchHandle->find->fileName == "..");
 	lua_pushboolean(L, 1);
 	return 1;
 }
@@ -609,7 +609,7 @@ static int l_searchHandleGetFileName(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "GetFileName", true);
-	lua_pushstring(L, searchHandle->find->fileName);
+	lua_pushstring(L, searchHandle->find->fileName.c_str());
 	return 1;
 }
 
@@ -617,7 +617,7 @@ static int l_searchHandleGetFileSize(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "GetFileSize", true);
-	lua_pushinteger(L, searchHandle->find->fileSize);
+	lua_pushinteger(L, (lua_Integer)searchHandle->find->fileSize);
 	return 1;
 }
 
@@ -626,9 +626,7 @@ static int l_searchHandleGetFileModifiedTime(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "GetFileModifiedTime", true);
 	lua_pushnumber(L, (double)searchHandle->find->modified);
-	lua_pushstring(L, searchHandle->find->modifiedDate);
-	lua_pushstring(L, searchHandle->find->modifiedTime);
-	return 3;
+	return 1;
 }
 
 // =================

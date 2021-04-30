@@ -63,7 +63,7 @@ private:
 	std::vector<r_tex_c *> textureQueue;
 	std::mutex mutex;
 
-	void	ThreadProc();
+	void	ThreadProc() override;
 };
 
 r_ITexManager* r_ITexManager::GetHandle(r_renderer_c* renderer)

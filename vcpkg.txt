@@ -1,4 +1,6 @@
+fmt:x86-windows-static
 giflib:x86-windows-static
+glfw3:x86-windows-static
 libjpeg-turbo:x86-windows-static
 liblzma:x86-windows-static
 libpng:x86-windows-static
