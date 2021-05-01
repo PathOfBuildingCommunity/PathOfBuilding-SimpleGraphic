@@ -45,6 +45,7 @@ public:
 	volatile bool doRun;
 	volatile bool isRunning;
 
+	void	RunMessages(HWND hwnd = nullptr);
 	void	ThreadProc();
 
 	void	Print(const char* text);
@@ -72,6 +73,19 @@ sys_console_c::sys_console_c(sys_IMain* sysHnd)
 
 	ThreadStart(true);
 	while ( !isRunning );
+}
+
+void sys_console_c::RunMessages(HWND hwnd)
+{
+	// Flush message queue
+	MSG msg;
+	while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
+		if (GetMessage(&msg, hwnd, 0, 0) == 0) {
+			sys->Exit();
+		}
+		TranslateMessage(&msg);
+		DispatchMessage(&msg);
+	}
 }
 
 void sys_console_c::ThreadProc()
@@ -134,7 +148,7 @@ void sys_console_c::ThreadProc()
 	InvalidateRect(hwOut, nullptr, TRUE);
 
 	// Flush any messages created
-	sys->RunMessages();
+	RunMessages();
 
 	shown = true;
 
@@ -142,7 +156,7 @@ void sys_console_c::ThreadProc()
 	
 	isRunning = true;
 	while (doRun) {
-		sys->RunMessages(hwMain);
+		RunMessages(hwMain);
 		sys->Sleep(1);
 	}
 
@@ -214,7 +228,7 @@ void sys_console_c::SetVisible(bool show)
 			Print(buffer);
 			delete buffer;
 	
-			sys->RunMessages(hwMain);
+			RunMessages(hwMain);
 		}
 	} else {
 		shown = false;
@@ -284,7 +298,7 @@ void sys_console_c::Print(const char* text)
 	Edit_SetSel(hwOut, Edit_GetTextLength(hwOut), -1);
 	Edit_ReplaceSel(hwOut, winText);
 	Edit_Scroll(hwOut, 0xFFFF, 0);
-	sys->RunMessages(hwMain);
+	RunMessages(hwMain);
 	delete winText;
 }
 

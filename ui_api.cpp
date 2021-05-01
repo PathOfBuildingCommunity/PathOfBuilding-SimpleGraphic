@@ -669,7 +669,6 @@ static int l_ShowCursor(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: ShowCursor(doShow)");
-	ui->sys->ShowCursor(lua_toboolean(L, 1));
 	return 0;
 }
 
@@ -798,14 +797,14 @@ static int l_GetScriptPath(lua_State* L)
 static int l_GetRuntimePath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->sys->basePath);
+	lua_pushstring(L, ui->sys->basePath.c_str());
 	return 1;
 }
 
 static int l_GetUserPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->sys->userPath);
+	lua_pushstring(L, ui->sys->userPath.c_str());
 	return 1;
 }
 
@@ -1177,6 +1176,19 @@ static int l_Exit(lua_State* L)
 int ui_main_c::InitAPI(lua_State* L)
 {
 	luaL_openlibs(L);
+
+	// Add "lua/" subdir for non-JIT Lua
+	{
+		lua_getglobal(L, "package");
+		char const* tn = lua_typename(L, -1);
+		lua_getfield(L, -1, "path");
+		std::string old_path = lua_tostring(L, -1);
+		lua_pop(L, 1);
+		old_path += ";lua/?.lua";
+		lua_pushstring(L, old_path.c_str());
+		lua_setfield(L, -2, "path");
+		lua_pop(L, 1);
+	}
 
 	// Callbacks
 	lua_newtable(L);		// Callbacks table

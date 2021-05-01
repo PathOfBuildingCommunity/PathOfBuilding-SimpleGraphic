@@ -9,13 +9,17 @@
 
 #include "system.h"
 
-#define _WIN32_WINNT _WIN32_WINNT_WINXP
+#ifdef _WIN32
+#define _WIN32_WINNT _WIN32_WINNT_WIN7
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
 #include <shlobj.h>
 #include <shellapi.h>
 #include <mmsystem.h>
+#endif
+
+#include <chrono>
 
 // =======
 // Classes
@@ -28,7 +32,6 @@ public:
 	int		GetTime();
 	void	Sleep(int msec);
 	bool	IsKeyDown(byte key);
-	void	ShowCursor(int doShow);
 	void	ClipboardCopy(const char* str);
 	char*	ClipboardPaste();
 	bool	SetWorkDir(const char* newCwd = NULL);
@@ -43,17 +46,15 @@ public:
 
 	bool	Run(int argc, char** argv);
 
-	static LRESULT __stdcall WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	void	RunMessages(HWND hwnd = NULL);
-	void	PrintLastError(const char* msg);
-
 	int		KeyToVirtual(byte key);
 	byte	VirtualToKey(int virt);
 	byte	GlfwKeyToKey(int key);
 	char	GlfwKeyExtraChar(int key);
 
+#ifdef _WIN32
 	HINSTANCE hinst = nullptr;
 	HICON	icon = nullptr;
+#endif
 
 	class core_IMain* core = nullptr;
 
@@ -63,5 +64,5 @@ public:
 	char*	exitMsg = nullptr;
 	char*	threadError = nullptr;
 	bool	errorRaised = false;
-	int		baseTime = 0;
+	std::chrono::system_clock::time_point baseTime;
 };

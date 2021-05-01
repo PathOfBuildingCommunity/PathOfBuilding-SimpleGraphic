@@ -16,6 +16,7 @@
 #include <io.h>
 #else
 #include <strings.h>
+#include <unistd.h>
 #endif
 #include <math.h>
 #include <errno.h>
@@ -487,6 +488,7 @@ dword	StringHash(const char* str, int mask);
 #ifndef _WIN32
 #define _stricmp strcasecmp
 #define _strnicmp strncasecmp
+#define _chdir chdir
 #endif
 
 // =======

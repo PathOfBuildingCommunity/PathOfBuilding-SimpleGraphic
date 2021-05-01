@@ -267,7 +267,7 @@ char* _AllocStringLen(size_t len, const char* file, int line)
 
 void FreeString(const char* str)
 {
-	if (str) delete str;
+	if (str) delete[] str;
 }
 
 dword StringHash(const char* str, int mask)

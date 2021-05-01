@@ -18,7 +18,7 @@ public:
 	void	Start();
 	int		Get();
 private:
-	int		startTime;
+	std::chrono::system_clock::time_point startTime;
 };
 
 // Thread
@@ -60,17 +60,16 @@ public:
 	sys_IConsole* conWin = nullptr;
 	sys_IVideo* video = nullptr;
 
-	bool	x64 = false;
-	bool	debug = false;
-	bool	debuggerRunning = false;
-	int		processorCount = 0;
-	char	basePath[512] = {};
-	char	userPath[512] = {};
+	bool		x64 = false;
+	bool		debug = false;
+	bool		debuggerRunning = false;
+	int			processorCount = 0;
+	std::string	basePath;
+	std::string	userPath;
 
 	virtual int		GetTime() = 0;
 	virtual void	Sleep(int msec) = 0;
 	virtual bool	IsKeyDown(byte key) = 0;
-	virtual void	ShowCursor(int doShow) = 0;
 	virtual void	ClipboardCopy(const char* str) = 0;
 	virtual char*	ClipboardPaste() = 0;
 	virtual bool	SetWorkDir(const char* newCwd = NULL) = 0;

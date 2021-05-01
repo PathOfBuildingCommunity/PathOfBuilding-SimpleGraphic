@@ -212,8 +212,8 @@ void ui_main_c::Init(int argc, char** argv)
 		scriptPath = AllocString(tmpDir);
 		scriptWorkDir = AllocString(tmpDir);
 	} else {
-		scriptPath = AllocString(sys->basePath);
-		scriptWorkDir = AllocString(sys->basePath);
+		scriptPath = AllocString(sys->basePath.c_str());
+		scriptWorkDir = AllocString(sys->basePath.c_str());
 	}
 	scriptArgc = argc;
 	scriptArgv = new char*[argc];

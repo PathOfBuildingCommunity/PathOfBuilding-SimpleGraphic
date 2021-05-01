@@ -11,7 +11,18 @@
 
 #include "core.h"
 
+#ifdef _WIN32
 #include <eh.h>
+#include <Shlobj.h>
+#elif __APPLE__ && __MACH__
+#include <libproc.h>
+#endif
+
+#ifndef _WIN32
+#include <sys/types.h>
+#include <pwd.h>
+#include <uuid/uuid.h>
+#endif
 
 #include <GLFW/glfw3.h>
 #include <filesystem>
@@ -24,28 +35,29 @@
 // Locals
 // ======
 
+#ifdef _WIN32
 static void SE_ErrorTrans(unsigned int code, EXCEPTION_POINTERS* exPtr)
 {
 	throw exPtr;
 }
+#endif
 
 // ===========
 // Timer class
 // ===========
 
 timer_c::timer_c()
-{
-	startTime = 0;
-}
+{}
 
 void timer_c::Start()
 {
-	startTime = timeGetTime();
+	startTime = std::chrono::system_clock::now();
 }
 
 int timer_c::Get()
 {
-	return timeGetTime() - startTime;
+	auto curTime = std::chrono::system_clock::now();
+	return (int)std::chrono::duration_cast<std::chrono::milliseconds>(curTime - startTime).count();
 }
 
 // ============
@@ -61,14 +73,16 @@ unsigned long thread_c::statThreadProc(void* obj)
 {
 	thread_c* thread = (thread_c*)obj;
 	try {
+#ifdef _WIN32
 		// Enable translation to catch C exceptions if debugger is not present
 		if ( !thread->_sysMain->debuggerRunning ) {
 			_set_se_translator(SE_ErrorTrans);
 		}
-
+#endif
 		// Run thread procedure
 		thread->ThreadProc();	
 	}
+#ifdef _WIN32
 	catch (EXCEPTION_POINTERS* exPtr) {
 		// C exception
 		PEXCEPTION_RECORD exRec = exPtr->ExceptionRecord;
@@ -86,6 +100,11 @@ unsigned long thread_c::statThreadProc(void* obj)
 		sprintf_s(err, 1024, "Critical error at address %08Xh in thread %d:\n%s", static_cast<int>((ULONG_PTR)exRec->ExceptionAddress), GetCurrentThreadId(), detail);
 		thread->_sysMain->threadError = AllocString(err);
 	}
+#else
+	catch (std::exception& e) {
+		thread->_sysMain->threadError = AllocString(fmt::format("Exception: {}", e.what()).c_str());
+	}
+#endif
 	return 0;
 }
 
@@ -126,11 +145,6 @@ bool find_c::FindFirst(const char* fileSpec)
 {
 	std::filesystem::path p(fileSpec);
 	glob = p.filename();
-	{
-		OutputDebugStringA(fmt::format("\"{}\" - \"{}\"\n",
-			p.parent_path().string(),
-			glob.string()).c_str());
-	}
 
 	std::error_code ec;
 	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
@@ -386,6 +400,7 @@ static const byte sys_keyRemap[] = {
 	'\'',			// DE		VK_OEM_7
 };
 
+#ifdef _WIN32
 int sys_main_c::KeyToVirtual(byte key)
 {
 	if (key >= 32 && key <= 127) {
@@ -407,6 +422,7 @@ byte sys_main_c::VirtualToKey(int virt)
 		return 0;
 	}
 }
+#endif
 
 byte sys_main_c::GlfwKeyToKey(int key) {
 	static std::map<int, byte> s_lookup = {
@@ -491,29 +507,23 @@ char sys_main_c::GlfwKeyExtraChar(int key) {
 
 int sys_main_c::GetTime()
 {
-	return timeGetTime() - baseTime;
+	auto curTime = std::chrono::system_clock::now();
+	return (int)std::chrono::duration_cast<std::chrono::milliseconds>(curTime - baseTime).count();
 }
 
 void sys_main_c::Sleep(int msec)
 {
-	::Sleep(msec);
+	std::this_thread::sleep_for(std::chrono::milliseconds(msec));
 }
 
 bool sys_main_c::IsKeyDown(byte k)
 {
+#ifdef _WIN32
 	return !!(GetKeyState(KeyToVirtual(k)) & 0x8000);
-}
-
-void sys_main_c::ShowCursor(int doShow)
-{
-	static bool shown = true;
-	if (shown && !doShow) {
-		shown = false;
-		::ShowCursor(0);
-	} else if (doShow && !shown) {
-		::ShowCursor(1);
-		shown = true;
-	}
+#else
+	// TODO(LV): Implement on other OSes
+	return false;
+#endif
 }
 
 void sys_main_c::ClipboardCopy(const char* str)
@@ -531,12 +541,13 @@ bool sys_main_c::SetWorkDir(const char* newCwd)
 	if (newCwd) {
 		return _chdir(newCwd) != 0;
 	} else {
-		return _chdir(basePath) != 0;
+		return _chdir(basePath.c_str()) != 0;
 	}
 }
 
 void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 {
+#ifdef _WIN32
 	char cmd[512];
 	strcpy(cmd, cmdName);
 	if ( !strchr(cmd, '.') ) {
@@ -554,227 +565,23 @@ void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 		sinfo.lpVerb = "runas";
 		ShellExecuteEx(&sinfo);
 	}
+#else
+	// TODO(LV): Implement subprocesses for other OSes.
+#endif
 }
 
 void sys_main_c::OpenURL(const char* url)
 {
+#ifdef _WIN32
 	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
-}
-
-// =====================
-// Main Window Prodecure
-// =====================
-
-LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-	sys_main_c* sys = (sys_main_c*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-	if ( !sys ) {
-		return DefWindowProc(hwnd, msg, wParam, lParam);
-	}
-
-	switch (msg) {
-	case WM_CLOSE:
-		if (sys->initialised && sys->core->CanExit()) {
-			PostQuitMessage(0);
-		}
-		return FALSE;
-
-	case WM_ACTIVATEAPP:
-		sys->video->SetActive(!!wParam);
-		break;
-
-	case WM_SIZE:
-		if ( !IsIconic(hwnd) ) {
-			sys->video->SizeChanged(LOWORD(lParam), HIWORD(lParam), wParam == SIZE_MAXIMIZED);
-		}
-		break;
-
-	case WM_MOVE:
-		if ( !IsIconic(hwnd) ) {
-			sys->video->PosChanged(GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
-		}
-		break;
-
-	case WM_GETMINMAXINFO:
-		{
-			int width, height;
-			sys->video->GetMinSize(width, height);
-			if (width) {
-				MINMAXINFO* mmi = (MINMAXINFO*)lParam;
-				mmi->ptMinTrackSize.x = width;
-				mmi->ptMinTrackSize.y = height;
-			}
-		}
-		return FALSE;
-
-	case WM_CHAR:
-		if (sys->initialised) {
-			sys->core->KeyEvent((int)wParam, KE_CHAR);
-		}
-		return FALSE;
-
-	case WM_SYSKEYDOWN:
-		if (lParam & 0x20000000) {
-			byte key = sys->VirtualToKey((int)wParam);
-			if (key == KEY_F4) {
-				PostQuitMessage(0);
-			} else if (key && sys->initialised) {
-				sys->core->KeyEvent(key, KE_KEYDOWN);
-			}
-		}
-		return FALSE;
-
-	case WM_KEYDOWN:
-		if (sys->initialised) {
-			byte key = sys->VirtualToKey((int)wParam);
-			if (key) {
-				sys->core->KeyEvent(key, KE_KEYDOWN);
-			}
-		}
-		return FALSE;
-
-	case WM_SYSKEYUP:
-		if (lParam & 0x20000000) {
-			byte key = sys->VirtualToKey((int)wParam);
-			if (key && sys->initialised) {
-				sys->core->KeyEvent(key, KE_KEYUP);
-			}
-		}
-		return FALSE;
-
-	case WM_KEYUP:
-		if (sys->initialised) {
-			byte key = sys->VirtualToKey((int)wParam);
-			if (key) {
-				sys->core->KeyEvent(key, KE_KEYUP);
-			}
-		}
-		return FALSE;
-
-	case WM_LBUTTONDOWN:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_LMOUSE, KE_KEYDOWN);
-		}
-		return FALSE;
-
-	case WM_MBUTTONDOWN:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_MMOUSE, KE_KEYDOWN);
-		}
-		return FALSE;
-
-	case WM_RBUTTONDOWN:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_RMOUSE, KE_KEYDOWN);
-		}
-		return FALSE;
-
-	case WM_XBUTTONDOWN:
-		if (sys->initialised) {
-			if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
-				sys->core->KeyEvent(KEY_MOUSE4, KE_KEYDOWN);
-			} else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2) {
-				sys->core->KeyEvent(KEY_MOUSE5, KE_KEYDOWN);
-			}
-		}
-		return TRUE;
-
-	case WM_LBUTTONUP:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_LMOUSE, KE_KEYUP);
-		}
-		return FALSE;
-
-	case WM_MBUTTONUP:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_MMOUSE, KE_KEYUP);
-		}
-		return FALSE;
-
-	case WM_RBUTTONUP:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_RMOUSE, KE_KEYUP);
-		}
-		return FALSE;
-
-	case WM_XBUTTONUP:
-		if (sys->initialised) {
-			if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
-				sys->core->KeyEvent(KEY_MOUSE4, KE_KEYUP);
-			} else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2) {
-				sys->core->KeyEvent(KEY_MOUSE5, KE_KEYUP);
-			}
-		}
-		return TRUE;
-
-	case WM_LBUTTONDBLCLK:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_LMOUSE, KE_DBLCLK);
-		}
-		return FALSE;
-
-	case WM_MBUTTONDBLCLK:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_MMOUSE, KE_DBLCLK);
-		}
-		return FALSE;
-
-	case WM_RBUTTONDBLCLK:
-		if (sys->initialised) {
-			sys->core->KeyEvent(KEY_RMOUSE, KE_DBLCLK);
-		}
-		return FALSE;
-
-	case WM_XBUTTONDBLCLK:
-		if (sys->initialised) {
-			if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) {
-				sys->core->KeyEvent(KEY_MOUSE4, KE_DBLCLK);
-			} else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON2) {
-				sys->core->KeyEvent(KEY_MOUSE5, KE_DBLCLK);
-			}
-		}
-		return TRUE;
-
-	case WM_MOUSEWHEEL:
-		if (sys->initialised) {
-			if ((SHORT)HIWORD(wParam) > 0) {
-				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYDOWN);
-				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYUP);
-			} else {
-				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYDOWN);
-				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYUP);
-			}
-		}
-		return FALSE;
-	}
-
-	return DefWindowProc(hwnd, msg, wParam, lParam);
-}
-
-void sys_main_c::RunMessages(HWND hwnd)
-{
-	// Flush message queue
-	MSG msg;
-	while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
-		if (GetMessage(&msg, hwnd, 0, 0) == 0) {
-			Exit();
-		}
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
-	}
+#else
+	// TODO(LV): Implement URL opening for other OSes.
+#endif
 }
 
 // ==============================
 // System Initialisation/Shutdown
 // ==============================
-
-void sys_main_c::PrintLastError(const char* msg)
-{
-	DWORD code = GetLastError();
-	char buf[1024];
-	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, code, 0, buf, 1024, NULL);
-	con->Printf("%s: code %d, %s\n", msg, code, buf);
-}
 
 void sys_main_c::Error(const char *fmt, ...)
 {
@@ -788,21 +595,32 @@ void sys_main_c::Error(const char *fmt, ...)
 
 	va_list va;
 	va_start(va, fmt);
+#ifdef _WIN32
 	char msg[4096];
 	vsprintf_s(msg, 4096, fmt, va);
+#else
+	char* msg{};
+	vasprintf(&msg, fmt, va);
+#endif
 	va_end(va);
 	con->Printf("\n--- ERROR ---\n%s", msg);
+#ifndef _WIN32
+	free(msg);
+#endif
 
 	exitFlag = false;
 	while (exitFlag == false) {
-		RunMessages();
 		Sleep(50);
 	}
 
 #ifdef _MEMTRAK_H
 	_memTrak_suppressReport = true;
 #endif
+#ifdef _WIN32
 	ExitProcess(0);
+#else
+	std::exit(0);
+#endif
 }
 
 void sys_main_c::Exit(const char* msg)
@@ -828,6 +646,44 @@ void sys_main_c::Restart()
 	exitFlag = true;
 }
 
+std::string FindBasePath()
+{
+#ifdef _WIN32
+	std::vector<char> basePath(512);
+	GetModuleFileNameA(NULL, basePath.data(), basePath.size());
+	*strrchr(basePath.data(), '\\') = 0;
+	return basePath.data();
+#elif __linux__
+#elif __APPLE__ && __MACH__
+	pid_t pid = getpid();
+	char basePath[PROC_PIDPATHINFO_MAXSIZE]{};
+	proc_pidpath(pid, basePath, sizeof(basePath));
+	*strrchr(basePath, '/') = 0;
+	return basePath;
+#endif
+}
+
+std::string FindUserPath()
+{
+#ifdef _WIN32
+    PWSTR os_path{};
+    SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &os_path);
+    std::filesystem::path path(os_path);
+    CoTaskMemFree(os_path);
+    return path.string();
+#else
+    if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
+        return data_home_path;
+    }
+    if (char const* home_path = getenv("HOME")) {
+        return std::filesystem::path(home_path) / ".local/share";
+    }
+    uid_t uid = getuid();
+    struct passwd *pw = getpwuid(uid);
+    return std::filesystem::path(pw->pw_dir) / ".local/share";
+#endif
+}
+
 sys_main_c::sys_main_c()
 {
 #ifdef _WIN64
@@ -840,17 +696,16 @@ sys_main_c::sys_main_c()
 #else
 	debug = false;
 #endif
+#ifdef _WIN32
 	debuggerRunning = IsDebuggerPresent() == TRUE;
-	SYSTEM_INFO sysInfo;
-	GetSystemInfo(&sysInfo);
-	processorCount = sysInfo.dwNumberOfProcessors;
+#else
+	debuggerRunning = false;
+#endif
+	processorCount = std::thread::hardware_concurrency();
 
 	// Set the local system information
-	hinst = GetModuleHandle(NULL);
-	icon = LoadIcon(hinst, MAKEINTRESOURCE(1000));
-	GetModuleFileName(NULL, basePath, 512);
-	*strrchr(basePath, '\\') = 0;
-	SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, 0, userPath);
+	basePath = FindBasePath();
+	userPath = FindUserPath();
 }
 
 bool sys_main_c::Run(int argc, char** argv)
@@ -861,7 +716,7 @@ bool sys_main_c::Run(int argc, char** argv)
 	exitMsg = NULL;
 	threadError = NULL;
 	errorRaised = false;
-	baseTime = timeGetTime();
+	baseTime = std::chrono::system_clock::now();
 
 	SetWorkDir();
 
@@ -881,10 +736,12 @@ bool sys_main_c::Run(int argc, char** argv)
 	initialised = true;
 
 	try {
+#ifdef _WIN32
 		// Enable translation to catch C exceptions if debugger is not present
 		if ( !debuggerRunning ) {
 			_set_se_translator(SE_ErrorTrans);
 		}
+#endif
 
 		// Initialise engine
 		core->Init(argc, argv);
@@ -908,6 +765,7 @@ bool sys_main_c::Run(int argc, char** argv)
 		// Shutdown engine
 		core->Shutdown();
 	}
+#ifdef _WIN32
 	catch (EXCEPTION_POINTERS* exPtr) { 
 		// C exception
 		PEXCEPTION_RECORD exRec = exPtr->ExceptionRecord;
@@ -923,6 +781,11 @@ bool sys_main_c::Run(int argc, char** argv)
 		}
 		Error("Critical error at address %08Xh:\n%s", static_cast<int>((ULONG_PTR)exRec->ExceptionAddress), detail);
 	}
+#else
+	catch (std::exception& e) {
+		Error("Exception: ", e.what());
+	}
+#endif
 
 	if (exitMsg) {
 		exitFlag = false;
@@ -934,7 +797,6 @@ bool sys_main_c::Run(int argc, char** argv)
 			exitMsg = NULL;
 		}
 		while (exitFlag == false) {
-			RunMessages();
 			Sleep(50);
 		}
 	}	

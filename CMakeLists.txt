@@ -30,15 +30,16 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/render/r_texture.cpp"
     "engine/render/r_texture.h"
     # "engine/system/win/sys_console.cpp"
-    # "engine/system/win/sys_local.h"
-    # "engine/system/win/sys_main.cpp"
-    # "engine/system/win/sys_opengl.cpp"
-    # "engine/system/win/sys_video.cpp"
+    "engine/system/win/sys_console_unix.cpp"
+    "engine/system/win/sys_local.h"
+    "engine/system/win/sys_main.cpp"
+    "engine/system/win/sys_opengl.cpp"
+    "engine/system/win/sys_video.cpp"
     "engine/system/sys_console.h"
     "engine/system/sys_main.h"
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
-    # "win/entry.cpp"
+    "win/entry.cpp"
     "ui.h"
     "ui_api.cpp"
     "ui_console.cpp"
@@ -59,6 +60,7 @@ add_library(SimpleGraphic SHARED
 target_compile_definitions(SimpleGraphic
     PRIVATE
     "GL_SILENCE_DEPRECATION"
+    "SIMPLEGRAPHIC_EXPORTS"
 )
 
 target_include_directories(SimpleGraphic
@@ -68,6 +70,7 @@ target_include_directories(SimpleGraphic
 )
 
 find_package(fmt CONFIG REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
 
 include(FindLua)
@@ -85,6 +88,7 @@ target_include_directories(SimpleGraphic
 target_link_libraries(SimpleGraphic
     PRIVATE
     fmt::fmt
+    glfw
     ${JPEG_LIBRARIES}
     ${LUA_LIBRARIES}
     OpenGL::GL

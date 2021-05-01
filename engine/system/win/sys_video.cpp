@@ -9,8 +9,9 @@
 #include "core.h"
 
 #include <GLFW/glfw3.h>
-#define GLFW_EXPOSE_NATIVE_WIN32
-#include <GLFW/glfw3native.h>
+
+#include <optional>
+#include <utility>
 
 // ====================
 // sys_IVideo Interface
@@ -96,6 +97,17 @@ sys_video_c::~sys_video_c()
 	glfwTerminate();
 }
 
+std::optional<std::pair<double, double>> PlatformGetCursorPos() {
+#if _WIN32
+	POINT curPos;
+	GetCursorPos(&curPos);
+	return std::make_pair((double)curPos.x, (double)curPos.y);
+#else
+	// TODO(LV): Implement on other OSes
+	return {};
+#endif
+}
+
 // ==================
 // System Video Class
 // ==================
@@ -119,16 +131,18 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		sys->con->Warning("display #%d doesn't exist (max display number is %d)", cur.display, numMon - 1);
 		cur.display = 0;
 	} else if (cur.display < 0) {
-		// Use monitor containing the mouse cursor 
-		POINT curPos;
-		GetCursorPos(&curPos);
+		// Use monitor containing the mouse cursor if available, otherwise primary monitor
 		cur.display = 0;
-		for (int m = 0; m < numMon; ++m) {
-			int right = mon[m].left + mon[m].width;
-			int bottom = mon[m].top + mon[m].height;
-			if (curPos.x >= mon[m].left && curPos.y >= mon[m].top && curPos.x < right && curPos.y < bottom) {
-				cur.display = m;
-				break;
+		auto curPos = PlatformGetCursorPos();
+		if (curPos) {
+			auto [curX, curY] = *curPos;
+			for (int m = 0; m < numMon; ++m) {
+				int right = mon[m].left + mon[m].width;
+				int bottom = mon[m].top + mon[m].height;
+				if (curX >= mon[m].left && curY >= mon[m].top && curX < right && curY < bottom) {
+					cur.display = m;
+					break;
+				}
 			}
 		}
 	}
@@ -148,10 +162,14 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	Vector2Copy(cur.mode, vid.size);
 	Vector2Copy(defRes, scrSize);
 
+	struct WindowRect {
+		int left, top;
+		int right, bottom;
+	};
+
 	// Get window rectangle
-	RECT wrec;
+	WindowRect wrec;
 	if (cur.flags & VID_USESAVED) {
-		POINT savePos = { cur.save.pos[0], cur.save.pos[1] };
 		// TODO(LV): Move offscreen windows to a monitor.
 		wrec.left = cur.save.pos[0];
 		wrec.top = cur.save.pos[1];
