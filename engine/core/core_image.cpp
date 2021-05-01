@@ -11,7 +11,11 @@
 #include <jpeglib.h>
 #include <png.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 #include <algorithm>
+#include <vector>
 
 // =======
 // Classes
@@ -92,6 +96,9 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x474E5089) {
 		// 0x89 P N G
 		return new png_c(conHnd);
+	} else if (*(dword*)dat == 0x38464947) {
+		// G I F 8
+		return new gif_c(conHnd);
 	} else if (*(dword*)dat == BLP2_MAGIC) {
 		// B L P 2
 		return new blp_c(conHnd);
@@ -792,6 +799,52 @@ bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 		return true;
 	}
 	return false;
+}
+
+// =========
+// GIF Image
+// =========
+
+bool gif_c::Load(const char* fileName)
+{
+	// Open file
+	fileInputStream_c in;
+	if (in.FileOpen(fileName, true)) {
+		return true;
+	}
+
+	{
+		std::vector<byte> fileData(in.GetLen());
+		if (in.Read(fileData.data(), fileData.size())) {
+			return true;
+		}
+		int x, y, in_comp;
+		stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, 4);
+		if (!data || in_comp != 4) {
+			stbi_image_free(data);
+			return true;
+		}
+		width = x;
+		height = y;
+		comp = in_comp;
+		type = IMGTYPE_RGBA;
+		const size_t byteSize = width * height * comp;
+		dat = new byte[byteSize];
+		std::copy_n(data, byteSize, dat);
+		stbi_image_free(data);
+		return false;
+	}
+}
+
+bool gif_c::Save(const char* fileName)
+{
+	// HELL no.
+	return true;
+}
+
+bool gif_c::ImageInfo(const char* fileName, imageInfo_s* info)
+{
+	return true;
 }
 
 // =========
