@@ -188,7 +188,7 @@ static int l_imgHandleLoad(lua_State* L)
 	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
 		strcpy(fullFileName, fileName);
 	} else {
-		sprintf(fullFileName, "%s\\%s", ui->scriptWorkDir, fileName);
+		sprintf(fullFileName, "%s/%s", ui->scriptWorkDir, fileName);
 	}
 	delete imgHandle->hnd;
 	int flags = TF_NOMIPMAP;
