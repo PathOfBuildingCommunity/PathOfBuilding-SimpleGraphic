@@ -194,7 +194,14 @@ void r_layer_c::Render()
 		switch (cmd->cmd) {
 		case r_layerCmd_s::VIEWPORT:
 			if (cmd->viewport.x != curViewPort.x || cmd->viewport.y != curViewPort.y || cmd->viewport.width != curViewPort.width || cmd->viewport.height != curViewPort.height) {
-				glViewport(cmd->viewport.x, renderer->sys->video->vid.size[1] - cmd->viewport.y - cmd->viewport.height, cmd->viewport.width, cmd->viewport.height);
+				auto& vid = renderer->sys->video->vid;
+				float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
+				float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
+				float x = cmd->viewport.x * fbScaleX;
+				float y = (vid.size[1] - cmd->viewport.y - cmd->viewport.height) * fbScaleY;
+				float width = cmd->viewport.width * fbScaleX;
+				float height = cmd->viewport.height * fbScaleY;
+				glViewport((int)x, (int)y, (int)width, (int)height);
 				glMatrixMode(GL_PROJECTION);
 				glLoadIdentity();
 				glOrtho(0, (float)cmd->viewport.width, (float)cmd->viewport.height, 0, -9999, 9999);

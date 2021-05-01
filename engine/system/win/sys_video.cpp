@@ -25,6 +25,7 @@ public:
 	void	SetActive(bool active);
 	void	SetForeground();
 	bool	IsActive();
+	void	FramebufferSizeChanged(int width, int height);
 	void	SizeChanged(int width, int height, bool max);
 	void	PosChanged(int x, int y);
 	void	GetMinSize(int &width, int &height);
@@ -223,6 +224,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			glfwSetWindowShouldClose(wnd, sys->initialised && sys->core->CanExit());
 		});
+		glfwSetFramebufferSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->video->FramebufferSizeChanged(width, height);
+		});
 		glfwSetWindowSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			bool maximized = glfwGetWindowAttrib(wnd, GLFW_MAXIMIZED);
@@ -286,6 +291,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
 
 	glfwSetWindowPos(wnd, vid.pos[0], vid.pos[1]);
+	glfwGetFramebufferSize(wnd, &vid.fbSize[0], &vid.fbSize[1]);
 	glfwGetWindowSize(wnd, &vid.size[0], &vid.size[1]);
 
 	initialised = true;
@@ -309,6 +315,11 @@ void sys_video_c::SetForeground()
 bool sys_video_c::IsActive()
 {
 	return glfwGetWindowAttrib(wnd, GLFW_FOCUSED);
+}
+
+void sys_video_c::FramebufferSizeChanged(int width, int height) {
+	vid.fbSize[0] = width;
+	vid.fbSize[1] = height;
 }
 
 void sys_video_c::SizeChanged(int width, int height, bool max)
