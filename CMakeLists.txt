@@ -3,7 +3,9 @@ cmake_minimum_required(VERSION 3.15)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
+include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
@@ -66,31 +68,30 @@ target_compile_definitions(SimpleGraphic
 target_include_directories(SimpleGraphic
     PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/engine"    
+    "${CMAKE_CURRENT_SOURCE_DIR}/engine"
 )
 
+find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
-
-include(FindLua)
-find_package(lua REQUIRED)
-
+find_package(LuaJit REQUIRED)
 find_package(OpenGL REQUIRED)
 find_package(libpng CONFIG REQUIRED)
 
 target_include_directories(SimpleGraphic
     PRIVATE
     ${JPEG_INCLUDE_DIR}
-    ${LUA_INCLUDE_DIR}
+    ${LUAJIT_INCLUDE_DIR}
 )
 
 target_link_libraries(SimpleGraphic
     PRIVATE
+    CURL::libcurl
     fmt::fmt
     glfw
     ${JPEG_LIBRARIES}
-    ${LUA_LIBRARIES}
+    ${LUAJIT_LIBRARIES}
     OpenGL::GL
     png_static
 )
