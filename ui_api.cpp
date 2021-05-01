@@ -6,6 +6,7 @@
 
 #include "ui_local.h"
 
+#include <filesystem>
 #include <zlib.h>
 
 /* OnFrame()
@@ -100,10 +101,10 @@ static int l_SetCallback(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetCallback(name[, func])");
-	ui->LAssert(L, lua_isstring(L, 1), "SetCallback() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "SetCallback() argument 1: expected string, got %s", luaL_typename(L, 1));
 	lua_pushvalue(L, 1);
 	if (n >= 2) {
-		ui->LAssert(L, lua_isfunction(L, 2) || lua_isnil(L, 2), "SetCallback() argument 2: expected function or nil, got %t", 2);
+		ui->LAssert(L, lua_isfunction(L, 2) || lua_isnil(L, 2), "SetCallback() argument 2: expected function or nil, got %s", luaL_typename(L, 2));
 		lua_pushvalue(L, 2);
 	} else {
 		lua_pushnil(L);
@@ -117,7 +118,7 @@ static int l_GetCallback(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: GetCallback(name)");
-	ui->LAssert(L, lua_isstring(L, 1), "GetCallback() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "GetCallback() argument 1: expected string, got %s", luaL_typename(L, 1));
 	lua_pushvalue(L, 1);
 	lua_gettable(L, lua_upvalueindex(1));
 	return 1;
@@ -129,7 +130,7 @@ static int l_SetMainObject(lua_State* L)
 	int n = lua_gettop(L);
 	lua_pushstring(L, "MainObject");
 	if (n >= 1) {
-		ui->LAssert(L, lua_istable(L, 1) || lua_isnil(L, 1), "SetMainObject() argument 1: expected table or nil, got %t", 1);
+		ui->LAssert(L, lua_istable(L, 1) || lua_isnil(L, 1), "SetMainObject() argument 1: expected table or nil, got %s", luaL_typename(L, 1));
 		lua_pushvalue(L, 1);
 	} else {
 		lua_pushnil(L);
@@ -181,7 +182,7 @@ static int l_imgHandleLoad(lua_State* L)
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "Load", false);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
-	ui->LAssert(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* fileName = lua_tostring(L, 1);
 	char fullFileName[512];
 	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
@@ -245,7 +246,7 @@ static int l_imgHandleSetLoadingPriority(lua_State* L)
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "SetLoadingPriority", true);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: imgHandle:SetLoadingPriority(pri)");
-	ui->LAssert(L, lua_isnumber(L, 1), "imgHandle:SetLoadingPriority() argument 1: expected number, got %t", 1);
+	ui->LAssert(L, lua_isnumber(L, 1), "imgHandle:SetLoadingPriority() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->renderer->SetShaderLoadingPriority(imgHandle->hnd, (int)lua_tointeger(L, 1));
 	return 0;
 }
@@ -288,11 +289,11 @@ static int l_SetClearColor(lua_State* L)
 	ui->LAssert(L, n >= 3, "Usage: SetClearColor(red, green, blue[, alpha])");
 	col4_t color;
 	for (int i = 1; i <= 3; i++) {
-		ui->LAssert(L, lua_isnumber(L, i), "SetClearColor() argument %d: expected number, got %t", i, i);
+		ui->LAssert(L, lua_isnumber(L, i), "SetClearColor() argument %d: expected number, got %s", i, luaL_typename(L, i));
 		color[i-1] = (float)lua_tonumber(L, i);
 	}
 	if (n >= 4 && !lua_isnil(L, 4)) {
-		ui->LAssert(L, lua_isnumber(L, 4), "SetClearColor() argument 4: expected number or nil, got %t", 4);
+		ui->LAssert(L, lua_isnumber(L, 4), "SetClearColor() argument 4: expected number or nil, got %s", luaL_typename(L, 4));
 		color[3] = (float)lua_tonumber(L, 4);
 	} else {
 		color[3] = 1.0;
@@ -308,9 +309,9 @@ static int l_SetDrawLayer(lua_State* L)
 	ui->LAssert(L, ui->renderEnable, "SetDrawLayer() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetDrawLayer({layer|nil}[, subLayer])");
-	ui->LAssert(L, lua_isnumber(L, 1) || lua_isnil(L, 1), "SetDrawLayer() argument 1: expected number or nil, got %t", 1);
+	ui->LAssert(L, lua_isnumber(L, 1) || lua_isnil(L, 1), "SetDrawLayer() argument 1: expected number or nil, got %s", luaL_typename(L, 1));
 	if (n >= 2) {
-		ui->LAssert(L, lua_isnumber(L, 2), "SetDrawLayer() argument 2: expected number, got %t", 2);
+		ui->LAssert(L, lua_isnumber(L, 2), "SetDrawLayer() argument 2: expected number, got %s", luaL_typename(L, 2));
 	}
 	if (lua_isnil(L, 1)) {
 		ui->LAssert(L, n >= 2, "SetDrawLayer(): must provide subLayer if layer is nil");
@@ -339,7 +340,7 @@ static int l_SetViewport(lua_State* L)
 	if (n) {
 		ui->LAssert(L, n >= 4, "Usage: SetViewport([x, y, width, height])");
 		for (int i = 1; i <= 4; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "SetViewport() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "SetViewport() argument %d: expected number, got %s", i, luaL_typename(L, i));
 		}
 		ui->renderer->SetViewport((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)lua_tointeger(L, 4));
 	} else {
@@ -375,11 +376,11 @@ static int l_SetDrawColor(lua_State* L)
 	} else {
 		ui->LAssert(L, n >= 3, "Usage: SetDrawColor(red, green, blue[, alpha]) or SetDrawColor(escapeStr)");
 		for (int i = 1; i <= 3; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "SetDrawColor() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "SetDrawColor() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			color[i-1] = (float)lua_tonumber(L, i);
 		}
 		if (n >= 4 && !lua_isnil(L, 4)) {
-			ui->LAssert(L, lua_isnumber(L, 4), "SetDrawColor() argument 4: expected number or nil, got %t", 4);
+			ui->LAssert(L, lua_isnumber(L, 4), "SetDrawColor() argument 4: expected number or nil, got %s", luaL_typename(L, 4));
 			color[3] = (float)lua_tonumber(L, 4);
 		} else {
 			color[3] = 1.0;
@@ -396,7 +397,7 @@ static int l_DrawImage(lua_State* L)
 	ui->LAssert(L, ui->renderEnable, "DrawImage() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 5, "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])");
-	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImage() argument 1: expected image handle or nil, got %t", 1);
+	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImage() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
 	if ( !lua_isnil(L, 1) ) {
 		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
@@ -407,13 +408,13 @@ static int l_DrawImage(lua_State* L)
 	if (n > 5) {
 		ui->LAssert(L, n >= 9, "DrawImage(): incomplete set of texture coordinates provided");
 		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			arg[i-2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
 	} else {
 		for (int i = 2; i <= 5; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			arg[i-2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3]);
@@ -428,7 +429,7 @@ static int l_DrawImageQuad(lua_State* L)
 	ui->LAssert(L, ui->renderEnable, "DrawImageQuad() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 9, "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])");
-	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImageQuad() argument 1: expected image handle or nil, got %t", 1);
+	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImageQuad() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
 	if ( !lua_isnil(L, 1) ) {
 		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
@@ -439,13 +440,13 @@ static int l_DrawImageQuad(lua_State* L)
 	if (n > 9) {
 		ui->LAssert(L, n >= 17, "DrawImageQuad(): incomplete set of texture coordinates provided");
 		for (int i = 2; i <= 17; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			arg[i-2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7], arg[8], arg[9], arg[10], arg[11], arg[12], arg[13], arg[14], arg[15]);
 	} else {
 		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %t", i, i);
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			arg[i-2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
@@ -460,12 +461,12 @@ static int l_DrawString(lua_State* L)
 	ui->LAssert(L, ui->renderEnable, "DrawString() called outside of OnFrame");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 6, "Usage: DrawString(left, top, align, height, font, text)");
-	ui->LAssert(L, lua_isnumber(L, 1), "DrawString() argument 1: expected number, got %t", 1);
-	ui->LAssert(L, lua_isnumber(L, 2), "DrawString() argument 2: expected number, got %t", 2);
-	ui->LAssert(L, lua_isstring(L, 3) || lua_isnil(L, 3), "DrawString() argument 3: expected string or nil, got %t", 3);
-	ui->LAssert(L, lua_isnumber(L, 4), "DrawString() argument 4: expected number, got %t", 4);
-	ui->LAssert(L, lua_isstring(L, 5), "DrawString() argument 5: expected string, got %t", 5);
-	ui->LAssert(L, lua_isstring(L, 6), "DrawString() argument 6: expected string, got %t", 6);
+	ui->LAssert(L, lua_isnumber(L, 1), "DrawString() argument 1: expected number, got %s", luaL_typename(L, 1));
+	ui->LAssert(L, lua_isnumber(L, 2), "DrawString() argument 2: expected number, got %s", luaL_typename(L, 2));
+	ui->LAssert(L, lua_isstring(L, 3) || lua_isnil(L, 3), "DrawString() argument 3: expected string or nil, got %s", luaL_typename(L, 3));
+	ui->LAssert(L, lua_isnumber(L, 4), "DrawString() argument 4: expected number, got %s", luaL_typename(L, 4));
+	ui->LAssert(L, lua_isstring(L, 5), "DrawString() argument 5: expected string, got %s", luaL_typename(L, 5));
+	ui->LAssert(L, lua_isstring(L, 6), "DrawString() argument 6: expected string, got %s", luaL_typename(L, 6));
 	static const char* alignMap[6] = { "LEFT", "CENTER", "RIGHT", "CENTER_X", "RIGHT_X", NULL };
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	ui->renderer->DrawString(
@@ -481,9 +482,9 @@ static int l_DrawStringWidth(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 3, "Usage: DrawStringWidth(height, font, text)");
-	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringWidth() argument 1: expected number, got %t", 1);
-	ui->LAssert(L, lua_isstring(L, 2), "DrawStringWidth() argument 2: expected string, got %t", 2);
-	ui->LAssert(L, lua_isstring(L, 3), "DrawStringWidth() argument 3: expected string, got %t", 3);
+	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringWidth() argument 1: expected number, got %s", luaL_typename(L, 1));
+	ui->LAssert(L, lua_isstring(L, 2), "DrawStringWidth() argument 2: expected string, got %s", luaL_typename(L, 2));
+	ui->LAssert(L, lua_isstring(L, 3), "DrawStringWidth() argument 3: expected string, got %s", luaL_typename(L, 3));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	lua_pushinteger(L, ui->renderer->DrawStringWidth((int)lua_tointeger(L, 1), luaL_checkoption(L, 2, "FIXED", fontMap), lua_tostring(L, 3)));
 	return 1;
@@ -495,11 +496,11 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 5, "Usage: DrawStringCursorIndex(height, font, text, cursorX, cursorY)");
-	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringCursorIndex() argument 1: expected number, got %t", 1);
-	ui->LAssert(L, lua_isstring(L, 2), "DrawStringCursorIndex() argument 2: expected string, got %t", 2);
-	ui->LAssert(L, lua_isstring(L, 3), "DrawStringCursorIndex() argument 3: expected string, got %t", 3);
-	ui->LAssert(L, lua_isnumber(L, 4), "DrawStringCursorIndex() argument 4: expected number, got %t", 4);
-	ui->LAssert(L, lua_isnumber(L, 5), "DrawStringCursorIndex() argument 5: expected number, got %t", 5);
+	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringCursorIndex() argument 1: expected number, got %s", luaL_typename(L, 1));
+	ui->LAssert(L, lua_isstring(L, 2), "DrawStringCursorIndex() argument 2: expected string, got %s", luaL_typename(L, 2));
+	ui->LAssert(L, lua_isstring(L, 3), "DrawStringCursorIndex() argument 3: expected string, got %s", luaL_typename(L, 3));
+	ui->LAssert(L, lua_isnumber(L, 4), "DrawStringCursorIndex() argument 4: expected number, got %s", luaL_typename(L, 4));
+	ui->LAssert(L, lua_isnumber(L, 5), "DrawStringCursorIndex() argument 5: expected number, got %s", luaL_typename(L, 5));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	lua_pushinteger(L, ui->renderer->DrawStringCursorIndex((int)lua_tointeger(L, 1), luaL_checkoption(L, 2, "FIXED", fontMap), lua_tostring(L, 3), (int)lua_tointeger(L, 4), (int)lua_tointeger(L, 5)) + 1);
 	return 1;
@@ -510,7 +511,7 @@ static int l_StripEscapes(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: StripEscapes(string)");
-	ui->LAssert(L, lua_isstring(L, 1), "StripEscapes() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "StripEscapes() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* str = lua_tostring(L, 1);
 	char* strip = new char[strlen(str) + 1];
 	char* p = strip;
@@ -550,7 +551,7 @@ static int l_NewFileSearch(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: NewFileSearch(spec[, findDirectories])");
-	ui->LAssert(L, lua_isstring(L, 1), "NewFileSearch() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "NewFileSearch() argument 1: expected string, got %s", luaL_typename(L, 1));
 	find_c* find = new find_c();
 	if ( !find->FindFirst(lua_tostring(L, 1)) ) {
 		delete find;
@@ -638,7 +639,7 @@ static int l_SetWindowTitle(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetWindowTitle(title)");
-	ui->LAssert(L, lua_isstring(L, 1), "SetWindowTitle() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "SetWindowTitle() argument 1: expected string, got %s", luaL_typename(L, 1));
 	ui->sys->video->SetTitle(lua_tostring(L, 1));
 	ui->sys->conWin->SetTitle(lua_tostring(L, 1));
 	return 0;
@@ -657,8 +658,8 @@ static int l_SetCursorPos(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 2, "Usage: SetCursorPos(x, y)");
-	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %t", 1);
-	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %t", 2);
+	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %s", luaL_typename(L, 1));
+	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
 	ui->sys->video->SetRelativeCursor((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2));
 	return 0;
 }
@@ -677,7 +678,7 @@ static int l_IsKeyDown(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: IsKeyDown(keyName)");
-	ui->LAssert(L, lua_isstring(L, 1), "IsKeyDown() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "IsKeyDown() argument 1: expected string, got %s", luaL_typename(L, 1));
 	size_t len;
 	const char* kname = lua_tolstring(L, 1, &len);
 	ui->LAssert(L, len >= 1, "IsKeyDown() argument 1: string is empty", 1);
@@ -692,7 +693,7 @@ static int l_Copy(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: Copy(string)");
-	ui->LAssert(L, lua_isstring(L, 1), "Copy() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "Copy() argument 1: expected string, got %s", luaL_typename(L, 1));
 	ui->sys->ClipboardCopy(lua_tostring(L, 1));
 	return 0;
 }
@@ -715,7 +716,7 @@ static int l_Deflate(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: Deflate(string)");
-	ui->LAssert(L, lua_isstring(L, 1), "Deflate() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "Deflate() argument 1: expected string, got %s", luaL_typename(L, 1));
 	z_stream_s z;
 	z.zalloc = NULL;
 	z.zfree = NULL;
@@ -745,7 +746,7 @@ static int l_Inflate(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: Inflate(string)");
-	ui->LAssert(L, lua_isstring(L, 1), "Inflate() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "Inflate() argument 1: expected string, got %s", luaL_typename(L, 1));
 	size_t inLen;
 	byte* in = (byte*)lua_tolstring(L, 1, &inLen);
 	int outSz = inLen * 4;
@@ -813,10 +814,12 @@ static int l_MakeDir(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: MakeDir(path)");
-	ui->LAssert(L, lua_isstring(L, 1), "MakeDir() argument 1: expected string, got %t", 1);
-	if (_mkdir(lua_tostring(L, 1))) {
+	ui->LAssert(L, lua_isstring(L, 1), "MakeDir() argument 1: expected string, got %s", luaL_typename(L, 1));
+	std::filesystem::path path(lua_tostring(L, 1));
+	std::error_code ec;
+	if (!create_directory(path, ec)) {
 		lua_pushnil(L);
-		lua_pushstring(L, strerror(errno));
+		lua_pushstring(L, strerror(ec.value()));
 		return 2;
 	} else {
 		lua_pushboolean(L, true);
@@ -829,10 +832,12 @@ static int l_RemoveDir(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: l_RemoveDir(path)");
-	ui->LAssert(L, lua_isstring(L, 1), "l_RemoveDir() argument 1: expected string, got %t", 1);
-	if (_rmdir(lua_tostring(L, 1))) {
+	ui->LAssert(L, lua_isstring(L, 1), "l_RemoveDir() argument 1: expected string, got %s", luaL_typename(L, 1));
+	std::filesystem::path path(lua_tostring(L, 1));
+	std::error_code ec;
+	if (!is_directory(path, ec) || ec || remove(path, ec) || ec) {
 		lua_pushnil(L);
-		lua_pushstring(L, strerror(errno));
+		lua_pushstring(L, strerror(ec.value()));
 		return 2;
 	} else {
 		lua_pushboolean(L, true);
@@ -845,7 +850,7 @@ static int l_SetWorkDir(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SetWorkDir(path)");
-	ui->LAssert(L, lua_isstring(L, 1), "SetWorkDir() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "SetWorkDir() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* newWorkDir = lua_tostring(L, 1);
 	if ( !ui->sys->SetWorkDir(newWorkDir) ) {
 		if (ui->scriptWorkDir) {
@@ -869,7 +874,7 @@ static int l_LaunchSubScript(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 3, "Usage: LaunchSubScript(scriptText, funcList, subList[, ...])");
 	for (int i = 1; i <= 3; i++) {
-		ui->LAssert(L, lua_isstring(L, i), "LaunchSubScript() argument %d: expected string, got %t", i, i);
+		ui->LAssert(L, lua_isstring(L, i), "LaunchSubScript() argument %d: expected string, got %s", i, luaL_typename(L, i));
 	}
 	for (int i = 4; i <= n; i++) {
 		ui->LAssert(L, lua_isnil(L, i) || lua_isboolean(L, i) || lua_isnumber(L, i) || lua_isstring(L, i), 
@@ -892,7 +897,7 @@ static int l_LaunchSubScript(lua_State* L)
 	}
 	ui->subScriptList[slot] = ui_ISubScript::GetHandle(ui, slot);
 	if (ui->subScriptList[slot]->Start()) {
-		lua_pushlightuserdata(L, (void*)slot);
+		lua_pushlightuserdata(L, (void*)(uintptr_t)slot);
 	} else {
 		lua_pushnil(L);
 	}
@@ -904,8 +909,8 @@ static int l_AbortSubScript(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: AbortSubScript(ssID)");
-	ui->LAssert(L, lua_islightuserdata(L, 1), "AbortSubScript() argument 1: expected subscript ID, got %t", 1);
-	dword slot = (dword)lua_touserdata(L, 1);
+	ui->LAssert(L, lua_islightuserdata(L, 1), "AbortSubScript() argument 1: expected subscript ID, got %s", luaL_typename(L, 1));
+	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1);
 	ui->LAssert(L, slot < ui->subScriptSize && ui->subScriptList[slot], "AbortSubScript() argument 1: invalid subscript ID");
 	ui->LAssert(L, ui->subScriptList[slot]->IsRunning(), "AbortSubScript(): subscript isn't running");
 	ui_ISubScript::FreeHandle(ui->subScriptList[slot]);
@@ -918,8 +923,8 @@ static int l_IsSubScriptRunning(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: IsSubScriptRunning(ssID)");
-	ui->LAssert(L, lua_islightuserdata(L, 1), "IsSubScriptRunning() argument 1: expected subscript ID, got %t", 1);
-	dword slot = (dword)lua_touserdata(L, 1);
+	ui->LAssert(L, lua_islightuserdata(L, 1), "IsSubScriptRunning() argument 1: expected subscript ID, got %s", luaL_typename(L, 1));
+	dword slot = (dword)(uintptr_t)lua_touserdata(L, 1);
 	ui->LAssert(L, slot < ui->subScriptSize && ui->subScriptList[slot], "IsSubScriptRunning() argument 1: invalid subscript ID");
 	lua_pushboolean(L, ui->subScriptList[slot]->IsRunning());
 	return 1;
@@ -930,7 +935,7 @@ static int l_LoadModule(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: LoadModule(name[, ...])");
-	ui->LAssert(L, lua_isstring(L, 1), "LoadModule() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "LoadModule() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* modName = lua_tostring(L, 1);
 	char fileName[1024];
 	strcpy(fileName, modName);
@@ -951,7 +956,7 @@ static int l_PLoadModule(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: PLoadModule(name[, ...])");
-	ui->LAssert(L, lua_isstring(L, 1), "PLoadModule() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "PLoadModule() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* modName = lua_tostring(L, 1);
 	char* fileName = AllocStringLen(strlen(modName) + 4);
 	strcpy(fileName, modName);
@@ -982,7 +987,7 @@ static int l_PCall(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: PCall(func[, ...])");
-	ui->LAssert(L, lua_isfunction(L, 1), "PCall() argument 1: expected function, got %t", 1);
+	ui->LAssert(L, lua_isfunction(L, 1), "PCall() argument 1: expected function, got %s", luaL_typename(L, 1));
 	lua_getfield(L, LUA_REGISTRYINDEX, "traceback");
 	lua_insert(L, 1); // Insert traceback function at start of stack
 	int err = lua_pcall(L, n - 1, LUA_MULTRET, 1);
@@ -999,7 +1004,7 @@ static int l_ConPrintf(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: ConPrintf(fmt[, ...])");
-	ui->LAssert(L, lua_isstring(L, 1), "ConPrintf() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "ConPrintf() argument 1: expected string, got %s", luaL_typename(L, 1));
 	lua_pushvalue(L, lua_upvalueindex(1));	// string.format
 	lua_insert(L, 1);
 	lua_call(L, n, 1);
@@ -1062,7 +1067,7 @@ static int l_ConPrintTable(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: ConPrintTable(tbl[, noRecurse])");
-	ui->LAssert(L, lua_istable(L, 1), "ConPrintTable() argument 1: expected table, got %t", 1);
+	ui->LAssert(L, lua_istable(L, 1), "ConPrintTable() argument 1: expected table, got %s", luaL_typename(L, 1));
 	bool recurse = lua_toboolean(L, 2) == 0;
 	lua_settop(L, 1);
 	lua_getglobal(L, "tostring");
@@ -1079,7 +1084,7 @@ static int l_ConExecute(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: ConExecute(cmd)");
-	ui->LAssert(L, lua_isstring(L, 1), "ConExecute() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "ConExecute() argument 1: expected string, got %s", luaL_typename(L, 1));
 	ui->sys->con->Execute(lua_tostring(L,1));
 	return 0;
 }
@@ -1115,7 +1120,7 @@ static int l_SpawnProcess(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: SpawnProcess(cmdName[, args])");
-	ui->LAssert(L, lua_isstring(L, 1), "SpawnProcess() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "SpawnProcess() argument 1: expected string, got %s", luaL_typename(L, 1));
 	ui->sys->SpawnProcess(lua_tostring(L, 1), lua_tostring(L, 2));
 	return 0;
 }
@@ -1125,7 +1130,7 @@ static int l_OpenURL(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: OpenURL(url)");
-	ui->LAssert(L, lua_isstring(L, 1), "OpenURL() argument 1: expected string, got %t", 1);
+	ui->LAssert(L, lua_isstring(L, 1), "OpenURL() argument 1: expected string, got %s", luaL_typename(L, 1));
 	ui->sys->OpenURL(lua_tostring(L, 1));
 	return 0;
 }
@@ -1152,7 +1157,7 @@ static int l_Exit(lua_State* L)
 	int n = lua_gettop(L);
 	const char* msg = NULL;
 	if (n >= 1 && !lua_isnil(L, 1)) {
-		ui->LAssert(L, lua_isstring(L, 1), "Exit() argument 1: expected string or nil, got %t", 1);
+		ui->LAssert(L, lua_isstring(L, 1), "Exit() argument 1: expected string or nil, got %s", luaL_typename(L, 1));
 		msg = lua_tostring(L, 1);
 	}
 	ui->sys->Exit(msg);

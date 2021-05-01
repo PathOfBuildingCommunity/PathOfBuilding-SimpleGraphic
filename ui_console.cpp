@@ -6,6 +6,9 @@
 
 #include "ui_local.h"
 
+#include <fmt/core.h>
+#include <string_view>
+
 // =============
 // Configuration
 // =============
@@ -83,6 +86,8 @@ void ui_console_c::Toggle()
 		moveStart = sys->GetTime();
 		sys->con->Scroll(CBSC_BOTTOM);
 		break;
+	default:
+		break;
 	}
 }
 
@@ -139,6 +144,8 @@ void ui_console_c::Render()
 			y*= 1 - movetime / UI_CONMOVETIME;
 		}
 		break;
+	default:
+		break;
 	}
 
 	int fontSize = con_fontSize->intVal;
@@ -183,26 +190,31 @@ void ui_console_c::Render()
 	}
 
 	// Generate input caret string
-	char caretStr[512];
-	*caretStr = 0;
+	size_t caretPad = 0;
 	for (int c = 0; c < caret; c++) {
 		int escLen = IsColorEscape(&input[c]);
 		if (escLen) {
 			c+= escLen - 1;
 		} else {
-			strcat_s(caretStr, 512, " ");
-		}	
+			++caretPad;
+		}
 	}
-	strcat_s(caretStr, 512, "_");
+	std::string caretStr(caretPad, ' ');
+	caretStr += "_";
 
 	// Draw prompt, input text, and caret
 	renderer->DrawString(0, basey, F_LEFT, fontSize, colorWhite, F_FIXED, "]");
 	renderer->DrawStringFormat(fontSize * 0.66f, basey, F_LEFT, fontSize, colorWhite, F_FIXED, "%s", input);
-	renderer->DrawString(fontSize * 0.66f, basey, F_LEFT, fontSize, colorWhite, F_FIXED, caretStr);
+	renderer->DrawString(fontSize * 0.66f, basey, F_LEFT, fontSize, colorWhite, F_FIXED, caretStr.c_str());
 }
 
 void ui_console_c::SetConInput(char* newInput, int newCaret)
 {
-	strcpy_s(input, 1024, newInput);
-	caret = newCaret;
+	std::string_view nextInput = newInput;
+	if (nextInput.size() >= 1024) {
+		nextInput = nextInput.substr(0, 1023);
+	}
+	memcpy(input, nextInput.data(), nextInput.size());
+	input[nextInput.size()] = '\0';
+	caret = newCaret; // TOOD(LV): bounds-check new caret?
 }

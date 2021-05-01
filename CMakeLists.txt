@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 include(${CMAKE_CURRENT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
 set(SIMPLEGRAPHIC_SOURCES
+    "config.h"
     "engine/common/common.cpp"
     "engine/common/console.cpp"
     "engine/common/console.h"
@@ -38,6 +39,17 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
     # "win/entry.cpp"
+    "ui.h"
+    "ui_api.cpp"
+    "ui_console.cpp"
+    "ui_console.h"
+    "ui_debug.cpp"
+    "ui_debug.h"
+    "ui_local.h"
+    "ui_main.cpp"
+    "ui_main.h"
+    "ui_subscript.cpp"
+    "ui_subscript.h"
 )
 
 add_library(SimpleGraphic SHARED
@@ -57,18 +69,24 @@ target_include_directories(SimpleGraphic
 
 find_package(fmt CONFIG REQUIRED)
 find_package(JPEG REQUIRED)
+
+include(FindLua)
+find_package(lua REQUIRED)
+
 find_package(OpenGL REQUIRED)
 find_package(libpng CONFIG REQUIRED)
 
 target_include_directories(SimpleGraphic
     PRIVATE
     ${JPEG_INCLUDE_DIR}
+    ${LUA_INCLUDE_DIR}
 )
 
 target_link_libraries(SimpleGraphic
     PRIVATE
     fmt::fmt
     ${JPEG_LIBRARIES}
+    ${LUA_LIBRARIES}
     OpenGL::GL
     png_static
 )

@@ -110,36 +110,10 @@ static ui_subscript_c* GetSSPtr(lua_State* L)
 void ui_subscript_c::LAssert(int cond, const char* fmt, ...)
 {
 	if ( !cond ) {
-		char* newFmt = AllocString(fmt);
 		va_list va;
 		va_start(va, fmt);
-		char* p = newFmt;
-		while ((p = strchr(p, '%')) && *++p) {
-			if (*p == '%') continue;
-			switch (*p) {
-			case 's':
-			case 'p':
-				va_arg(va, char *);
-				break;
-			case 'c':
-			case 'd':
-				va_arg(va, int);
-				break;
-			case 'f':
-				va_arg(va, double);
-				break;
-			case 't':
-				*p = 's';
-				int* arg = &va_arg(va, int);
-				*(char**)arg = (char*)luaL_typename(L, *arg);
-				break;
-			}
-		}
+		lua_pushvfstring(L, fmt, va);
 		va_end(va);
-		va_start(va, fmt);
-		lua_pushvfstring(L, newFmt, va);
-		va_end(va);
-		FreeString(newFmt);
 		lua_error(L);
 	}
 }
@@ -463,7 +437,7 @@ void ui_subscript_c::SubScriptFrame()
 		if (errorStr) {
 			int extraArgs = ui->PushCallback("OnSubError");
 			if (extraArgs >= 0) {
-				lua_pushlightuserdata(ui->L, (void*)id);
+				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)id);
 				lua_pushstring(ui->L, errorStr);
 				ui->PCall(extraArgs + 2, 0);
 			}
@@ -483,7 +457,7 @@ void ui_subscript_c::SubScriptFrame()
 						break;
 					}
 				}
-				lua_pushlightuserdata(ui->L, (void*)id);
+				lua_pushlightuserdata(ui->L, (void*)(uintptr_t)id);
 				ui->PCall(extraArgs + 1 + ssPushData(ui->L, ssBuildData(L, 2)), 0);
 			}
 		}

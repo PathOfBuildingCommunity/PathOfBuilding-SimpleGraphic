@@ -87,36 +87,10 @@ ui_main_c::ui_main_c(sys_IMain* sysHnd, core_IMain* coreHnd)
 void ui_main_c::LAssert(lua_State* L, int cond, const char* fmt, ...)
 {
 	if ( !cond ) {
-		char* newFmt = AllocString(fmt);
 		va_list va;
 		va_start(va, fmt);
-		char* p = newFmt;
-		while ((p = strchr(p, '%')) && *++p) {
-			if (*p == '%') continue;
-			switch (*p) {
-			case 's':
-			case 'p':
-				va_arg(va, char *);
-				break;
-			case 'c':
-			case 'd':
-				va_arg(va, int);
-				break;
-			case 'f':
-				va_arg(va, double);
-				break;
-			case 't':
-				*p = 's';
-				int* arg = &va_arg(va, int);
-				*(char**)arg = (char*)luaL_typename(L, *arg);
-				break;
-			}
-		}
+		lua_pushvfstring(L, fmt, va);
 		va_end(va);
-		va_start(va, fmt);
-		lua_pushvfstring(L, newFmt, va);
-		va_end(va);
-		FreeString(newFmt);
 		lua_error(L);
 	}
 }
