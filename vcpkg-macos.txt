@@ -1,7 +1,2 @@
 fmt:x64-osx
 glfw3:x64-osx
-libjpeg-turbo:x64-osx
-liblzma:x64-osx
-libpng:x64-osx
-lua:x64-osx
-zlib:x64-osx

@@ -42,6 +42,8 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
     "win/entry.cpp"
+    "stb_image.h"
+    "stb_image_write.h"
     "ui.h"
     "ui_api.cpp"
     "ui_console.cpp"
@@ -71,13 +73,10 @@ target_include_directories(SimpleGraphic
     "${CMAKE_CURRENT_SOURCE_DIR}/engine"
 )
 
-find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(JPEG REQUIRED)
 find_package(LuaJit REQUIRED)
 find_package(OpenGL REQUIRED)
-find_package(libpng CONFIG REQUIRED)
 
 target_include_directories(SimpleGraphic
     PRIVATE
@@ -85,13 +84,17 @@ target_include_directories(SimpleGraphic
     ${LUAJIT_INCLUDE_DIR}
 )
 
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_link_options(SimpleGraphic
+        PRIVATE
+        "-export-dynamic"
+    )
+endif ()
+
 target_link_libraries(SimpleGraphic
     PRIVATE
-    CURL::libcurl
     fmt::fmt
     glfw
-    ${JPEG_LIBRARIES}
     ${LUAJIT_LIBRARIES}
     OpenGL::GL
-    png_static
 )

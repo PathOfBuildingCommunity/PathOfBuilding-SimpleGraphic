@@ -14,6 +14,9 @@
 #ifdef _WIN32
 #include <eh.h>
 #include <Shlobj.h>
+#elif __linux__
+#include <unistd.h>
+#include <limits.h>
 #elif __APPLE__ && __MACH__
 #include <libproc.h>
 #endif
@@ -521,6 +524,7 @@ bool sys_main_c::IsKeyDown(byte k)
 #ifdef _WIN32
 	return !!(GetKeyState(KeyToVirtual(k)) & 0x8000);
 #else
+#warning LV: IsKeyDown not implemented on this OS.
 	// TODO(LV): Implement on other OSes
 	return false;
 #endif
@@ -566,6 +570,7 @@ void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 		ShellExecuteEx(&sinfo);
 	}
 #else
+#warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.
 #endif
 }
@@ -575,6 +580,7 @@ void sys_main_c::OpenURL(const char* url)
 #ifdef _WIN32
 	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
 #else
+#warning LV: URL opening not implemented on this OS.
 	// TODO(LV): Implement URL opening for other OSes.
 #endif
 }
@@ -654,6 +660,13 @@ std::string FindBasePath()
 	*strrchr(basePath.data(), '\\') = 0;
 	return basePath.data();
 #elif __linux__
+	char basePath[PATH_MAX];
+    ssize_t len = ::readlink("/proc/self/exe", basePath, sizeof(basePath));
+    if (len == -1 || len == sizeof(basePath))
+    	len = 0;
+	basePath[len] = '\0';
+	*strrchr(basePath, '/') = 0;
+	return basePath;
 #elif __APPLE__ && __MACH__
 	pid_t pid = getpid();
 	char basePath[PROC_PIDPATHINFO_MAXSIZE]{};

@@ -17,6 +17,9 @@
 #define GL_GLEXT_LEGACY
 #include <OpenGL/gl.h>
 #include <GL/glext.h>
+#elif __linux__
+#include <GL/gl.h>
+#include <GL/glext.h>
 #else
 #define WINGDIAPI
 #define APIENTRY __stdcall

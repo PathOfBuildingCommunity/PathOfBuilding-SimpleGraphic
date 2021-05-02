@@ -8,11 +8,11 @@
 
 #include "core_image.h"
 
-#include <jpeglib.h>
-#include <png.h>
-
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #include <algorithm>
 #include <vector>
@@ -356,80 +356,6 @@ bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
 // JPEG Image
 // ==========
 
-struct jpegError_s: public jpeg_error_mgr {
-	jpegError_s()
-	{
-		jpeg_std_error(this);
-		output_message = MSGOut;
-		error_exit = FatalError;
-	}
-	static void MSGOut(j_common_ptr cinfo)
-	{
-		char buffer[JMSG_LENGTH_MAX];
-		(*cinfo->err->format_message)(cinfo, buffer);
-		clientData_s* cd = (clientData_s*)cinfo->client_data;
-		cd->con->Warning("JPEG '%s': %s", cd->fileName, buffer);
-	}
-	static void FatalError(j_common_ptr cinfo)
-	{
-		MSGOut(cinfo);
-		throw 1;
-	}
-};
-
-// JPEG Reading
-
-struct jpegRead_s: public jpeg_source_mgr {
-	ioStream_c* in = nullptr;
-	byte buffer[1024] = {};
-	jpegRead_s(ioStream_c* in)
-		: in(in)
-	{
-		init_source = Init;
-		term_source = Term;
-		fill_input_buffer = Fill;
-		skip_input_data = SkipInput;
-		resync_to_restart = jpeg_resync_to_restart;
-	}
-	static void Init(j_decompress_ptr jdecomp)
-	{
-		jpegRead_s* jr = (jpegRead_s*)jdecomp->src;
-		jr->next_input_byte = jr->buffer;
-		jr->bytes_in_buffer = 0;
-	}
-	static void Term(j_decompress_ptr jdecomp)
-	{
-	}
-	static boolean Fill(j_decompress_ptr jdecomp)
-	{
-		static unsigned char dummyEOI[2] = {0xFF, JPEG_EOI};
-		jpegRead_s* jr = (jpegRead_s*)jdecomp->src;
-		size_t avail = jr->in->GetLen() - jr->in->GetPos();
-		if (avail) {
-			jr->next_input_byte = jr->buffer;
-			jr->bytes_in_buffer = (std::min<size_t>)(avail, 1024);
-			jr->in->Read(jr->buffer, jr->bytes_in_buffer);
-		} else {
-			jr->next_input_byte = dummyEOI;
-			jr->bytes_in_buffer = 2;
-		}
-		return true;
-	}
-	static void SkipInput(j_decompress_ptr jdecomp, long count)
-	{
-		jpegRead_s* jr = (jpegRead_s*)jdecomp->src;
-		while (count > 0) {
-			if (jr->bytes_in_buffer == 0) {
-				Fill(jdecomp);
-			}
-			long skip = (std::min<long>)(count, (long)jr->bytes_in_buffer);
-			jr->next_input_byte+= skip;
-			jr->bytes_in_buffer-= skip;
-			count-= skip;
-		}
-	}
-};
-
 bool jpeg_c::Load(const char* fileName)
 {
 	Free();
@@ -440,88 +366,33 @@ bool jpeg_c::Load(const char* fileName)
 		return true;
 	}
 
-	// Initialise decompressor
-	jpegError_s jerror;
-	jpeg_decompress_struct jdecomp;
-	jdecomp.err = &jerror;
-	jpeg_create_decompress(&jdecomp);
-	clientData_s cd;
-	cd.fileName = fileName;
-	cd.con = con;
-	jdecomp.client_data = &cd;
-
-	// Initialise source manager
-	jpegRead_s src(&in);
-	jdecomp.src = &src;
-
-	byte** rows = NULL;
-	try {
-		// Read header
-		jpeg_read_header(&jdecomp, true);
-		width = jdecomp.image_width;
-		height = jdecomp.image_height;
-		comp = jdecomp.num_components;
-		if (comp != 1 && comp != 3) {
-			con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
-			jpeg_destroy_decompress(&jdecomp);
-			return true;
-		}
-		type = comp == 1? IMGTYPE_GRAY : IMGTYPE_RGB;
-
-		// Allocate image and generate row pointers
-		dat = new byte[width * height * comp];
-		rows = new byte*[height];
-		for (dword r = 0; r < height; r++) {
-			rows[r] = dat + r * width * comp;
-		}
-
-		// Decompress
-		jpeg_start_decompress(&jdecomp);
-		while (jdecomp.output_scanline < height) {
-			jpeg_read_scanlines(&jdecomp, rows + jdecomp.output_scanline, height - jdecomp.output_scanline);
-		}
-		jpeg_finish_decompress(&jdecomp);
-	} 
-	catch (...) {
-	}
-	delete[] rows;
-
-	jpeg_destroy_decompress(&jdecomp);
-	return false;
-}
-
-// JPEG Writing
-
-struct jpegWrite_s: public jpeg_destination_mgr {
-	ioStream_c* out = nullptr;
-	byte buffer[1024] = {};
-	jpegWrite_s(ioStream_c* out)
-		: out(out)
-	{
-		init_destination = Init;
-		term_destination = Term;
-		empty_output_buffer = Empty;
-	}
-	static void Init(j_compress_ptr jcomp)
-	{
-		jpegWrite_s* jw = (jpegWrite_s*)jcomp->dest;
-		jw->next_output_byte = jw->buffer;
-		jw->free_in_buffer = 1024;
-	}
-	static void Term(j_compress_ptr jcomp)
-	{
-		jpegWrite_s* jw = (jpegWrite_s*)jcomp->dest;
-		jw->out->Write(jw->buffer, 1024 - jw->free_in_buffer);
-	}
-	static boolean Empty(j_compress_ptr jcomp)
-	{
-		jpegWrite_s* jw = (jpegWrite_s*)jcomp->dest;
-		jw->out->Write(jw->buffer, 1024);
-		jw->next_output_byte = jw->buffer;
-		jw->free_in_buffer = 1024;
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size())) {
 		return true;
 	}
-};
+	int x, y, in_comp;
+	if (!stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp)) {
+		return true;
+	}
+	if (in_comp != 1 && in_comp != 3) {
+		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
+		return true;
+	}
+	stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, in_comp);
+	if (!data) {
+		stbi_image_free(data);
+		return true;
+	}
+	width = x;
+	height = y;
+	comp = in_comp;
+	type = in_comp == 1 ? IMGTYPE_GRAY : IMGTYPE_RGB;
+	const size_t byteSize = width * height * comp;
+	dat = new byte[byteSize];
+	std::copy_n(data, byteSize, dat);
+	stbi_image_free(data);
+	return false;
+}
 
 bool jpeg_c::Save(const char* fileName)
 {
@@ -536,52 +407,11 @@ bool jpeg_c::Save(const char* fileName)
 		return true;
 	}
 
-	// Initialise compressor
-	jpegError_s jerror;
-	jpeg_compress_struct jcomp;
-	jcomp.err = &jerror;
-	jpeg_create_compress(&jcomp);
-	clientData_s cd;
-	cd.fileName = fileName;
-	cd.con = con;
-	jcomp.client_data = &cd;
-
-	// Initialise destination manager
-	jpegWrite_s dst(&out);
-	jcomp.dest = &dst;
-
-	// Set image parameters
-	jcomp.image_width = width;
-	jcomp.image_height = height;
-	if (type == IMGTYPE_GRAY) {
-		jcomp.input_components = 1;
-		jcomp.in_color_space = JCS_GRAYSCALE;
-	} else {
-		jcomp.input_components = 3;
-		jcomp.in_color_space = JCS_RGB;
-	}
-	jpeg_set_defaults(&jcomp);
-	jpeg_set_quality(&jcomp, quality, true);
-
-	// Generate row pointers
-	byte** rows = new byte*[height];
-	for (dword r = 0; r < height; r++) {
-		rows[r] = dat + r * width * comp;
-	}
-
-	try {
-		// Compress
-		jpeg_start_compress(&jcomp, true);		
-		jpeg_write_scanlines(&jcomp, rows, height);
-		jpeg_finish_compress(&jcomp);
-	}
-	catch (...) {
-		dst.Term(&jcomp);
-	}
-	delete[] rows;
-
-	jpeg_destroy_compress(&jcomp);
-	return false;
+	int rc = stbi_write_jpg_to_func([](void* ctx, void* data, int size) {
+		auto out = (fileOutputStream_c*)ctx;
+		out->Write(data, size);
+	}, &out, width, height, comp, dat, quality);
+	return !rc;
 }
 
 // JPEG Image Info
@@ -593,57 +423,27 @@ bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
-
-	// Initialise decompressor
-	jpegError_s jerror;
-	jpeg_decompress_struct jdecomp;
-	jdecomp.err = &jerror;
-	jpeg_create_decompress(&jdecomp);
-	clientData_s cd;
-	cd.fileName = fileName;
-	cd.con = con;
-	jdecomp.client_data = &cd;
-
-	// Initialise source manager
-	jpegRead_s src(&in);
-	jdecomp.src = &src;
-
-	try {
-		// Read header
-		jpeg_read_header(&jdecomp, true);
-	}
-	catch (...) {
-		jpeg_destroy_decompress(&jdecomp);
+	
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size())) {
 		return true;
 	}
-	info->width = jdecomp.image_width;
-	info->height = jdecomp.image_height;
-	info->alpha = false;
-	info->comp = jdecomp.num_components;
+	int x, y, comp;
+	if (stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &comp)) {
+		return true;
+	}
 
-	jpeg_destroy_decompress(&jdecomp);
+	info->width = x;
+	info->height = y;
+	info->comp = comp;
+	info->alpha = false;
+
 	return (comp != 1 && comp != 3);
 }
 
 // =========
 // PNG Image
 // =========
-
-static void IPNG_ErrorProc(png_structp png, const char* msg)
-{
-	clientData_s* cd = (clientData_s*)png_get_error_ptr(png);
-	cd->con->Warning("PNG '%s': %s", cd->fileName, msg);
-}
-
-// PNG Reading
-
-static void IPNG_ReadProc(png_structp png, png_bytep data, png_size_t len)
-{
-	ioStream_c* in = (ioStream_c*)png_get_io_ptr(png);
-	if (in->Read(data, len)) {
-		png_error(png, "Truncated file");
-	}
-}
 
 bool png_c::Load(const char* fileName)
 {
@@ -654,66 +454,29 @@ bool png_c::Load(const char* fileName)
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
-	byte sig[8];
-	if (in.Read(sig, 8) || png_sig_cmp(sig, 0, 8)) {
-		con->Warning("PNG '%s': invalid signature", fileName);
+
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size())) {
 		return true;
 	}
-
-	// Initialise PNG reader
-	clientData_s cd;
-	cd.con = con;
-	cd.fileName = fileName;
-	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &cd, IPNG_ErrorProc, IPNG_ErrorProc);
-	png_infop info = png_create_info_struct(png);
-	if (setjmp(png_jmpbuf(png))) {
-		png_destroy_read_struct(&png, &info, NULL);
+	int x, y, in_comp;
+	if (!stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp)) {
 		return true;
 	}
-	png_set_read_fn(png, &in, IPNG_ReadProc);
-
-	// Read image
-	png_set_sig_bytes(png, 8);
-	png_read_png(png, info, PNG_TRANSFORM_GRAY_TO_RGB | PNG_TRANSFORM_SCALE_16, NULL);
-
-	// Copy image data
-	width = png_get_image_width(png, info);
-	height = png_get_image_height(png, info);
-	comp = png_get_channels(png, info);
-	switch (comp) {
-	case 3:
-		type = IMGTYPE_RGB;
-		break;
-	case 4:
-		type = IMGTYPE_RGBA;
-		break;
-	default:
-		con->Warning("PNG '%s': unknown image type %d", fileName, comp);
-		png_destroy_read_struct(&png, &info, NULL);
+	width = x;
+	height = y;
+	comp = in_comp < 3 ? 3 : 4;
+	type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
+	stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, comp);
+	if (!data) {
+		stbi_image_free(data);
 		return true;
-	};
-	dat = new byte[width * height * comp];
-	byte** rows = png_get_rows(png, info);
-	for (dword y = 0; y < height; y++) {
-		memcpy(dat + y * width * comp, rows[y], width * comp);
 	}
-
-	png_destroy_read_struct(&png, &info, NULL);
+	const size_t byteSize = width * height * comp;
+	dat = new byte[byteSize];
+	std::copy_n(data, byteSize, dat);
+	stbi_image_free(data);
 	return false;
-}
-
-// PNG Writing
-
-static void IPNG_WriteProc(png_structp png, png_bytep data, png_size_t len)
-{
-	fileOutputStream_c* out = (fileOutputStream_c*)png_get_io_ptr(png);
-	out->Write(data, len);
-}
-
-static void IPNG_FlushProc(png_structp png)
-{
-	fileOutputStream_c* out = (fileOutputStream_c*)png_get_io_ptr(png);
-	out->FileFlush();
 }
 
 bool png_c::Save(const char* fileName)
@@ -728,30 +491,12 @@ bool png_c::Save(const char* fileName)
 		return true;
 	}
 
-	// Initialise PNG writer
-	clientData_s cd;
-	cd.fileName = fileName;
-	cd.con = con;
-	png_structp png = png_create_write_struct(PNG_LIBPNG_VER_STRING, &cd, IPNG_ErrorProc, IPNG_ErrorProc);
-	png_infop pnginfo = png_create_info_struct(png);
-	if (setjmp(png_jmpbuf(png))) {
-		png_destroy_write_struct(&png, &pnginfo);
-		return true;
-	}
-	png_set_write_fn(png, &out, IPNG_WriteProc, IPNG_FlushProc);
-
-	// Write image
-	png_set_IHDR(png, pnginfo, width, height, 8, type == IMGTYPE_RGBA? PNG_COLOR_TYPE_RGB_ALPHA : PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-	byte** rows = new byte*[height];
-	for (dword r = 0; r < height; r++) {
-		rows[r] = dat + r * width * comp;
-	}
-	png_set_rows(png, pnginfo, rows);
-	png_write_png(png, pnginfo, PNG_TRANSFORM_IDENTITY, NULL);
-	delete[] rows;
-
-	png_destroy_write_struct(&png, &pnginfo);
-	return false;
+	auto rc = stbi_write_png_to_func([](void* ctx, void* data, int size) {
+		auto out = (fileOutputStream_c*)ctx;
+		out->Write(data, size);
+	}, &out, width, height, comp, dat, width * comp);
+	
+	return !rc;
 }
 
 // PNG Image Info
@@ -763,41 +508,20 @@ bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
-	byte sig[8];
-	if (in.Read(sig, 8) || png_sig_cmp(sig, 0, 8)) {
+
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size())) {
+		return true;
+	}
+	int x, y, comp;
+	if (stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &comp)) {
 		return true;
 	}
 
-	// Initialise PNG reader
-	clientData_s cd;
-	cd.con = con;
-	cd.fileName = fileName;
-	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, &cd, IPNG_ErrorProc, IPNG_ErrorProc);
-	png_infop pnginfo = png_create_info_struct(png);
-	if (setjmp(png_jmpbuf(png))) {
-		png_destroy_read_struct(&png, &pnginfo, NULL);
-		return true;
-	}
-	png_set_read_fn(png, &in, IPNG_ReadProc);
-
-	// Get image info
-	png_set_sig_bytes(png, 8);
-	png_read_info(png, pnginfo);
-	info->width = png_get_image_width(png, pnginfo);
-	info->height = png_get_image_height(png, pnginfo);
-	int type = png_get_color_type(png, pnginfo);
-	png_destroy_read_struct(&png, &pnginfo, NULL);
-	if (type & PNG_COLOR_MASK_COLOR) {
-		if (type & PNG_COLOR_MASK_ALPHA) {
-			info->alpha = true;
-			info->comp = 4;
-		} else {
-			info->alpha = false;
-			info->comp = 3;
-		}
-	} else {
-		return true;
-	}
+	info->width = x;
+	info->height = y;
+	info->comp = comp <= 3 ? 3 : comp;
+	info->alpha = comp == 4;
 	return false;
 }
 

@@ -784,7 +784,7 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 
 	time_t curTime;
 	time(&curTime);
-	std::string ssname = fmt::format(CFG_DATAPATH "Screenshots/{%m%d%y_%H%M%S}.{}",
+	std::string ssname = fmt::format(CFG_DATAPATH "Screenshots/{:%m%d%y_%H%M%S}.{}",
 	fmt::localtime(curTime), ext);
 		// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
 		// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);

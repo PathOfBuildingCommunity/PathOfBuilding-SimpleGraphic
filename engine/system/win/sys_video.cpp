@@ -104,6 +104,7 @@ std::optional<std::pair<double, double>> PlatformGetCursorPos() {
 	GetCursorPos(&curPos);
 	return std::make_pair((double)curPos.x, (double)curPos.y);
 #else
+#warning LV: Global cursor position queries not implemented yet on this OS.
 	// TODO(LV): Implement on other OSes
 	return {};
 #endif
