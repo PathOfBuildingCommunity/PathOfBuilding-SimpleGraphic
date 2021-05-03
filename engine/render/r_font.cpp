@@ -6,19 +6,22 @@
 
 #include "r_local.h"
 
+#include <fstream>
+#include <string>
+
 // =======
 // Classes
 // =======
 
 // Glyph parameters
 struct f_glyph_s {
-	double	tcLeft;
-	double	tcRight;
-	double	tcTop;
-	double	tcBottom;
-	int		width;
-	int		spLeft;
-	int		spRight;
+	double	tcLeft = 0.0;
+	double	tcRight = 0.0;
+	double	tcTop = 0.0;
+	double	tcBottom = 0.0;
+	int		width = 0;
+	int		spLeft = 0;
+	int		spRight = 0;
 };
 
 // Font height info
@@ -45,27 +48,20 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	// Open info file
 	char tgfName[260];
 	sprintf_s(tgfName, 260, "%s.tgf", fileNameBase);
-	fileInputStream_c tgf;
-	if (tgf.FileOpen(tgfName, false)) {
+	std::ifstream tgf(tgfName);
+	if (!tgf) {
 		renderer->sys->con->Warning("font \"%s\" not found", fontName);
 		return;
 	}
-
-	// Read contents of info file
-	size_t tgfLen = tgf.GetLen();
-	char* tgfDat = AllocStringLen(tgfLen);
-	tgf.Read(tgfDat, tgfLen);
-	tgf.FileClose();
 
 	maxHeight = 0;
 	f_fontHeight_s* fh = NULL;
 
 	// Parse info file
-	char* tk_context;
-	char* sub = strtok_s(tgfDat, "\n", &tk_context);
-	do {
+	std::string sub;
+	while (std::getline(tgf, sub)) {
 		int h, x, y, w, sl, sr;
-		if (sscanf_s(sub, "HEIGHT %u;", &h) == 1) {
+		if (sscanf_s(sub.c_str(), "HEIGHT %u;", &h) == 1) {
 			// New height
 			fh = new f_fontHeight_s;
 			fontHeights[numFontHeight++] = fh;
@@ -77,7 +73,7 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 				maxHeight = h;
 			}
 			fh->numGlyph = 0;
-		} else if (fh && sscanf_s(sub, "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
+		} else if (fh && sscanf_s(sub.c_str(), "GLYPH %u %u %u %d %d;", &x, &y, &w, &sl, &sr) == 5) {
 			// Add glyph
 			if (fh->numGlyph >= 128) continue;
 			f_glyph_s* glyph = &fh->glyphs[fh->numGlyph++];
@@ -89,9 +85,7 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 			glyph->spLeft = sl;
 			glyph->spRight = sr;
 		}
-	} while (sub = strtok_s(NULL, "\n", &tk_context));
-
-	FreeString(tgfDat);
+	}
 
 	// Generate mapping of text height to font height
 	fontHeightMap = new int[maxHeight + 1];
