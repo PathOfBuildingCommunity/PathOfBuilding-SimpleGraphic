@@ -465,7 +465,7 @@ bool png_c::Load(const char* fileName)
 	}
 	width = x;
 	height = y;
-	comp = in_comp < 3 ? 3 : 4;
+	comp = (in_comp == 1 || in_comp == 3) ? 3 : 4;
 	type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, comp);
 	if (!data) {
