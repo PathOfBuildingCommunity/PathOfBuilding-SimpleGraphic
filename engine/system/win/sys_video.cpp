@@ -65,6 +65,19 @@ public:
 	char	curTitle[512] = {};	// Window title
 
 	bool cursorInWindow = false;
+
+	struct CursorPos {
+		int x, y;
+	};
+	std::optional<CursorPos> lastCursorPos;
+
+	struct ClickEvent
+	{
+		std::chrono::system_clock::time_point time;
+		CursorPos pos;
+		byte button;
+	};
+	std::optional<ClickEvent> lastClick;
 };
 
 sys_IVideo* sys_IVideo::GetHandle(sys_IMain* sysHnd)
@@ -135,8 +148,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	} else if (cur.display < 0) {
 		// Use monitor containing the mouse cursor if available, otherwise primary monitor
 		cur.display = 0;
-		auto curPos = PlatformGetCursorPos();
-		if (curPos) {
+		if (auto curPos = PlatformGetCursorPos()) {
 			auto [curX, curY] = *curPos;
 			for (int m = 0; m < numMon; ++m) {
 				int right = mon[m].left + mon[m].width;
@@ -219,7 +231,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			auto video = (sys_video_c*)sys->video;
-			video->cursorInWindow = !!entered;
+			bool is_inside = !!entered;
+			video->cursorInWindow = is_inside;
+			if (!is_inside) {
+				video->lastCursorPos.reset();
+			}
+		});
+		glfwSetCursorPosCallback(wnd, [](GLFWwindow* wnd, double x, double y) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			auto video = (sys_video_c*)sys->video;
+			video->lastCursorPos = CursorPos{(int)x, (int)y};
 		});
 		glfwSetWindowCloseCallback(wnd, [](GLFWwindow* wnd) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
@@ -256,6 +277,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			auto video = (sys_video_c*)sys->video;
 			int sg_key;
 			switch(button) {
 			case GLFW_MOUSE_BUTTON_LEFT:
@@ -276,7 +298,43 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			default:
 				return;
 			}
-			sys->core->KeyEvent(sg_key, (action == GLFW_PRESS) ? KE_KEYDOWN : KE_KEYUP);
+			bool is_down = action == GLFW_PRESS;
+			sys->heldKeyState[sg_key] = is_down;
+			keyEvent_s sg_type = is_down ? KE_KEYDOWN : KE_KEYUP;
+
+			// Determine if a click is a doubleclick by checking for recent nearby click of same type.
+			auto& lastClick = video->lastClick;
+			if (is_down && video->lastCursorPos) {
+				auto now = std::chrono::system_clock::now();
+
+				// Was the last click with the same button?
+				if (lastClick && lastClick->button == sg_key) {
+					std::chrono::milliseconds const DOUBLECLICK_DELAY(500);
+					int const DOUBLECLICK_RANGE = 5;
+
+					// Was it recent and close enough?
+					auto durationSinceClick = now - lastClick->time;
+					auto prevPos = lastClick->pos;
+					auto curPos = *video->lastCursorPos;
+					if (durationSinceClick <= DOUBLECLICK_DELAY &&
+						abs(prevPos.x - curPos.x) <= DOUBLECLICK_RANGE &&
+						abs(prevPos.y - curPos.y) <= DOUBLECLICK_RANGE)
+					{
+							sg_type = KE_DBLCLK;
+					}
+				}
+				if (sg_type == KE_DBLCLK) {
+					lastClick.reset();
+				}
+				else {
+					ClickEvent e;
+					e.time = now;
+					e.pos = *video->lastCursorPos;
+					e.button = sg_key;
+					lastClick = e;
+				}
+			}
+			sys->core->KeyEvent(sg_key, sg_type);
 		});
 		glfwSetScrollCallback(wnd, [](GLFWwindow* wnd, double xoffset, double yoffset) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
