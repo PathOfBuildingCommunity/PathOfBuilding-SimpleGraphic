@@ -115,8 +115,8 @@ void sys_console_c::Print(const char* text)
 	int len = 0;
 	for (int b = 0; text[b]; b++) {
 		if (text[b] == '\n') {
-			// Newline takes 2 characters
-			len+= 2;
+			// Newline takes 1 character
+			len+= 1;
 		} else if ((escLen = IsColorEscape(&text[b]))) {
 			// Skip colour escapes
 			b+= escLen - 1;
@@ -142,7 +142,7 @@ void sys_console_c::Print(const char* text)
 	}
 
 	// Append to the output
-	std::cerr << winText;
+	std::cerr << winText << std::flush;
 	delete winText;
 }
 
