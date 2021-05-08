@@ -20,6 +20,7 @@
 #endif
 
 #include <chrono>
+#include <vector>
 
 // =======
 // Classes
@@ -65,4 +66,5 @@ public:
 	char*	threadError = nullptr;
 	bool	errorRaised = false;
 	std::chrono::system_clock::time_point baseTime;
+	std::vector<uint8_t> heldKeyState;
 };

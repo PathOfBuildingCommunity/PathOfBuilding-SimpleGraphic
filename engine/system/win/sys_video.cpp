@@ -246,6 +246,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (byte k = sys->GlfwKeyToKey(key)) {
 				bool is_down = action == GLFW_PRESS || action == GLFW_REPEAT;
+				sys->heldKeyState[k] = is_down;
 				sys->core->KeyEvent(k, is_down ? KE_KEYDOWN : KE_KEYUP);
 				char ch = sys->GlfwKeyExtraChar(key);
 				if (is_down && ch) {

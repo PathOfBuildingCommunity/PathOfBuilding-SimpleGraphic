@@ -30,6 +30,7 @@
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <map>
+#include <set>
 #include <thread>
 
 #include <fmt/core.h>
@@ -521,13 +522,10 @@ void sys_main_c::Sleep(int msec)
 
 bool sys_main_c::IsKeyDown(byte k)
 {
-#ifdef _WIN32
-	return !!(GetKeyState(KeyToVirtual(k)) & 0x8000);
-#else
-#warning LV: IsKeyDown not implemented on this OS.
-	// TODO(LV): Implement on other OSes
+	if (k < heldKeyState.size()) {
+		return !!heldKeyState[k];
+	}
 	return false;
-#endif
 }
 
 void sys_main_c::ClipboardCopy(const char* str)
@@ -698,6 +696,7 @@ std::string FindUserPath()
 }
 
 sys_main_c::sys_main_c()
+	: heldKeyState(KEY_SCROLL + 1, (uint8_t)0)
 {
 #ifdef _WIN64
 	x64 = true;
