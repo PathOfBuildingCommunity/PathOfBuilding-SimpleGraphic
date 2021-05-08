@@ -77,6 +77,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJit REQUIRED)
 find_package(OpenGL REQUIRED)
+find_package(ZLIB REQUIRED)
 
 target_include_directories(SimpleGraphic
     PRIVATE
@@ -97,4 +98,5 @@ target_link_libraries(SimpleGraphic
     glfw
     ${LUAJIT_LIBRARIES}
     OpenGL::GL
+    ZLIB::ZLIB
 )
