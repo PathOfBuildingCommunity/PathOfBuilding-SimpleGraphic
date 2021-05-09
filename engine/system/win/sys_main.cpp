@@ -573,7 +573,8 @@ void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 #endif
 }
 
-void sys_main_c::OpenURL(const char* url)
+#if _WIN32 || __linux__
+void PlatformOpenURL(const char* url)
 {
 #ifdef _WIN32
 	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
@@ -581,6 +582,14 @@ void sys_main_c::OpenURL(const char* url)
 #warning LV: URL opening not implemented on this OS.
 	// TODO(LV): Implement URL opening for other OSes.
 #endif
+}
+#else
+void PlatformOpenURL(const char* url);
+#endif
+
+void sys_main_c::OpenURL(const char* url)
+{
+	PlatformOpenURL(url);
 }
 
 // ==============================

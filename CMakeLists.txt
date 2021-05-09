@@ -3,6 +3,10 @@ cmake_minimum_required(VERSION 3.15)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 
+if (APPLE)
+    enable_language(OBJCXX)
+endif ()
+
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
@@ -57,8 +61,16 @@ set(SIMPLEGRAPHIC_SOURCES
     "ui_subscript.h"
 )
 
+set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
+if (APPLE)
+    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+        "engine/system/win/sys_macos.mm"
+    )
+endif()
+
 add_library(SimpleGraphic SHARED
     ${SIMPLEGRAPHIC_SOURCES}
+    ${SIMPLEGRAPHIC_PLATFORM_SOURCES}
 )
 
 target_compile_definitions(SimpleGraphic
@@ -89,6 +101,16 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_options(SimpleGraphic
         PRIVATE
         "-export-dynamic"
+    )
+endif ()
+
+if (APPLE)
+    find_library(CORE_FOUNDATION_LIBRARY CoreFoundation)
+    find_library(APPLICATION_SERVICES_LIBRARY ApplicationServices)
+    target_link_libraries(SimpleGraphic
+        PRIVATE
+        ${CORE_FOUNDATION_LIBRARY}
+        ${APPLICATION_SERVICES_LIBRARY}
     )
 endif ()
 
