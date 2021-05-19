@@ -9,12 +9,12 @@ To build the library yourself, you will need to acquire these libraries.
 The following 3rd-party libraries are required to build SimpleGraphic.dll.
 Usually, the latest version will work, but the most recent version used by the
 PathOfBuildingCommunity org are as follows:
-* LuaJIT 2.0.5-3
 * zlib 1.2.11-6
 * libjpeg-turbo 2.0.4
 * libpng 1.6.37-9
 * giflib 5.1.4-6
 * liblzma 5.2.4-5
+* luajit 2.1-beta3
 
 These libraries are also listed in vcpkg.txt
 for our GitHub actions build to reference.
@@ -27,10 +27,14 @@ the dependencies when building for Visual Studio.
 vcpkg is included as a submodule of this project,
 so installing it should be relatively simple.
 
-1) Run 'git submodule update --init'
-2) 'cd vcpkg'
+1) Run `git submodule update --init`
+2) `cd vcpkg`
 3) Type the following commands:
    1) `bootstrap-vcpkg.sh` or `bootstrap-vcpkg.bat`
    2) `./vcpkg.exe install @../vcpkg.txt` or `vcpkg install @../vcpkg.txt`
-4) The SimpleGraphic solution and vcproj are already configured to look in this
+4) `cd ../LuaJIT/src`
+   1) `vcvarsall`
+   	* If this command doesn't work, follow the instructions on this page to run vcvarsall.bat: 200~https://docs.microsoft.com/en-us/cpp/build/building-on-the-command-line?view=msvc-160#developer_command_file_locations
+   2) `.\msvcbuild.bat` 
+5) The SimpleGraphic solution and vcproj are already configured to look in this
 location for the dependencies, so now it should build as-is.

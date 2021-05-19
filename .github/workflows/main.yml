@@ -8,6 +8,13 @@ jobs:
                     uses: actions/checkout@v2
                     with:
                       submodules: 'recursive'
+                  - name: Setup Windows Dev env
+                    uses: ilammy/msvc-dev-cmd@v1
+                    with:
+                        arch: 'x86'
+                  - name: Build LuaJIT
+                    run: '.\msvcbuild.bat'
+                    working-directory: LuaJIT/src
                   - name: run-vcpkg
                     uses: lukka/run-vcpkg@v6.0
                     with:
@@ -17,7 +24,7 @@ jobs:
                   - name: Setup MSBuild
                     uses: microsoft/setup-msbuild@v1
                   - name: Check dependencies
-                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static'
+                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static; ls ${{ github.workspace }}/LuaJIT/src/lua*'
                   - name: Build DLL
                     run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
                   - name: Archive DLL
