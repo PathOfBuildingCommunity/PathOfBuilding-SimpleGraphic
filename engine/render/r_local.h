@@ -15,16 +15,16 @@
 #define APIENTRY
 #endif
 #define GL_GLEXT_LEGACY
-#include <OpenGL/gl.h>
-#include <GL/glext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 #elif __linux__
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 #else
 #define WINGDIAPI
 #define APIENTRY __stdcall
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <GLES2/gl2.h>
+#include <GLES2/gl2ext.h>
 #endif
 
 #include "core/core_image.h"

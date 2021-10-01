@@ -290,8 +290,8 @@ int r_tex_c::GLTypeForImgType(int type)
 		GL_LUMINANCE,
 		GL_RGB,
 		GL_RGBA,
-		GL_BGR,
-		GL_BGRA,
+		0,
+		0,
 		GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
 		GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
 		GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
@@ -410,8 +410,8 @@ void r_tex_c::Upload(image_c* image, int flags)
 
 	// Set repeating
 	if (flags & TF_CLAMP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	} else {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -434,7 +434,7 @@ void r_tex_c::Upload(image_c* image, int flags)
 
 	// Special case for precompressed textures (BLP DXT)
 	if (image->type >= IMGTYPE_RGB_DXT1 && image->type <= IMGTYPE_RGBA_DXT5) {
-		if ( !renderer->glCompressedTexImage2DARB ) {
+		if ( !renderer->glCompressedTexImage2D ) {
 			image_c raw;
 			raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
 			Upload(&raw, TF_NOMIPMAP);
@@ -446,7 +446,7 @@ void r_tex_c::Upload(image_c* image, int flags)
 		while (1) {
 			mipSize = *(dword*)datPtr;
 			datPtr+= sizeof(dword);
-			renderer->glCompressedTexImage2DARB(GL_TEXTURE_2D, miplevel, GLTypeForImgType(image->type), up_w, up_h, 0, mipSize, datPtr);
+			renderer->glCompressedTexImage2D(GL_TEXTURE_2D, miplevel, GLTypeForImgType(image->type), up_w, up_h, 0, mipSize, datPtr);
 			datPtr+= mipSize;
 			if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
 				break;
@@ -471,14 +471,17 @@ void r_tex_c::Upload(image_c* image, int flags)
 		mipBuf[2] = image->dat;
 	}
 
-	int intformat = image->comp;
-	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2DARB) {
+	int intformat = 0;
+	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2D) {
 		// Enable compression
 		if (image->comp == 3) {
 			intformat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
 		} else if (image->comp == 4) {
 			intformat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 		}
+	}
+	if (!intformat) {
+		intformat = GLTypeForImgType(image->type);
 	}
 
 	int miplevel = 0;

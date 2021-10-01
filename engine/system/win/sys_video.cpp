@@ -215,7 +215,8 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
 		glfwWindowHint(GLFW_FLOATING, !!(cur.flags & VID_TOPMOST));
 		glfwWindowHint(GLFW_MAXIMIZED, !!(cur.flags & VID_MAXIMIZE));
-		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
+		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
+		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 		glfwWindowHint(GLFW_DEPTH_BITS, 24);

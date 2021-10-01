@@ -26,10 +26,10 @@ enum r_takeScreenshot_e {
 class r_shader_c {
 public:
 	r_renderer_c* renderer;
-	char*		name;
+	char* name;
 	dword		nameHash;
 	int			refCount;
-	r_tex_c*	tex;
+	r_tex_c* tex;
 
 	r_shader_c(r_renderer_c* renderer, const char* shname, int flags);
 	r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat);
@@ -88,6 +88,28 @@ r_shaderHnd_c::~r_shaderHnd_c()
 	}
 }
 
+struct Mat4 {
+	float m[16];
+
+	float const* data() const{
+		return m;
+	}
+};
+
+Mat4 OrthoMatrix(double left, double right, double bottom, double top, double nearVal, double farVal)
+{
+	Mat4 ret;
+	std::fill_n(ret.m, 16, 0.0f);
+	ret.m[0] = (float)(2.0f / (right - left));
+	ret.m[5] = (float)(2.0f / (top - bottom));
+	ret.m[10] = (float)(-2.0f / (farVal - nearVal));
+	ret.m[12] = (float)-((right + left) / (right - left));
+	ret.m[13] = (float)-((top + bottom) / (top - bottom));
+	ret.m[14] = (float)-((farVal + nearVal) / (farVal - nearVal));
+	ret.m[15] = 1.0f;
+	return ret;
+}
+
 // =================
 // Layer queue class
 // =================
@@ -119,7 +141,7 @@ r_layer_c::r_layer_c(r_renderer_c* renderer, int layer, int subLayer)
 {
 	numCmd = 0;
 	cmdSize = 8;
-	cmdList = new r_layerCmd_s*[cmdSize];
+	cmdList = new r_layerCmd_s * [cmdSize];
 }
 
 r_layer_c::~r_layer_c()
@@ -136,7 +158,7 @@ r_layerCmd_s* r_layer_c::NewCommand()
 		cmd = new r_layerCmd_s;
 	}
 	if (numCmd == cmdSize) {
-		cmdSize<<= 1;
+		cmdSize <<= 1;
 		trealloc(cmdList, cmdSize);
 	}
 	cmdList[numCmd++] = cmd;
@@ -186,9 +208,15 @@ void r_layer_c::Quad(double s0, double t0, double x0, double y0, double s1, doub
 
 void r_layer_c::Render()
 {
-	r_viewport_s curViewPort = {-1, -1, -1, -1};
+	r_viewport_s curViewPort = { -1, -1, -1, -1 };
 	int curBlendMode = -1;
 	r_tex_c* curTex = NULL;
+	GLuint prog = renderer->tintedTextureProgram;
+	glUseProgram(prog);
+	{
+		GLint tintLoc = glGetUniformLocation(prog, "i_tint");
+		glUniform4f(tintLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+	}
 	for (int i = 0; i < numCmd; i++) {
 		r_layerCmd_s* cmd = cmdList[i];
 		switch (cmd->cmd) {
@@ -202,11 +230,9 @@ void r_layer_c::Render()
 				float width = cmd->viewport.width * fbScaleX;
 				float height = cmd->viewport.height * fbScaleY;
 				glViewport((int)x, (int)y, (int)width, (int)height);
-				glMatrixMode(GL_PROJECTION);
-				glLoadIdentity();
-				glOrtho(0, (float)cmd->viewport.width, (float)cmd->viewport.height, 0, -9999, 9999);
-				glMatrixMode(GL_MODELVIEW);
-				glLoadIdentity();
+				Mat4 mvpMatrix = OrthoMatrix(0, cmd->viewport.width, cmd->viewport.height, 0, -9999, 9999);
+				GLint mvpMatrixLoc = glGetUniformLocation(prog, "mvp_matrix");
+				glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, mvpMatrix.data());
 			}
 			break;
 		case r_layerCmd_s::BLEND:
@@ -230,24 +256,42 @@ void r_layer_c::Render()
 				curTex = cmd->tex;
 			}
 			break;
-		case r_layerCmd_s::QUAD:
-			glBegin(GL_TRIANGLE_FAN);
+		case r_layerCmd_s::QUAD: {
+			struct Vertex {
+				float x, y;
+				float u, v;
+			};
+			Vertex quad[4];
 			for (int v = 0; v < 4; v++) {
-				glTexCoord2d(cmd->quad.s[v], cmd->quad.t[v]);
-				glVertex2d(cmd->quad.x[v], cmd->quad.y[v]);
+				quad[v].u = (float)cmd->quad.s[v];
+				quad[v].v = (float)cmd->quad.t[v];
+				quad[v].x = (float)cmd->quad.x[v];
+				quad[v].y = (float)cmd->quad.y[v];
 			}
-			glEnd();
-			break;
-		case r_layerCmd_s::COLOR:
-			glColor4fv(cmd->col);
-			break;
+			GLint texLoc = glGetUniformLocation(prog, "t_tex");
+			glUniform1i(texLoc, 0);
+			int xyAttr = glGetAttribLocation(prog, "a_vertex");
+			int uvAttr = glGetAttribLocation(prog, "a_texcoord");
+			glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, x) + (char const*)quad);
+			glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, u) + (char const*)quad);
+			glEnableVertexAttribArray(xyAttr);
+			glEnableVertexAttribArray(uvAttr);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
+			glDisableVertexAttribArray(xyAttr);
+			glDisableVertexAttribArray(uvAttr);
+		} break;
+		case r_layerCmd_s::COLOR: {
+			GLint tintLoc = glGetUniformLocation(prog, "i_tint");
+			glUniform4fv(tintLoc, 1, cmd->col);
+		} break;
 		}
 		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
-			renderer->layerCmdBinSize<<= 1;
+			renderer->layerCmdBinSize <<= 1;
 			trealloc(renderer->layerCmdBin, renderer->layerCmdBinSize);
 		}
 		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
 	}
+	glUseProgram(0);
 	numCmd = 0;
 }
 
@@ -274,6 +318,70 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 
 	Cmd_Add("screenshot", 0, "[<format>]", this, &r_renderer_c::C_Screenshot);
 }
+
+static bool GetShaderCompileSuccess(GLuint id)
+{
+	GLint success{};
+	glGetShaderiv(id, GL_COMPILE_STATUS, &success);
+	return success == GL_TRUE;
+}
+
+static std::string GetShaderInfoLog(GLuint id)
+{
+	GLint len{};
+	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &len);
+	std::vector<char> msg(len);
+	glGetShaderInfoLog(id, msg.size(), &len, msg.data());
+	return std::string(msg.data(), msg.data() + len);
+}
+
+static bool GetProgramLinkSuccess(GLuint id)
+{
+	GLint success{};
+	glGetProgramiv(id, GL_LINK_STATUS, &success);
+	return success == GL_TRUE;
+}
+
+static std::string GetProgramInfoLog(GLuint id)
+{
+	GLint len{};
+	glGetProgramiv(id, GL_INFO_LOG_LENGTH, &len);
+	std::vector<char> msg(len);
+	glGetProgramInfoLog(id, msg.size(), &len, msg.data());
+	return std::string(msg.data(), msg.data() + len);
+}
+
+static char const* s_tintedTextureVertexSource = R"(#version 100
+
+uniform mat4 mvp_matrix;
+
+attribute vec2 a_vertex;
+attribute vec2 a_texcoord;
+
+varying vec2 v_texcoord;
+
+void main(void)
+{
+	v_texcoord = a_texcoord;
+	gl_Position = mvp_matrix * vec4(a_vertex, 0.0, 1.0);
+}
+)";
+
+static char const* s_tintedTextureFragmentSource = R"(#version 100
+precision mediump float;
+
+uniform sampler2D t_tex;
+uniform vec4 i_tint;
+
+varying vec2 v_texcoord;
+
+void main(void)
+{
+	vec4 color = texture2D(t_tex, v_texcoord);
+	// color = vec4(1.0, 1.0, 1.0, 1.0);
+	gl_FragColor = color * i_tint;
+}
+)";
 
 // =============
 // Init/Shutdown
@@ -317,19 +425,14 @@ void r_renderer_c::Init()
 
 	if (strstr(st_ext, "GL_EXT_texture_compression_s3tc")) {
 		sys->con->Printf("using GL_EXT_texture_compression_s3tc\n");
-		glCompressedTexImage2DARB = (PFNGLCOMPRESSEDTEXIMAGE2DARBPROC)openGL->GetProc("glCompressedTexImage2DARB");
-	} else {
+		glCompressedTexImage2D = (PFNGLCOMPRESSEDTEXIMAGE2DPROC)openGL->GetProc("glCompressedTexImage2D");
+	}
+	else {
 		sys->con->Printf("GL_EXT_texture_compression_s3tc not supported\n");
-		glCompressedTexImage2DARB = NULL;
+		glCompressedTexImage2D = NULL;
 	}
 
-	if (strstr(st_ext, "GL_ARB_texture_non_power_of_two")) {
-		sys->con->Printf("using GL_ARB_texture_non_power_of_two\n");
-		texNonPOT = true;
-	} else {
-		sys->con->Printf("GL_ARB_texture_non_power_of_two not supported\n");
-		texNonPOT = false;
-	}
+	texNonPOT = true;
 
 	// Initialise texture manager
 	texMan = r_ITexManager::GetHandle(this);
@@ -338,16 +441,47 @@ void r_renderer_c::Init()
 	numShader = 0;
 	memset(shaderList, 0, sizeof(shaderList));
 
+	// Initialise vertex programs
+	{
+		GLint success = GL_FALSE;
+		GLuint prog = glCreateProgram();
+		GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vs, 1, &s_tintedTextureVertexSource, nullptr);
+		glCompileShader(vs);
+		if (!GetShaderCompileSuccess(vs)) {
+			std::string log = GetShaderInfoLog(vs);
+			sys->Error("Failed to compile vertex shader:\n%s", log.c_str());
+		}
+		GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fs, 1, &s_tintedTextureFragmentSource, nullptr);
+		glCompileShader(fs);
+		if (!GetShaderCompileSuccess(fs)) {
+			std::string log = GetShaderInfoLog(fs);
+			sys->Error("Failed to compile fragment shader:\n%s", log.c_str());
+		}
+
+		glAttachShader(prog, vs);
+		glAttachShader(prog, fs);
+		glLinkProgram(prog);
+		if (!GetProgramLinkSuccess(prog)) {
+			std::string log = GetProgramInfoLog(prog);
+			sys->Error("Failed to link program:\n%s", log.c_str());
+		}
+		glDeleteShader(vs);
+		glDeleteShader(fs);
+		tintedTextureProgram = prog;
+	}
+
 	// Initialise layer array
 	numLayer = 1;
 	layerListSize = 16;
-	layerList = new r_layer_c*[layerListSize];
+	layerList = new r_layer_c * [layerListSize];
 	layerList[0] = new r_layer_c(this, 0, 0);
 
 	// Initialise layer command bin
 	layerCmdBinCount = 0;
 	layerCmdBinSize = 1024;
-	layerCmdBin = new r_layerCmd_s*[layerCmdBinSize];
+	layerCmdBin = new r_layerCmd_s * [layerCmdBinSize];
 
 	takeScreenshot = R_SSNONE;
 
@@ -430,7 +564,7 @@ static int layerCompFunc(const void* va, const void* vb)
 
 void r_renderer_c::EndFrame()
 {
-	r_layer_c** layerSort = new r_layer_c*[numLayer];
+	r_layer_c** layerSort = new r_layer_c * [numLayer];
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l] = layerList[l];
 	}
@@ -438,13 +572,13 @@ void r_renderer_c::EndFrame()
 	if (r_layerDebug->intVal) {
 		int totalCmd = 0;
 		for (int l = 0; l < numLayer; l++) {
-			totalCmd+= layerSort[l]->numCmd;
+			totalCmd += layerSort[l]->numCmd;
 			char str[1024];
 			sprintf(str, "%d (%4d,%4d) [%2d]", layerSort[l]->numCmd, layerSort[l]->layer, layerSort[l]->subLayer, l);
 			float w = (float)DrawStringWidth(16, F_FIXED, str);
 			DrawColor(0x7F000000);
-			DrawImage(NULL, (float)sys->video->vid.size[0] - w, sys->video->vid.size[1] - (l + 2)*16.0f, w, 16);
-			DrawStringFormat(0, sys->video->vid.size[1] - (l + 2)*16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
+			DrawImage(NULL, (float)sys->video->vid.size[0] - w, sys->video->vid.size[1] - (l + 2) * 16.0f, w, 16);
+			DrawStringFormat(0, sys->video->vid.size[1] - (l + 2) * 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 		}
 		char str[1024];
 		sprintf(str, "%d", totalCmd);
@@ -466,26 +600,26 @@ void r_renderer_c::EndFrame()
 	// Take screenshot
 	switch (takeScreenshot) {
 	case R_SSTGA:
-		{
-			targa_c i(sys->con);
-			i.type = IMGTYPE_BGR;
-			DoScreenshot(&i, "tga");
-		}
-		break;
+	{
+		targa_c i(sys->con);
+		i.type = IMGTYPE_RGB;
+		DoScreenshot(&i, "tga");
+	}
+	break;
 	case R_SSJPEG:
-		{
-			jpeg_c i(sys->con);
-			i.type = IMGTYPE_RGB;
-			DoScreenshot(&i, "jpg");
-		}
-		break;
+	{
+		jpeg_c i(sys->con);
+		i.type = IMGTYPE_RGB;
+		DoScreenshot(&i, "jpg");
+	}
+	break;
 	case R_SSPNG:
-		{
-			png_c i(sys->con);
-			i.type = IMGTYPE_RGB;
-			DoScreenshot(&i, "png");
-		}
-		break;
+	{
+		png_c i(sys->con);
+		i.type = IMGTYPE_RGB;
+		DoScreenshot(&i, "png");
+	}
+	break;
 	}
 	takeScreenshot = R_SSNONE;
 
@@ -516,7 +650,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
 	dword nameHash = StringHash(shname, 0xFFFF);
 	int newId = -1;
 	for (int s = 0; s < numShader; s++) {
-		if ( !shaderList[s] ) {
+		if (!shaderList[s]) {
 			newId = s;
 		} else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && shaderList[s]->tex->flags == flags) {
 			// Shader already exists, return a new handle for it
@@ -540,7 +674,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int t
 {
 	int newId = -1;
 	for (int s = 0; s < numShader; s++) {
-		if ( !shaderList[s] ) {
+		if (!shaderList[s]) {
 			newId = s;
 			break;
 		}
@@ -558,7 +692,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int t
 	return new r_shaderHnd_c(shaderList[newId]);
 }
 
-void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height)
+void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& height)
 {
 	if (hnd && hnd->sh->tex->status == r_tex_c::DONE) {
 		width = hnd->sh->tex->fileWidth;
@@ -602,10 +736,10 @@ void r_renderer_c::SetDrawLayer(int layer, int subLayer)
 			break;
 		}
 	}
-	if ( !newCurLayer ) {
+	if (!newCurLayer) {
 		if (numLayer == layerListSize) {
-			layerListSize<<= 1;
-			trealloc(layerList, layerListSize); 
+			layerListSize <<= 1;
+			trealloc(layerList, layerListSize);
 		}
 		layerList[numLayer] = new r_layer_c(this, layer, subLayer);
 		newCurLayer = layerList[numLayer];
@@ -687,7 +821,7 @@ void r_renderer_c::DrawString(float x, float y, int align, int height, const col
 		font = F_FIXED;
 	}
 
-	scp_t pos = {x, y};
+	scp_t pos = { x, y };
 	if (col) {
 		col4_t tcol;
 		Vector4Copy(col, tcol);
@@ -706,7 +840,7 @@ void r_renderer_c::DrawStringFormat(float x, float y, int align, int height, con
 	va_list va;
 	va_start(va, fmt);
 
-	scp_t pos = {x, y};
+	scp_t pos = { x, y };
 	if (col) {
 		col4_t tcol;
 		Vector4Copy(col, tcol);
@@ -738,11 +872,11 @@ int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, i
 // Screenshots
 // ===========
 
-void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c &args)
+void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c& args)
 {
-	const char* fmtName = args.argc >= 2? args.argv[1] : r_screenshotFormat->strVal.c_str();
+	const char* fmtName = args.argc >= 2 ? args.argv[1] : r_screenshotFormat->strVal.c_str();
 	takeScreenshot = R_SSNONE;
-	if ( !_stricmp(fmtName, "tga") ) {
+	if (!_stricmp(fmtName, "tga")) {
 		takeScreenshot = R_SSTGA;
 	} else if ( !_stricmp(fmtName, "jpg") || !_stricmp(fmtName, "jpeg") ) {
 		takeScreenshot = R_SSJPEG;
@@ -762,16 +896,15 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	byte* sbuf = new byte[size];
 
 	// Read the front buffer
-	glReadBuffer(GL_FRONT);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(0, 0, xs, ys, r_tex_c::GLTypeForImgType(i->type), GL_UNSIGNED_BYTE, sbuf);
 
 	// Flip the image
 	int	span = xs * 3;
 	byte* ss = new byte[size];
-	byte* p1 = sbuf; 
+	byte* p1 = sbuf;
 	byte* p2 = ss + size - span;
-	for (int y = 0; y < ys; y++, p1+= span, p2-= span) {
+	for (int y = 0; y < ys; y++, p1 += span, p2 -= span) {
 		memcpy(p2, p1, span);
 	}
 	delete[] sbuf;
@@ -785,11 +918,11 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	time_t curTime;
 	time(&curTime);
 	std::string ssname = fmt::format(CFG_DATAPATH "Screenshots/{:%m%d%y_%H%M%S}.{}",
-	fmt::localtime(curTime), ext);
-		// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
-		// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
+		fmt::localtime(curTime), ext);
+	// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
+	// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
 
-	// Save image
+// Save image
 	if (i->Save(ssname.c_str())) {
 		sys->con->Print("Couldn't write screenshot!\n");
 	} else {

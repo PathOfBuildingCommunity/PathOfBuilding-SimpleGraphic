@@ -154,8 +154,8 @@ bool targa_c::Load(const char* fileName)
 	// Try to match image type
 	int ittable[3][3] = {
 		 3,  8, IMGTYPE_GRAY,
-		 2, 24, IMGTYPE_BGR,
-		 2, 32, IMGTYPE_BGRA
+		 2, 24, IMGTYPE_RGB,
+		 2, 32, IMGTYPE_RGBA
 	};
 	int it_m;
 	for (it_m = 0; it_m < 3; it_m++) {
@@ -209,117 +209,20 @@ bool targa_c::Load(const char* fileName)
 		}
 	}
 
+	// Byteswap BGR(A) to RGB(A)
+	if (comp == 3 || comp == 4) {
+		uint8_t* p = dat;
+		for (size_t i = 0; i < width * height; ++i, p += comp) {
+			std::swap(p[0], p[2]);
+		}
+	}
+
 	return false;
 }
 
 bool targa_c::Save(const char* fileName)
 {
-	// Find a suitable image type
-	int ittable[3][3] = {
-		 1, IMGTYPE_GRAY, 3,
-		 3, IMGTYPE_BGR, 2,
-		 4, IMGTYPE_BGRA, 2
-	};
-	int it_m;
-	for (it_m = 0; it_m < 3; it_m++) {
-		if (ittable[it_m][0] == comp && ittable[it_m][1] == type) break;
-	}
-	if (it_m == 3) {
-		// Image type not supported
-		return true;
-	}
-
-	// Open the file
-	fileOutputStream_c out;
-	if (out.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Write header
-	tgaHeader_s hdr;
-	memset(&hdr, 0, sizeof(hdr));
-	hdr.width = width;
-	hdr.height = height;
-	hdr.depth = comp << 3;
-	hdr.imgType = ittable[it_m][2] + rle * 8;
-	out.TWrite(hdr);
-
-	// Write image
-	dword rowSize = width * comp;
-	if (rle) {
-		byte* packet = new byte[comp * 128 + 4];
-		dword mask = 0xFFFFFFFF >> ((4 - comp) << 3);
-		for (int y = height - 1; y >= 0; y--) {
-			byte* p = dat + y * rowSize;
-			byte hdr = 255;
-			dword lastPix;
-			memOutputStream_c line(512);
-			for (dword x = 0; x < width; x++, p+= comp) {
-				dword pix = *(dword*)p & mask;
-				if (hdr == 255) {
-					// Start new packet
-					*(dword*)packet = pix;
-					hdr = 0;
-				} else if (hdr & 0x80) {
-					// Run-length packet, check for continuance
-					if (pix == lastPix) {
-						hdr++;
-						if (hdr == 255) {
-							// Max length, write it
-							line.TWrite(hdr);
-							line.Write(packet, comp);
-						}
-					} else {
-						line.TWrite(hdr);
-						line.Write(packet, comp);
-						*(dword*)packet = pix;
-						hdr = 0;
-					}
-				} else if (hdr) {
-					// Raw packet, check if a run-length packet could be created with the last pixel
-					if (pix == lastPix) {
-						hdr--;
-						line.TWrite(hdr);
-						line.Write(packet, comp * (hdr + 1));
-						*(dword*)packet = pix;
-						hdr = 129;
-					} else if (hdr == 127) {
-						// Packet is already full, write it
-						line.TWrite(hdr);
-						line.Write(packet, comp * (hdr + 1));
-						*(dword*)packet = pix;
-						hdr = 0;
-					} else {
-						hdr++;
-						*(dword*)(packet + comp * hdr) = pix;
-					}
-				} else {
-					// New packet, check if this could become a run-length packet
-					if (pix == lastPix) {
-						hdr = 129;
-					} else {
-						hdr = 1;
-						*(dword*)(packet + comp) = pix;
-					}
-				}
-				lastPix = pix;
-			}
-			if (hdr < 255) {
-				// Leftover packet, write it
-				line.TWrite(hdr);
-				line.Write(packet, hdr & 0x80? comp : comp * (hdr + 1));
-			}
-			line.MemOutput(&out);
-		}
-		delete[] packet;
-	} else {
-		// Raw
-		for (int y = height - 1; y >= 0; y--) {
-			out.Write(dat + y * rowSize, rowSize);
-		}
-	}
-
-	return false;
+	return true;
 }
 
 bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)

@@ -97,7 +97,7 @@ public:
 	bool	texNonPOT = false;			// Non power-of-2 textures supported?
 	dword	texMaxDim = 0;				// Maximum texture dimension
 
-	PFNGLCOMPRESSEDTEXIMAGE2DARBPROC	glCompressedTexImage2DARB = nullptr;
+	PFNGLCOMPRESSEDTEXIMAGE2DPROC	glCompressedTexImage2D = nullptr;
 	
 	conVar_c*	r_compress = nullptr;
 	conVar_c*	r_screenshotFormat = nullptr;
@@ -114,6 +114,8 @@ public:
 
 	int		numShader = 0;
 	class r_shader_c *shaderList[R_MAXSHADERS] = {};
+
+	int		tintedTextureProgram = 0;
 
 	int		numLayer = 0;
 	int		layerListSize = 0;
