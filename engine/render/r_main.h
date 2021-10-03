@@ -98,6 +98,9 @@ public:
 	dword	texMaxDim = 0;				// Maximum texture dimension
 
 	PFNGLCOMPRESSEDTEXIMAGE2DPROC	glCompressedTexImage2D = nullptr;
+	PFNGLINSERTEVENTMARKEREXTPROC	glInsertEventMarkerEXT = nullptr;
+	PFNGLPUSHGROUPMARKEREXTPROC		glPushGroupMarkerEXT = nullptr;
+	PFNGLPOPGROUPMARKEREXTPROC		glPopGroupMarkerEXT = nullptr;
 	
 	conVar_c*	r_compress = nullptr;
 	conVar_c*	r_screenshotFormat = nullptr;

@@ -7,6 +7,7 @@
 #include "r_local.h"
 
 #include <fmt/chrono.h>
+#include <map>
 
 // =======
 // Classes
@@ -214,6 +215,8 @@ struct Vertex {
 
 struct Batch {
 	explicit Batch(GLuint prog);
+	Batch(Batch&& rhs);
+	Batch& operator = (Batch&& rhs);
 	Batch(Batch const&) = delete;
 	Batch& operator = (Batch const&) = delete;
 	~Batch();
@@ -226,7 +229,7 @@ struct Batch {
 	GLuint vbo;
 	std::vector<Vertex> vertices;
 
-	void FlushBatch();
+	void Execute();
 };
 
 Batch::Batch(GLuint prog)
@@ -238,11 +241,36 @@ Batch::Batch(GLuint prog)
 	glGenBuffers(1, &vbo);
 }
 
-Batch::~Batch() {
-	glDeleteBuffers(1, &vbo);
+Batch::Batch(Batch&& rhs)
+	: prog(rhs.prog)
+	, xyAttr(rhs.xyAttr)
+	, uvAttr(rhs.uvAttr)
+	, tintAttr(rhs.tintAttr)
+	, vbo(rhs.vbo)
+	, vertices(std::move(rhs.vertices))
+{
+	rhs.vbo = 0;
 }
 
-void Batch::FlushBatch()
+Batch& Batch::operator = (Batch&& rhs) {
+	prog = rhs.prog;
+	xyAttr = rhs.xyAttr;
+	uvAttr = rhs.uvAttr;
+	tintAttr = rhs.tintAttr;
+	vbo = rhs.vbo;
+	vertices = std::move(rhs.vertices);
+	rhs.vbo = 0;
+
+	return *this;
+}
+
+Batch::~Batch() {
+	if (vbo) {
+		glDeleteBuffers(1, &vbo);
+	}
+}
+
+void Batch::Execute()
 {
 	if (vertices.empty()) {
 		return;
@@ -266,9 +294,38 @@ void Batch::FlushBatch()
 
 void r_layer_c::Render()
 {
-	r_viewport_s curViewPort = { -1, -1, -1, -1 };
-	int curBlendMode = -1;
-	r_tex_c* curTex = NULL;
+	struct BatchKey {
+		r_viewport_s viewport = { -1, -1, -1, -1 };
+		int blendMode = -1;
+		r_tex_c* tex = NULL;
+
+		bool operator < (BatchKey const& rhs) const {
+			if (viewport.x != rhs.viewport.x) {
+				return viewport.x < rhs.viewport.x;
+			}
+			if (viewport.y != rhs.viewport.y) {
+				return viewport.y < rhs.viewport.y;
+			}
+			if (viewport.width != rhs.viewport.width) {
+				return viewport.width < rhs.viewport.width;
+			}
+			if (viewport.height != rhs.viewport.height) {
+				return viewport.height < rhs.viewport.height;
+			}
+			if (blendMode != rhs.blendMode) {
+				return blendMode < rhs.blendMode;
+			}
+			return std::less<r_tex_c const*>{}(tex, rhs.tex);
+		}
+	};
+
+	if (renderer->glPushGroupMarkerEXT)
+	{
+		std::ostringstream oss;
+		oss << "Layer " << layer << ", sub-layer " << subLayer;
+		renderer->glPushGroupMarkerEXT(0, oss.str().c_str());
+	}
+	BatchKey currentKey{};
 	GLuint prog = renderer->tintedTextureProgram;
 	float tint[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	glUseProgram(prog);
@@ -276,51 +333,35 @@ void r_layer_c::Render()
 		GLint texLoc = glGetUniformLocation(prog, "t_tex");
 		glUniform1i(texLoc, 0);
 	}
-	Batch batch{ prog };
+
+	std::vector<Batch> batches;
+	std::vector<BatchKey> batchKeys;
+	std::map<BatchKey, size_t> batchIndices;
 
 	for (int i = 0; i < numCmd; i++) {
 		r_layerCmd_s* cmd = cmdList[i];
 		switch (cmd->cmd) {
 		case r_layerCmd_s::VIEWPORT:
-			if (cmd->viewport.x != curViewPort.x || cmd->viewport.y != curViewPort.y || cmd->viewport.width != curViewPort.width || cmd->viewport.height != curViewPort.height) {
-				batch.FlushBatch();
-				auto& vid = renderer->sys->video->vid;
-				float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
-				float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
-				float x = cmd->viewport.x * fbScaleX;
-				float y = (vid.size[1] - cmd->viewport.y - cmd->viewport.height) * fbScaleY;
-				float width = cmd->viewport.width * fbScaleX;
-				float height = cmd->viewport.height * fbScaleY;
-				glViewport((int)x, (int)y, (int)width, (int)height);
-				Mat4 mvpMatrix = OrthoMatrix(0, cmd->viewport.width, cmd->viewport.height, 0, -9999, 9999);
-				GLint mvpMatrixLoc = glGetUniformLocation(prog, "mvp_matrix");
-				glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, mvpMatrix.data());
-			}
+			currentKey.viewport = cmd->viewport;
 			break;
 		case r_layerCmd_s::BLEND:
-			if (cmd->blendMode != curBlendMode) {
-				batch.FlushBatch();
-				switch (cmd->blendMode) {
-				case RB_ALPHA:
-					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-					break;
-				case RB_PRE_ALPHA:
-					glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-					break;
-				case RB_ADDITIVE:
-					glBlendFunc(GL_ONE, GL_ONE);
-					break;
-				}
-			}
+			currentKey.blendMode = cmd->blendMode;
 			break;
 		case r_layerCmd_s::BIND:
-			if (cmd->tex != curTex) {
-				batch.FlushBatch();
-				cmd->tex->Bind();
-				curTex = cmd->tex;
-			}
+			currentKey.tex = cmd->tex;
 			break;
 		case r_layerCmd_s::QUAD: {
+			Batch* batch{};
+			auto I = batchIndices.find(currentKey);
+			if (I != batchIndices.end()) {
+				batch = &batches[I->second];
+			}
+			else {
+				batchIndices.insert(I, { currentKey, batches.size() });
+				batchKeys.push_back(currentKey);
+				batches.emplace_back(prog);
+				batch = &batches.back();
+			}
 			Vertex quad[4];
 			for (int v = 0; v < 4; v++) {
 				quad[v].u = (float)cmd->quad.s[v];
@@ -332,27 +373,75 @@ void r_layer_c::Render()
 				quad[v].b = tint[2];
 				quad[v].a = tint[3];
 			}
-			// 3 2
-			// 0 1
+			// 3-2
+			// |/|
+			// 0-1
 			size_t indices[] = { 0, 1, 2, 0, 2, 3 };
 			for (auto idx : indices) {
-				batch.vertices.push_back(quad[idx]);
+				batch->vertices.push_back(quad[idx]);
 			}
 		} break;
-		case r_layerCmd_s::COLOR: {
+		case r_layerCmd_s::COLOR:
 			std::copy_n(cmd->col, 4, tint);
-		} break;
+			break;
 		}
+	}
+
+	std::optional<BatchKey> lastKey{};
+	int const numBatches = batches.size();
+	for (int i = 0; i < numBatches; ++i) {
+		auto& batch = batches[i];
+		auto& key = batchKeys[i];
+		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
+			lastKey->viewport.width != key.viewport.width	|| lastKey->viewport.height != key.viewport.height)
+		{
+			auto& vid = renderer->sys->video->vid;
+			float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
+			float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
+			float x = key.viewport.x * fbScaleX;
+			float y = (vid.size[1] - key.viewport.y - key.viewport.height) * fbScaleY;
+			float width = key.viewport.width * fbScaleX;
+			float height = key.viewport.height * fbScaleY;
+			glViewport((int)x, (int)y, (int)width, (int)height);
+			Mat4 mvpMatrix = OrthoMatrix(0, key.viewport.width, key.viewport.height, 0, -9999, 9999);
+			GLint mvpMatrixLoc = glGetUniformLocation(prog, "mvp_matrix");
+			glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, mvpMatrix.data());
+		}
+		if (!lastKey || lastKey->blendMode != key.blendMode) {
+			switch (key.blendMode) {
+			case RB_ALPHA:
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				break;
+			case RB_PRE_ALPHA:
+				glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+				break;
+			case RB_ADDITIVE:
+				glBlendFunc(GL_ONE, GL_ONE);
+				break;
+			}
+		}
+		if (!lastKey || lastKey->tex != key.tex) {
+			key.tex->Bind();
+		}
+
+		batch.Execute();
+
+		lastKey = key;
+	}
+	glUseProgram(0);
+
+	for (int i = 0; i < numCmd; i++) {
+		r_layerCmd_s* cmd = cmdList[i];
 		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
 			renderer->layerCmdBinSize <<= 1;
 			trealloc(renderer->layerCmdBin, renderer->layerCmdBinSize);
 		}
 		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
 	}
-	// Draw the last batch
-	batch.FlushBatch();
-	glUseProgram(0);
 	numCmd = 0;
+	if (renderer->glPopGroupMarkerEXT) {
+		renderer->glPopGroupMarkerEXT();
+	}
 }
 
 // =====================
@@ -493,6 +582,19 @@ void r_renderer_c::Init()
 	else {
 		sys->con->Printf("GL_EXT_texture_compression_s3tc not supported\n");
 		glCompressedTexImage2D = NULL;
+	}
+
+	if (strstr(st_ext, "GL_EXT_debug_marker")) {
+		sys->con->Printf("using GL_EXT_debug_marker\n");
+		glInsertEventMarkerEXT = (PFNGLINSERTEVENTMARKEREXTPROC)openGL->GetProc("glInsertEventMarkerEXT");
+		glPushGroupMarkerEXT = (PFNGLPUSHGROUPMARKEREXTPROC)openGL->GetProc("glPushGroupMarkerEXT");
+		glPopGroupMarkerEXT = (PFNGLPOPGROUPMARKEREXTPROC)openGL->GetProc("glPopGroupMarkerEXT");
+	}
+	else {
+		sys->con->Printf("GL_EXT_debug_marker not supported\n");
+		glInsertEventMarkerEXT = NULL;
+		glPushGroupMarkerEXT = NULL;
+		glPopGroupMarkerEXT = NULL;
 	}
 
 	texNonPOT = true;
