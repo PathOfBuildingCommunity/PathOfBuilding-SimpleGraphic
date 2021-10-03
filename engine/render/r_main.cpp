@@ -206,22 +206,84 @@ void r_layer_c::Quad(double s0, double t0, double x0, double y0, double s1, doub
 	cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
 }
 
+struct Vertex {
+	float x, y;
+	float u, v;
+	float r, g, b, a;
+};
+
+struct Batch {
+	explicit Batch(GLuint prog);
+	Batch(Batch const&) = delete;
+	Batch& operator = (Batch const&) = delete;
+	~Batch();
+
+	GLuint prog;
+	GLint xyAttr;
+	GLint uvAttr;
+	GLint tintAttr;
+
+	GLuint vbo;
+	std::vector<Vertex> vertices;
+
+	void FlushBatch();
+};
+
+Batch::Batch(GLuint prog)
+	: prog(prog)
+{
+	xyAttr = glGetAttribLocation(prog, "a_vertex");
+	uvAttr = glGetAttribLocation(prog, "a_texcoord");
+	tintAttr = glGetAttribLocation(prog, "a_tint");
+	glGenBuffers(1, &vbo);
+}
+
+Batch::~Batch() {
+	glDeleteBuffers(1, &vbo);
+}
+
+void Batch::FlushBatch()
+{
+	if (vertices.empty()) {
+		return;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, vbo);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
+	glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, x));
+	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
+	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
+	glEnableVertexAttribArray(xyAttr);
+	glEnableVertexAttribArray(uvAttr);
+	glEnableVertexAttribArray(tintAttr);
+	glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+	glDisableVertexAttribArray(xyAttr);
+	glDisableVertexAttribArray(uvAttr);
+	glDisableVertexAttribArray(tintAttr);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	vertices.clear();
+}
+
 void r_layer_c::Render()
 {
 	r_viewport_s curViewPort = { -1, -1, -1, -1 };
 	int curBlendMode = -1;
 	r_tex_c* curTex = NULL;
 	GLuint prog = renderer->tintedTextureProgram;
+	float tint[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
 	glUseProgram(prog);
 	{
-		GLint tintLoc = glGetUniformLocation(prog, "i_tint");
-		glUniform4f(tintLoc, 1.0f, 1.0f, 1.0f, 1.0f);
+		GLint texLoc = glGetUniformLocation(prog, "t_tex");
+		glUniform1i(texLoc, 0);
 	}
+	Batch batch{ prog };
+
 	for (int i = 0; i < numCmd; i++) {
 		r_layerCmd_s* cmd = cmdList[i];
 		switch (cmd->cmd) {
 		case r_layerCmd_s::VIEWPORT:
 			if (cmd->viewport.x != curViewPort.x || cmd->viewport.y != curViewPort.y || cmd->viewport.width != curViewPort.width || cmd->viewport.height != curViewPort.height) {
+				batch.FlushBatch();
 				auto& vid = renderer->sys->video->vid;
 				float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
 				float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
@@ -237,6 +299,7 @@ void r_layer_c::Render()
 			break;
 		case r_layerCmd_s::BLEND:
 			if (cmd->blendMode != curBlendMode) {
+				batch.FlushBatch();
 				switch (cmd->blendMode) {
 				case RB_ALPHA:
 					glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -252,37 +315,32 @@ void r_layer_c::Render()
 			break;
 		case r_layerCmd_s::BIND:
 			if (cmd->tex != curTex) {
+				batch.FlushBatch();
 				cmd->tex->Bind();
 				curTex = cmd->tex;
 			}
 			break;
 		case r_layerCmd_s::QUAD: {
-			struct Vertex {
-				float x, y;
-				float u, v;
-			};
 			Vertex quad[4];
 			for (int v = 0; v < 4; v++) {
 				quad[v].u = (float)cmd->quad.s[v];
 				quad[v].v = (float)cmd->quad.t[v];
 				quad[v].x = (float)cmd->quad.x[v];
 				quad[v].y = (float)cmd->quad.y[v];
+				quad[v].r = tint[0];
+				quad[v].g = tint[1];
+				quad[v].b = tint[2];
+				quad[v].a = tint[3];
 			}
-			GLint texLoc = glGetUniformLocation(prog, "t_tex");
-			glUniform1i(texLoc, 0);
-			int xyAttr = glGetAttribLocation(prog, "a_vertex");
-			int uvAttr = glGetAttribLocation(prog, "a_texcoord");
-			glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, x) + (char const*)quad);
-			glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), offsetof(Vertex, u) + (char const*)quad);
-			glEnableVertexAttribArray(xyAttr);
-			glEnableVertexAttribArray(uvAttr);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-			glDisableVertexAttribArray(xyAttr);
-			glDisableVertexAttribArray(uvAttr);
+			// 3 2
+			// 0 1
+			size_t indices[] = { 0, 1, 2, 0, 2, 3 };
+			for (auto idx : indices) {
+				batch.vertices.push_back(quad[idx]);
+			}
 		} break;
 		case r_layerCmd_s::COLOR: {
-			GLint tintLoc = glGetUniformLocation(prog, "i_tint");
-			glUniform4fv(tintLoc, 1, cmd->col);
+			std::copy_n(cmd->col, 4, tint);
 		} break;
 		}
 		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
@@ -291,6 +349,8 @@ void r_layer_c::Render()
 		}
 		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
 	}
+	// Draw the last batch
+	batch.FlushBatch();
 	glUseProgram(0);
 	numCmd = 0;
 }
@@ -357,12 +417,15 @@ uniform mat4 mvp_matrix;
 
 attribute vec2 a_vertex;
 attribute vec2 a_texcoord;
+attribute vec4 a_tint;
 
 varying vec2 v_texcoord;
+varying vec4 v_tint;
 
 void main(void)
 {
 	v_texcoord = a_texcoord;
+	v_tint = a_tint;
 	gl_Position = mvp_matrix * vec4(a_vertex, 0.0, 1.0);
 }
 )";
@@ -374,12 +437,12 @@ uniform sampler2D t_tex;
 uniform vec4 i_tint;
 
 varying vec2 v_texcoord;
+varying vec4 v_tint;
 
 void main(void)
 {
 	vec4 color = texture2D(t_tex, v_texcoord);
-	// color = vec4(1.0, 1.0, 1.0, 1.0);
-	gl_FragColor = color * i_tint;
+	gl_FragColor = color * v_tint;
 }
 )";
 
