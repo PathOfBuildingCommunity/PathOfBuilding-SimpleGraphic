@@ -485,6 +485,17 @@ char*	_AllocStringLen(size_t len, const char* file, int line);
 void	FreeString(const char* str);
 dword	StringHash(const char* str, int mask);
 
+#ifdef _WIN32
+wchar_t* WidenANSIString(const char* str);
+wchar_t* WidenOEMString(const char* str);
+wchar_t* WidenUTF8String(const char* str);
+void FreeWideString(wchar_t* str);
+
+char* NarrowANSIString(const wchar_t* str);
+char* NarrowOEMString(const wchar_t* str);
+char* NarrowUTF8String(const wchar_t* str);
+#endif
+
 #ifndef _WIN32
 #define _stricmp strcasecmp
 #define _strnicmp strncasecmp

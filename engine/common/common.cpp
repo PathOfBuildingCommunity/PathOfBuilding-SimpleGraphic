@@ -279,3 +279,61 @@ dword StringHash(const char* str, int mask)
 	}
 	return hash & mask;
 }
+
+#ifdef _WIN32
+#include <Windows.h>
+
+static wchar_t* WidenCodepageString(const char* str, UINT codepage)
+{
+	int cch = MultiByteToWideChar(codepage, 0, str, -1, nullptr, 0);
+	wchar_t* wstr = new wchar_t[cch];
+	MultiByteToWideChar(codepage, 0, str, -1, wstr, cch);
+	return wstr;
+}
+
+wchar_t* WidenANSIString(const char* str)
+{
+	return WidenCodepageString(str, CP_ACP);
+}
+
+wchar_t* WidenOEMString(const char* str)
+{
+	return WidenCodepageString(str, CP_OEMCP);
+}
+
+wchar_t* WidenUTF8String(const char* str)
+{
+	return WidenCodepageString(str, CP_UTF8);
+}
+
+char* NarrowCodepageString(const wchar_t* str, UINT codepage)
+{
+	int cb = WideCharToMultiByte(codepage, 0, str, -1, nullptr, 0, nullptr, nullptr);
+	char* nstr = new char[cb];
+	WideCharToMultiByte(codepage, 0, str, -1, nstr, cb, nullptr, nullptr);
+	return nstr;
+}
+
+void FreeWideString(wchar_t* str)
+{
+	if (str) {
+		delete[] str;
+	}
+}
+
+char* NarrowANSIString(const wchar_t* str)
+{
+	return NarrowCodepageString(str, CP_ACP);
+}
+
+char* NarrowOEMString(const wchar_t* str)
+{
+	return NarrowCodepageString(str, CP_OEMCP);
+}
+
+char* NarrowUTF8String(const wchar_t* str)
+{
+	return NarrowCodepageString(str, CP_UTF8);
+}
+
+#endif
