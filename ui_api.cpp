@@ -683,6 +683,116 @@ static int l_GetAsyncCount(lua_State* L)
 	return 1;
 }
 
+// ============
+// File Handles
+// ============
+
+#ifdef _WIN32
+#include <Windows.h>
+
+static void stackDump(lua_State* L)
+{
+	char buf[4096]{};
+	char* p = buf;
+	int i;
+	int top = lua_gettop(L);
+	for (i = 1; i <= top; i++) {  /* repeat for each level */
+		int t = lua_type(L, i);
+		switch (t) {
+
+		case LUA_TSTRING:  /* strings */
+			p += sprintf(p, "`%s'", lua_tostring(L, i));
+			break;
+
+		case LUA_TBOOLEAN:  /* booleans */
+			p += sprintf(p, lua_toboolean(L, i) ? "true" : "false");
+			break;
+
+		case LUA_TNUMBER:  /* numbers */
+			p += sprintf(p, "%g", lua_tonumber(L, i));
+			break;
+
+		default:  /* other values */
+			p += sprintf(p, "%s", lua_typename(L, t));
+			break;
+
+		}
+		p += sprintf(p, "  ");  /* put a separator */
+	}
+	p += sprintf(p, "\n");  /* end the listing */
+	OutputDebugStringA(buf);
+}
+#endif
+
+/* io:open replacement that opens a file with UTF-8 paths instead of the user codepage.
+*  In order to reduce implementation effort this function opens a well-known readable file
+*  with regular io:open and swaps out the internal FILE* pointer to a file opened via the
+*  Unicode-aware _wfopen on Windows.
+* 
+*  The resulting file object has all the functionality of the standard library file
+*  object due to actually being such an object.
+*/
+static int l_OpenFile(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	
+	int n = lua_gettop(L);
+	ui->LAssert(L, n == 2, "Usage: OpenFile(path, mode)");
+	ui->LAssert(L, lua_isstring(L, 1), "OpenFile() argument 1: expected string, got %s", luaL_typename(L, 1));
+	ui->LAssert(L, lua_isstring(L, 2), "OpenFile() argument 2: expected string, got %s", luaL_typename(L, 2));
+
+#ifndef _WIN32
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ui->ioOpenf);
+	lua_pushstring(L, lua_tostring(L, 1));
+	lua_pushstring(L, lua_tostring(L, 2));
+	lua_call(L, 2, 2);
+	return lua_gettop(L) - 2;
+#else
+	wchar_t* widePath = WidenUTF8String(lua_tostring(L, 1));
+	wchar_t* wideMode = WidenUTF8String(lua_tostring(L, 2));
+	FILE* fp = _wfopen(widePath, wideMode);
+	FreeWideString(widePath);
+	FreeWideString(wideMode);
+	if (!fp) {
+		return 0;
+	}
+
+	static const std::string placeholder = [] {
+		char buf[MAX_PATH]{};
+		HMODULE mod = LoadLibraryA("ntdll.dll");
+		GetModuleFileNameA(mod, buf, sizeof(buf));
+		FreeLibrary(mod);
+		return std::string(buf);
+	}();
+
+	{
+		lua_rawgeti(L, LUA_REGISTRYINDEX, ui->ioOpenf);
+		lua_pushstring(L, placeholder.c_str());
+		lua_pushstring(L, "r");
+		lua_call(L, 2, 2);
+
+
+		if (lua_isnil(L, -2)) {
+			fclose(fp);
+			ui->LAssert(L, !lua_isnil(L, -2), "OpenFile(): failed to open placeholder path %s: %s", placeholder.c_str(), luaL_checkstring(L, -1));
+		}
+	}
+
+	lua_pop(L, 1);
+
+	struct luajitInternalFileHandlePart {
+		FILE* f;
+	};
+
+	luajitInternalFileHandlePart* ljData = (luajitInternalFileHandlePart*)luaL_checkudata(L, -1, "FILE*");
+
+	fclose(ljData->f);
+	ljData->f = fp;
+
+	return 1;
+#endif
+}
+
 // ==============
 // Search Handles
 // ==============
@@ -1455,6 +1565,17 @@ int ui_main_c::InitAPI(lua_State* L)
 {
 	luaL_openlibs(L);
 
+	{
+		ui_main_c* ui = GetUIPtr(L);
+		lua_getglobal(L, "io");
+		if (!lua_isnil(L, -1)) {
+			lua_getfield(L, -1, "open");
+			ui->ioOpenf = luaL_ref(L, LUA_REGISTRYINDEX);
+		}
+
+		lua_pop(L, 1);
+	}
+
 	// Add "lua/" subdir for non-JIT Lua
 	{
 		lua_getglobal(L, "package");
@@ -1518,6 +1639,9 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(StripEscapes);
 	ADDFUNC(GetAsyncCount);
 	ADDFUNC(RenderInit);
+
+	// Wide file I/O
+	ADDFUNC(OpenFile);
 
 	// Search handles
 	lua_newtable(L);	// Search handle metatable
