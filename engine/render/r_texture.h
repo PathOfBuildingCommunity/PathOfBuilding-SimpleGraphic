@@ -32,6 +32,7 @@ public:
 
 	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, image_c* img, int flags);
+	r_tex_c(GLuint tex);
 	~r_tex_c();
 
 	void	Bind();

@@ -105,7 +105,7 @@ public:
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
 
-	r_font_c* fonts[F_NUMFONTS] = {}; // Font objects
+	r_font_u* fonts[F_NUMFONTS] = {}; // Font objects
 
 	col4_t	drawColor = {};		// Current draw color
 
