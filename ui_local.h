@@ -11,12 +11,13 @@
 
 #include "ui.h"
 
-extern "C" {
-#include <luajit/lua.h>
-#include <luajit/lauxlib.h>
-#include <luajit/lualib.h>
-#include <luajit/luajit.h>
-}
+//extern "C" {
+//#include <luajit/lua.h>
+//#include <luajit/lauxlib.h>
+//#include <luajit/lualib.h>
+//#include <luajit/luajit.h>
+//}
+#include "lua.hpp"
 
 #include "ui_console.h"
 #include "ui_debug.h"
