@@ -347,9 +347,13 @@ void r_renderer_c::Init()
 
 	whiteImage = RegisterShader("@white", 0);
 
-	fonts[F_FIXED] = new r_font_c(this, "Bitstream Vera Sans Mono");
-	fonts[F_VAR] = new r_font_c(this, "Liberation Sans");
-	fonts[F_VAR_BOLD] = new r_font_c(this, "Liberation Sans Bold");
+	//fonts[F_FIXED] = new r_font_u(this, "Bitstream Vera Sans Mono");
+	//fonts[F_VAR] = new r_font_u(this, "Liberation Sans");
+	//fonts[F_VAR_BOLD] = new r_font_u(this, "Liberation Sans Bold");
+
+	fonts[F_FIXED] = new r_font_u(this, false);
+	fonts[F_VAR] = new r_font_u(this, false);
+	fonts[F_VAR_BOLD] = new r_font_u(this, true);
 
 	sys->con->Printf("Renderer initialised in %d msec.\n", timer.Get());
 }

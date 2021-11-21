@@ -544,14 +544,23 @@ void ui_main_c::KeyEvent(int key, int type)
 
 void ui_main_c::CallKeyHandler(const char* hname, int key, bool dblclk)
 {
-	if ( !L ) return;
+	if (!L) return;
 	int extraArgs = PushCallback(hname);
 	if (extraArgs < 0) {
 		return;
 	}
 	if (key < 128) {
 		lua_pushfstring(L, "%c", key);
-	} else {
+	}
+	else if (key > KEY_SCROLL)
+	{
+		wchar_t szwStr[2]{ '\0' };
+		szwStr[0] = (wchar_t)key;
+		std::string str;
+		UTF8W2A(szwStr, &str);
+		lua_pushstring(L, str.c_str());
+	}
+	else {
 		lua_pushstring(L, NameForKey(key));
 	}
 	lua_pushboolean(L, dblclk);

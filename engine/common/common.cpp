@@ -3,8 +3,10 @@
 //
 // Module: Common
 //
-
 #include "common.h"
+
+#include <sstream>
+#include <fstream>
 
 // ===================
 // Argument List Class
@@ -278,4 +280,129 @@ dword StringHash(const char* str, int mask)
 		hash+= (str[i] * 4999) ^ (((dword)i + 17) * 2003);
 	}
 	return hash & mask;
+}
+
+int IsColorEscape(const std::wstring::const_iterator& it)
+{
+	if (*it != '^')
+		return 0;
+	if (isdigit(*(it + 1)))
+		return 2;
+	if(*(it + 1) == 'x' || *(it + 1) == 'X')
+	{
+		for (int i = 0; i < 6; i++) {
+			if (!isxdigit(*(it + i + 2))) {
+				return 0;
+			}
+		}
+		return 8;
+	}
+	return 0;
+}
+
+void ReadColorEscape(const std::wstring::const_iterator& it, col3_t out)
+{
+	int len = IsColorEscape(it);
+	switch (len) {
+	case 2:
+		VectorCopy(colorEscape[*(it + 1) - '0'], out);
+		break;
+	case 8:
+	{
+		wchar_t wStr[6]{};
+		for (int i = 0; i < 6; i++)
+			wStr[i] = *(it + 2 + i);
+
+		int xr, xg, xb;
+		swscanf_s(wStr, L"%2x%2x%2x", &xr, &xg, &xb);
+		out[0] = xr / 255.0f;
+		out[1] = xg / 255.0f;
+		out[2] = xb / 255.0f;
+	}
+	break;
+	}
+}
+
+std::vector<std::wstring> StringSplit(const std::wstring& str, wchar_t split)
+{
+	//https://stackoverflow.com/questions/236129/how-do-i-iterate-over-the-words-of-a-string
+	std::wstringstream wss(str);
+	std::wstring subStr;
+	std::vector<std::wstring> vecStrRet;
+	while (std::getline(wss, subStr, split))
+		vecStrRet.push_back(subStr);
+
+	return vecStrRet;
+}
+
+int UTF8A2W(const char* str, std::wstring* out)
+{
+	_ASSERT(out);
+	int nRet = 0;
+	//Returns the size of the buffer required to accept the string, which already contains the character terminator '\0'
+	int nLength = MultiByteToWideChar(CP_UTF8, 0, str, -1, NULL, 0);
+	wchar_t* pBuff = (wchar_t*)malloc(nLength * sizeof(wchar_t));
+	if (nLength && pBuff)
+	{
+		nRet = MultiByteToWideChar(CP_UTF8, 0, str, -1, pBuff, nLength);
+		if (nRet)
+			*out = std::wstring(pBuff, nLength - 1);
+		free(pBuff);
+	}
+	return nRet;
+}
+
+int UTF8W2A(const wchar_t* strW, std::string* out)
+{
+	_ASSERT(out);
+	int nRet = 0;
+	//Returns the size of the buffer required to accept the string, which already contains the character terminator '\0'
+	int nLength = WideCharToMultiByte(CP_UTF8, 0, strW, -1, NULL, 0, NULL, NULL);
+	char* pBuff = (char*)malloc(nLength * sizeof(char));
+	if (nLength && pBuff)
+	{
+		nRet = WideCharToMultiByte(CP_UTF8, 0, strW, -1, pBuff, nLength, NULL, NULL);
+		if (nRet)
+			*out = std::string(pBuff, nLength - 1);
+		free(pBuff);
+	}
+
+	return nRet;
+}
+
+bool ZReadFile(const wchar_t* path, std::vector<char>* outBuffer)
+{
+	if (!outBuffer)
+		return false;
+
+	std::ifstream ifs;
+	ifs.open(path, std::ios::binary);
+	if (!ifs.is_open())
+		return false;
+	ifs.seekg(0, std::ios::end);
+	*outBuffer = std::vector<char>(static_cast<size_t>(ifs.tellg()));
+	ifs.seekg(0, std::ios::beg);
+	ifs.read(outBuffer->data(), outBuffer->size());
+	ifs.close();
+	return true;
+}
+
+std::vector<std::wstring> ListFiles(const wchar_t* wildcardPath)
+{
+	std::vector<std::wstring> vecFiles;
+	WIN32_FIND_DATAW findData;
+	HANDLE hFind = FindFirstFileW(wildcardPath, &findData);
+	if (hFind == INVALID_HANDLE_VALUE)
+		return vecFiles;
+	do
+	{	//igonre do and dodo
+		if (wcscmp(findData.cFileName, L".") == 0 || wcscmp(findData.cFileName, L"..") == 0)
+			continue;
+		if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
+			continue;
+
+		vecFiles.emplace_back(findData.cFileName);
+	} while (FindNextFileW(hFind, &findData));
+
+	return vecFiles;
 }

@@ -3,11 +3,15 @@
 //
 // Common header file, included by all modules
 //
+#ifndef COMMON_H
+#define COMMON_H
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#include <string>
+#include <vector>
 #include <time.h>
 #include <ctype.h>
 #include <process.h>
@@ -16,6 +20,7 @@
 #include <io.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <Windows.h>
 
 #ifdef _DEBUG
 #include "common/memtrak3.h"
@@ -478,6 +483,14 @@ char*	_AllocStringLen(size_t len, const char* file, int line);
 void	FreeString(const char* str);
 dword	StringHash(const char* str, int mask);
 
+int IsColorEscape(const std::wstring::const_iterator& it);
+void ReadColorEscape(const std::wstring::const_iterator& it, col3_t out);
+std::vector<std::wstring> StringSplit(const std::wstring& str, wchar_t split);
+int UTF8A2W(const char* str, std::wstring* out);
+int UTF8W2A(const wchar_t* strW, std::string* out);
+bool ZReadFile(const wchar_t* path,std::vector<char>* outBuffer);
+std::vector<std::wstring> ListFiles(const wchar_t* wildcardPath);
+
 // =======
 // Headers
 // =======
@@ -487,3 +500,5 @@ dword	StringHash(const char* str, int mask);
 #include "common/keylist.h"
 #include "common/streams.h"
 #include "common/console.h"
+
+#endif

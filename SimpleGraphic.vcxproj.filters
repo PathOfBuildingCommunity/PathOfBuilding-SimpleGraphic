@@ -5,174 +5,210 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="UI">
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{74628b39-eeb5-47c6-b59c-524b982486bb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{2f2895b4-d3d0-49f3-9de5-a6e2f10f73e6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\UI">
       <UniqueIdentifier>{a5dff788-b233-499b-9e81-9fd39c493de0}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Win">
-      <UniqueIdentifier>{71122fe1-d7dd-4c44-a4f0-149e4c5ee8a4}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Engine">
+    <Filter Include="Header Files\Engine">
       <UniqueIdentifier>{e44884bc-bdda-4d69-9f46-6eff5fcf8134}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Engine\Common">
+    <Filter Include="Header Files\Engine\Common">
       <UniqueIdentifier>{25926adf-b288-4582-bb6a-1a8b2ce97756}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Engine\Core">
+    <Filter Include="Header Files\Engine\Core">
       <UniqueIdentifier>{a8b5d6cd-7ecd-4ee5-8502-0bfc23dff6d5}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Engine\Render">
+    <Filter Include="Header Files\Engine\Render">
       <UniqueIdentifier>{f10a3e32-3443-4814-95bf-158ba1986306}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Engine\System">
+    <Filter Include="Header Files\Engine\System">
       <UniqueIdentifier>{887ce48e-d31e-4e4c-8172-61c124d26893}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine">
+      <UniqueIdentifier>{c4a5f809-f42c-4b3d-bc61-100f8cc9f2c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine\Core">
+      <UniqueIdentifier>{16b8cbb3-9420-4dae-953a-5e5099fd45b0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine\Common">
+      <UniqueIdentifier>{67102a24-0995-4194-a2a1-fafb4fcd0738}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine\Render">
+      <UniqueIdentifier>{74712ffa-d378-4f0c-8170-5c58ffd7b86a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Engine\System">
+      <UniqueIdentifier>{f33e4e42-e02c-4b5d-b10b-0723882fb565}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\UI">
+      <UniqueIdentifier>{6e1555f2-b38b-4986-ab0a-ae5c8812e7f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Win">
+      <UniqueIdentifier>{71122fe1-d7dd-4c44-a4f0-149e4c5ee8a4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="config.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui_console.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui_debug.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui_local.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui_main.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="ui_subscript.h">
-      <Filter>UI</Filter>
+      <Filter>Header Files\UI</Filter>
     </ClInclude>
     <ClInclude Include="engine\common\console.h">
-      <Filter>Engine\Common</Filter>
+      <Filter>Header Files\Engine\Common</Filter>
     </ClInclude>
     <ClInclude Include="engine\common\keylist.h">
-      <Filter>Engine\Common</Filter>
+      <Filter>Header Files\Engine\Common</Filter>
     </ClInclude>
     <ClInclude Include="engine\common\memtrak3.h">
-      <Filter>Engine\Common</Filter>
+      <Filter>Header Files\Engine\Common</Filter>
     </ClInclude>
     <ClInclude Include="engine\common\streams.h">
-      <Filter>Engine\Common</Filter>
+      <Filter>Header Files\Engine\Common</Filter>
     </ClInclude>
     <ClInclude Include="engine\core\core_config.h">
-      <Filter>Engine\Core</Filter>
+      <Filter>Header Files\Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="engine\core\core_image.h">
-      <Filter>Engine\Core</Filter>
+      <Filter>Header Files\Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="engine\core\core_main.h">
-      <Filter>Engine\Core</Filter>
+      <Filter>Header Files\Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="engine\core\core_video.h">
-      <Filter>Engine\Core</Filter>
+      <Filter>Header Files\Engine\Core</Filter>
     </ClInclude>
     <ClInclude Include="engine\system\sys_console.h">
-      <Filter>Engine\System</Filter>
+      <Filter>Header Files\Engine\System</Filter>
     </ClInclude>
     <ClInclude Include="engine\system\sys_main.h">
-      <Filter>Engine\System</Filter>
+      <Filter>Header Files\Engine\System</Filter>
     </ClInclude>
     <ClInclude Include="engine\system\sys_opengl.h">
-      <Filter>Engine\System</Filter>
+      <Filter>Header Files\Engine\System</Filter>
     </ClInclude>
     <ClInclude Include="engine\system\sys_video.h">
-      <Filter>Engine\System</Filter>
+      <Filter>Header Files\Engine\System</Filter>
     </ClInclude>
     <ClInclude Include="engine\system\win\sys_local.h">
-      <Filter>Engine\System</Filter>
-    </ClInclude>
-    <ClInclude Include="engine\render\r_font.h">
-      <Filter>Engine\Render</Filter>
+      <Filter>Header Files\Engine\System</Filter>
     </ClInclude>
     <ClInclude Include="engine\render\r_local.h">
-      <Filter>Engine\Render</Filter>
+      <Filter>Header Files\Engine\Render</Filter>
     </ClInclude>
     <ClInclude Include="engine\render\r_main.h">
-      <Filter>Engine\Render</Filter>
+      <Filter>Header Files\Engine\Render</Filter>
     </ClInclude>
     <ClInclude Include="engine\render\r_texture.h">
-      <Filter>Engine\Render</Filter>
+      <Filter>Header Files\Engine\Render</Filter>
     </ClInclude>
     <ClInclude Include="engine\render.h">
-      <Filter>Engine</Filter>
+      <Filter>Header Files\Engine</Filter>
     </ClInclude>
     <ClInclude Include="engine\system.h">
-      <Filter>Engine</Filter>
+      <Filter>Header Files\Engine</Filter>
     </ClInclude>
     <ClInclude Include="engine\common.h">
-      <Filter>Engine</Filter>
+      <Filter>Header Files\Engine\Common</Filter>
     </ClInclude>
+    <ClInclude Include="engine\render\r_font_u.h">
+      <Filter>Header Files\Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="engine\render\FontFactory.h">
+      <Filter>Header Files\Engine\Render</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ui_api.cpp">
-      <Filter>UI</Filter>
-    </ClCompile>
-    <ClCompile Include="ui_console.cpp">
-      <Filter>UI</Filter>
-    </ClCompile>
-    <ClCompile Include="ui_debug.cpp">
-      <Filter>UI</Filter>
-    </ClCompile>
-    <ClCompile Include="ui_main.cpp">
-      <Filter>UI</Filter>
-    </ClCompile>
-    <ClCompile Include="ui_subscript.cpp">
-      <Filter>UI</Filter>
-    </ClCompile>
     <ClCompile Include="win\entry.cpp">
-      <Filter>Win</Filter>
+      <Filter>Source Files\Win</Filter>
     </ClCompile>
     <ClCompile Include="engine\common\common.cpp">
-      <Filter>Engine\Common</Filter>
+      <Filter>Source Files\Engine\Common</Filter>
     </ClCompile>
     <ClCompile Include="engine\common\console.cpp">
-      <Filter>Engine\Common</Filter>
+      <Filter>Source Files\Engine\Common</Filter>
     </ClCompile>
     <ClCompile Include="engine\common\memtrak3.cpp">
-      <Filter>Engine\Common</Filter>
+      <Filter>Source Files\Engine\Common</Filter>
     </ClCompile>
     <ClCompile Include="engine\common\streams.cpp">
-      <Filter>Engine\Common</Filter>
+      <Filter>Source Files\Engine\Common</Filter>
     </ClCompile>
     <ClCompile Include="engine\core\core_config.cpp">
-      <Filter>Engine\Core</Filter>
+      <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
     <ClCompile Include="engine\core\core_image.cpp">
-      <Filter>Engine\Core</Filter>
+      <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
     <ClCompile Include="engine\core\core_main.cpp">
-      <Filter>Engine\Core</Filter>
+      <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
     <ClCompile Include="engine\core\core_video.cpp">
-      <Filter>Engine\Core</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\system\win\sys_console.cpp">
-      <Filter>Engine\System</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\system\win\sys_main.cpp">
-      <Filter>Engine\System</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\system\win\sys_opengl.cpp">
-      <Filter>Engine\System</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\system\win\sys_video.cpp">
-      <Filter>Engine\System</Filter>
-    </ClCompile>
-    <ClCompile Include="engine\render\r_font.cpp">
-      <Filter>Engine\Render</Filter>
+      <Filter>Source Files\Engine\Core</Filter>
     </ClCompile>
     <ClCompile Include="engine\render\r_main.cpp">
-      <Filter>Engine\Render</Filter>
+      <Filter>Source Files\Engine\Render</Filter>
     </ClCompile>
     <ClCompile Include="engine\render\r_texture.cpp">
-      <Filter>Engine\Render</Filter>
+      <Filter>Source Files\Engine\Render</Filter>
     </ClCompile>
+    <ClCompile Include="engine\system\win\sys_video.cpp">
+      <Filter>Source Files\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_opengl.cpp">
+      <Filter>Source Files\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_main.cpp">
+      <Filter>Source Files\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\system\win\sys_console.cpp">
+      <Filter>Source Files\Engine</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_api.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_console.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_debug.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_subscript.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="ui_main.cpp">
+      <Filter>Source Files\UI</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\render\r_font_u.cpp">
+      <Filter>Source Files\Engine\Render</Filter>
+    </ClCompile>
+    <ClCompile Include="engine\render\FontFactory.cpp">
+      <Filter>Source Files\Engine\Render</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="SimpleGraphic.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

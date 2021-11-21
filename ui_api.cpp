@@ -7,6 +7,7 @@
 #include "ui_local.h"
 
 #include <zlib.h>
+#include "engine/luautf8/lutf8lib.c"
 
 /* OnFrame()
 ** OnChar("<char>")
@@ -731,15 +732,18 @@ static int l_Deflate(lua_State* L)
 	z.next_out = out;
 	z.avail_out = outSz;
 	int err = deflate(&z, Z_FINISH);
+	int nRet = 0;
 	deflateEnd(&z);
 	if (err == Z_STREAM_END) {
 		lua_pushlstring(L, (const char*)out, z.total_out);
-		return 1;
+		nRet = 1;
 	} else {
 		lua_pushnil(L);
 		lua_pushstring(L, zError(err));
-		return 2;
+		nRet = 2;
 	}
+	delete[] out;
+	return nRet;
 }
 
 static int l_Inflate(lua_State* L)
@@ -1174,6 +1178,10 @@ static int l_Exit(lua_State* L)
 int ui_main_c::InitAPI(lua_State* L)
 {
 	luaL_openlibs(L);
+
+	//Add 3rd-party lib
+	luaopen_utf8(L);
+	lua_setglobal(L, "utf8");
 
 	// Callbacks
 	lua_newtable(L);		// Callbacks table

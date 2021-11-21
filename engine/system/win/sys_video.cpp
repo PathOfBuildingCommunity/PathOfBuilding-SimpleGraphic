@@ -81,16 +81,16 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	strcpy(curTitle, CFG_TITLE);
 
 	// Register the window class
-	WNDCLASS wndClass;
-	ZeroMemory(&wndClass, sizeof(WNDCLASS));
-	wndClass.lpszClassName	= CFG_TITLE " Class";
+	WNDCLASSW wndClass;
+	ZeroMemory(&wndClass, sizeof(WNDCLASSW));
+	wndClass.lpszClassName	= CFG_TITLE L" Class";
 	wndClass.hInstance		= sys->hinst;
 	wndClass.lpfnWndProc	= sys_main_c::WndProc;
 	wndClass.hbrBackground	= CreateSolidBrush(CFG_SCON_WINBG);
 	wndClass.hIcon			= sys->icon;
-	wndClass.hCursor		= LoadCursor(NULL, IDC_ARROW);
+	wndClass.hCursor		= LoadCursorW(NULL, MAKEINTRESOURCEW(32512));
 	wndClass.style			= CS_DBLCLKS;
-	if (RegisterClass(&wndClass) == 0) {
+	if (RegisterClassW(&wndClass) == 0) {
 		sys->Error("Unable to register main window class");
 	}
 }

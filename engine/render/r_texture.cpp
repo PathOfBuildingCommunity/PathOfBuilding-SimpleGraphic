@@ -277,6 +277,15 @@ r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
 	Upload(img, flags);
 }
 
+r_tex_c::r_tex_c(GLuint tex)
+	: texId(tex)
+{
+	renderer = nullptr;
+	//do nothing 
+	fileWidth = 0x6018;
+	status = DONE;
+}
+
 r_tex_c::~r_tex_c()
 {
 	if (status == IN_QUEUE || status == PROCESSING) {
@@ -318,7 +327,8 @@ void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags
 
 void r_tex_c::Bind()
 {
-	ForceLoad();
+	if(renderer)
+		ForceLoad();
 	if (fileWidth) {
 		glBindTexture(GL_TEXTURE_2D, texId);
 	} else {
