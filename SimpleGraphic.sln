@@ -1,20 +1,20 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.30907.101
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31912.275
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SimpleGraphic", "SimpleGraphic.vcxproj", "{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
-		Release|x86 = Release|x86
+		Release_MT|x86 = Release_MT|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Debug|x86.ActiveCfg = Debug|Win32
 		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Debug|x86.Build.0 = Debug|Win32
-		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Release|x86.ActiveCfg = Release|Win32
-		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Release|x86.Build.0 = Release|Win32
+		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Release_MT|x86.ActiveCfg = Release_MT|Win32
+		{62A6B2C3-84CC-49CC-BAD7-DD0A4BFE05CB}.Release_MT|x86.Build.0 = Release_MT|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
