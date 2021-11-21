@@ -1,5 +1,6 @@
 # Path of Building Community SimpleGraphic.dll
 
+[中文简介](README_zh-rCN.md)
 ## Introduction
 
 `SimpleGraphic.dll` is the host environment for Lua.
