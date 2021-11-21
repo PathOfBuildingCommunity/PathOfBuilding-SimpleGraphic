@@ -5,13 +5,15 @@
 // Platform: Windows
 //
 
+#ifndef SYS_LOCAL_H
+#define SYS_LOCAL_H
+
 #include "common.h"
 
 #include "system.h"
 
-#define _WIN32_WINNT _WIN32_WINNT_WINXP
 #define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include <Windows.h>
 #include <windowsx.h>
 #include <shlobj.h>
 #include <shellapi.h>
@@ -63,3 +65,4 @@ public:
 	bool	errorRaised = false;
 	int		baseTime = 0;
 };
+#endif // SYS_LOCAL_H

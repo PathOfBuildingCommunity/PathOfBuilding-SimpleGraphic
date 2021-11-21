@@ -384,15 +384,17 @@ void sys_main_c::ShowCursor(int doShow)
 
 void sys_main_c::ClipboardCopy(const char* str)
 {
-	size_t len = strlen(str);
-	HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len + 1);
+	std::wstring strW;
+	UTF8A2W(str, &strW);
+	//size_t len = strlen(str);
+	HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, (strW.size() + 1) * sizeof(wchar_t));
 	if ( !hg ) return;
-	char* cp = (char*)GlobalLock(hg);
-	strcpy(cp, str);
+	wchar_t* cp = (wchar_t*)GlobalLock(hg);
+	wcscpy(cp, strW.c_str());
 	GlobalUnlock(hg);
 	OpenClipboard((HWND)video->GetWindowHandle());
 	EmptyClipboard();
-	SetClipboardData(CF_TEXT, hg);
+	SetClipboardData(CF_UNICODETEXT, hg);
 	CloseClipboard();
 }
 
@@ -400,10 +402,12 @@ char* sys_main_c::ClipboardPaste()
 {
 	char* ret = NULL;
 	OpenClipboard((HWND)video->GetWindowHandle());
-	HANDLE clip = GetClipboardData(CF_TEXT);
+	HANDLE clip = GetClipboardData(CF_UNICODETEXT);
 	if (clip) {
-		char* text = (char*)GlobalLock(clip);
-		ret = AllocString(text);
+		wchar_t* text = (wchar_t*)GlobalLock(clip);
+		std::string sText;
+		UTF8W2A(text, &sText);
+		ret = AllocString(sText.c_str());
 		GlobalUnlock(clip);
 	}
 	CloseClipboard();
@@ -451,9 +455,9 @@ void sys_main_c::OpenURL(const char* url)
 
 LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	sys_main_c* sys = (sys_main_c*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+	sys_main_c* sys = (sys_main_c*)GetWindowLongPtrW(hwnd, GWLP_USERDATA);
 	if ( !sys ) {
-		return DefWindowProc(hwnd, msg, wParam, lParam);
+		return DefWindowProcW(hwnd, msg, wParam, lParam);
 	}
 
 	switch (msg) {
@@ -632,19 +636,19 @@ LRESULT __stdcall sys_main_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM
 		return FALSE;
 	}
 
-	return DefWindowProc(hwnd, msg, wParam, lParam);
+	return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
 void sys_main_c::RunMessages(HWND hwnd)
 {
 	// Flush message queue
 	MSG msg;
-	while (PeekMessage(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
-		if (GetMessage(&msg, hwnd, 0, 0) == 0) {
+	while (PeekMessageW(&msg, hwnd, 0, 0, PM_NOREMOVE)) {
+		if (GetMessageW(&msg, hwnd, 0, 0) == 0) {
 			Exit();
 		}
 		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+		DispatchMessageW(&msg);
 	}
 }
 
