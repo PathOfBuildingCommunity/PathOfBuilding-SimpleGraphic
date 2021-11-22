@@ -486,9 +486,12 @@ dword	StringHash(const char* str, int mask);
 int IsColorEscape(const std::wstring::const_iterator& it);
 void ReadColorEscape(const std::wstring::const_iterator& it, col3_t out);
 std::vector<std::wstring> StringSplit(const std::wstring& str, wchar_t split);
+/** Split string by line, support "\n" and "\r\n"
+ */
+std::vector<std::wstring> StringLines(const std::wstring& str);
 int UTF8A2W(const char* str, std::wstring* out);
 int UTF8W2A(const wchar_t* strW, std::string* out);
-bool ZReadFile(const wchar_t* path,std::vector<char>* outBuffer);
+bool ZReadFile(const wchar_t* path, std::vector<char>* outBuffer);
 std::vector<std::wstring> ListFiles(const wchar_t* wildcardPath);
 
 // =======

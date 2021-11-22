@@ -335,6 +335,15 @@ std::vector<std::wstring> StringSplit(const std::wstring& str, wchar_t split)
 	return vecStrRet;
 }
 
+std::vector<std::wstring> StringLines(const std::wstring& str)
+{
+	std::vector<std::wstring> vecLine = StringSplit(str, '\n');
+	for (std::wstring& ws : vecLine)
+		if (!ws.empty() && ws.at(ws.size() - 1) == '\r')
+			ws.pop_back();
+	return vecLine;
+}
+
 int UTF8A2W(const char* str, std::wstring* out)
 {
 	_ASSERT(out);

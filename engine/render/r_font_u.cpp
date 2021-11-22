@@ -237,7 +237,7 @@ int r_font_u::StringWidth(int height, const char* str)
 
 	int maxWidth = 0;
 	double scale = (double)height / font->height();
-	vector<wstring> vecLines = StringSplit(sText, '\n');
+	vector<wstring> vecLines = StringLines(sText);
 	for (auto& s : vecLines)
 	{
 		const double nRetWidth = StringWidthInternal(font, s) * scale;
@@ -260,7 +260,7 @@ int r_font_u::StringCursorIndex(int height, const char* str, int curX, int curY)
 	size_t lastIndex = 0;
 	int lineY = height;
 	curX = (int)(curX / (double)height * font->height());
-	vector<wstring> vecLines = StringSplit(sText, '\n');
+	vector<wstring> vecLines = StringSplit(sText,'\n');
 	for (auto& s : vecLines)
 	{
 		if (lineY <= curY)
@@ -415,7 +415,7 @@ void r_font_u::Draw(scp_t pos, int align, int height, col4_t col, const char* st
 	// Prepare for rendering
 	renderer->curLayer->Color(col);
 	// Separate into lines and render them
-	vector<wstring> vecLines = StringSplit(sText, '\n');
+	vector<wstring> vecLines = StringLines(sText);
 	for (auto& s : vecLines)
 	{
 		DrawTextLine(pos, align, height, col, s);

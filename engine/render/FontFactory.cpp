@@ -45,14 +45,14 @@ ZFont* FontFactory::createFont(const char* fileName, int height, bool bold, int 
 	return font;*/
 	std::ifstream ifs;
 	ifs.open(fileName, std::ios::binary);
-	if(!ifs.is_open())
+	if (!ifs.is_open())
 		return nullptr;
 	ifs.seekg(0, std::ios::end);
 	std::vector<char> vecFontBuffer(static_cast<size_t>(ifs.tellg()));
 	ifs.seekg(0);
 	ifs.read(vecFontBuffer.data(), vecFontBuffer.size());
 	ifs.close();
-	return createFont(vecFontBuffer,height,bold,resolution);
+	return createFont(vecFontBuffer, height, bold, resolution);
 }
 
 ZFont* FontFactory::createFont(const std::vector<char>& fontBuffer, int height, bool bold, int resolution)
@@ -70,8 +70,7 @@ ZFont* FontFactory::createFont(const std::vector<char>& fontBuffer, int height, 
 
 std::vector<char> FontFactory::GetSystemFont(const wchar_t* faceName)
 {
-
-	wchar_t szFaceName[MAX_FACE_NAME]{ '\0' };
+	wchar_t szFaceName[MAX_FACE_NAME]{'\0'};
 	//Get System default font family
 	if (!faceName)
 	{
@@ -84,7 +83,7 @@ std::vector<char> FontFactory::GetSystemFont(const wchar_t* faceName)
 
 	HDC hDC = ::CreateCompatibleDC(NULL);
 	HFONT hFont = CreateFontW(6, 0, 0, 0, FW_DONTCARE, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_OUTLINE_PRECIS,
-		CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, szFaceName);
+	                          CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY, VARIABLE_PITCH, szFaceName);
 
 	SelectObject(hDC, hFont);
 	const size_t size = GetFontData(hDC, 0, 0, NULL, 0);
@@ -172,10 +171,10 @@ bool ZFont::create(FT_Library library, const char* fileName, bool bold, int reso
 	return true;
 }
 
-bool ZFont::create(FT_Library library,const std::vector<char>& fontBuffer, bool bold, int resolution)
+bool ZFont::create(FT_Library library, const std::vector<char>& fontBuffer, bool bold, int resolution)
 {
 	FT_Error err;
-	if((err = FT_New_Memory_Face(library, (FT_Byte*)fontBuffer.data(),fontBuffer.size(),0,&ftFace_)) != FT_Err_Ok)
+	if ((err = FT_New_Memory_Face(library, (FT_Byte*)fontBuffer.data(), fontBuffer.size(), 0, &ftFace_)) != FT_Err_Ok)
 	{
 		return false;
 	}
@@ -206,6 +205,11 @@ ZFont::ZGlyph* ZFont::getCharacter(wchar_t uCode)
 		nTexOffsetX_ = 0;
 		nTexOffsetY_ += nHeight_ + 1;
 	}
+	if (nTexOffsetY_ > nTextureHeight)
+	{
+		//The text texture exceeds the large texture capacity, return '*'
+		return getCharacter('*');
+	}
 
 	ZGlyph* pCharacter = new ZGlyph;
 	if (uCode == '\r')
@@ -219,7 +223,7 @@ ZFont::ZGlyph* ZFont::getCharacter(wchar_t uCode)
 
 		FT_Error err;
 		if ((err = FT_Load_Char(ftFace_, uCode, FT_LOAD_RENDER | FT_LOAD_NO_BITMAP |
-			(TRUE ? FT_LOAD_TARGET_NORMAL : FT_LOAD_MONOCHROME | FT_LOAD_TARGET_MONO))) ==
+		                        (TRUE ? FT_LOAD_TARGET_NORMAL : FT_LOAD_MONOCHROME | FT_LOAD_TARGET_MONO))) ==
 			FT_Err_Ok)
 		{
 			FT_GlyphSlot glyph = ftFace_->glyph;
@@ -243,7 +247,7 @@ ZFont::ZGlyph* ZFont::getCharacter(wchar_t uCode)
 
 				glBindTexture(GL_TEXTURE_2D, hTexture_);
 				glTexSubImage2D(GL_TEXTURE_2D, 0, nTexOffsetX_, nTexOffsetY_,
-					bitmap.width, bitmap.rows, GL_ALPHA, GL_UNSIGNED_BYTE, bitmap.buffer);
+				                bitmap.width, bitmap.rows, GL_ALPHA, GL_UNSIGNED_BYTE, bitmap.buffer);
 
 				nTexOffsetX_ += bitmap.width + 1;
 			}
@@ -252,6 +256,12 @@ ZFont::ZGlyph* ZFont::getCharacter(wchar_t uCode)
 		{
 			printf("FT_Load_Char() Error %d\n", err);
 		}
+	}
+
+	if (uCode == '\t')
+	{
+		//Reset the width to 0 to ensure that the renderer does not show squares in certain fonts, such as Microsoft's Yahei font
+		pCharacter->width = 0;
 	}
 
 	mapCharacter_.emplace(uCode, pCharacter);
