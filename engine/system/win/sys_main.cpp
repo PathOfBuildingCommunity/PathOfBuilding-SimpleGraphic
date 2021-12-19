@@ -385,14 +385,15 @@ void sys_main_c::ShowCursor(int doShow)
 void sys_main_c::ClipboardCopy(const char* str)
 {
 	size_t len = strlen(str);
-	HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len + 1);
+	auto cch = MultiByteToWideChar(CP_UTF8, 0, str, len + 1, nullptr, 0);
+	HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, cch * sizeof(wchar_t));
 	if ( !hg ) return;
-	char* cp = (char*)GlobalLock(hg);
-	strcpy(cp, str);
+	wchar_t* cp = (wchar_t*)GlobalLock(hg); // 8-byte aligned so cast is safe
+	MultiByteToWideChar(CP_UTF8, 0, str, len + 1, cp, cch);
 	GlobalUnlock(hg);
 	OpenClipboard((HWND)video->GetWindowHandle());
 	EmptyClipboard();
-	SetClipboardData(CF_TEXT, hg);
+	SetClipboardData(CF_UNICODETEXT, hg);
 	CloseClipboard();
 }
 
