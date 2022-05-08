@@ -244,7 +244,7 @@ static const byte sys_keyRemap[] = {
 	0,				// 5D		VK_APPS
 	0,				// 5E		-
 	0,				// 5F		VK_SLEEP
-	0,				// 60		VK_NUMPAD0
+	'0',			// 60		VK_NUMPAD0
 	0,				// 61		VK_NUMPAD1
 	0,				// 62		VK_NUMPAD2
 	0,				// 63		VK_NUMPAD3
