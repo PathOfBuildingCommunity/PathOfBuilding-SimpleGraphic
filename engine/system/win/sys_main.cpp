@@ -255,9 +255,9 @@ static const byte sys_keyRemap[] = {
 	0,				// 68		VK_NUMPAD8
 	0,				// 69		VK_NUMPAD9
 	0,				// 6A		VK_MULTIPLY
-	0,				// 6B		VK_ADD
+	'+',			// 6B		VK_ADD
 	0,				// 6C		VK_SEPARATOR
-	0,				// 6D		VK_SUBTRACT
+	'-',			// 6D		VK_SUBTRACT
 	0,				// 6E		VK_DECIMAL
 	0,				// 6F		VK_DIVIDE
 	KEY_F1,			// 70		VK_F1
