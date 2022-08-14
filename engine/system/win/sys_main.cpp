@@ -6,6 +6,7 @@
 //
 
 #include <fmt/chrono.h>
+#include <re2/re2.h>
 
 #include "sys_local.h"
 
@@ -134,15 +135,41 @@ find_c::find_c()
 find_c::~find_c()
 {}
 
-bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file) {
-	// TODO(LV): Future-proof to handle more than /* and /*.ext
+bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file)
+{
+	using namespace std::literals::string_view_literals;
+	auto globStr = glob.generic_string();
+
+	// Deal with traditional "everything" wildcards.
 	if (glob == "*" || glob == "*.*") {
 		return true;
 	}
-	if (glob.stem() == "*" && glob.has_extension() && file.has_extension()) {
-		return glob.extension() == file.extension();
+
+	// If no wildcards are present, test file path as-is.
+	if (globStr.find_first_of("?*") == std::string::npos) {
+		return glob == file;
 	}
-	return glob == file;
+
+	// Otherwise build a regular expression from the glob and use that to match files.
+	fmt::memory_buffer buf;
+	auto it = fmt::appender(buf);
+	for (char ch : glob.generic_string()) {
+		if (ch == '*') {
+			it = fmt::format_to(it, ".*");
+		} else if (ch == '?') {
+			*it++ = '.';
+		} else if ("+[]{}+()|"sv.find(ch) != std::string_view::npos) {
+			// Escape metacharacters
+			it = fmt::format_to(it, "\\{}", ch);
+		} else if (std::isalnum((unsigned char)ch)) {
+			*it++ = ch;
+		} else {
+			it = fmt::format_to(it, "[{}]", ch);
+		}
+	}
+	RE2 reGlob{to_string(buf)};
+
+	return RE2::FullMatch(file.generic_string(), reGlob);
 }
 
 bool find_c::FindFirst(const char* fileSpec)
@@ -152,8 +179,9 @@ bool find_c::FindFirst(const char* fileSpec)
 
 	std::error_code ec;
 	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
-		if (GlobMatch(glob, *iter)) {
-			fileName = iter->path().filename().string();
+		auto candFilename = iter->path().filename();
+		if (GlobMatch(glob, candFilename)) {
+			fileName = candFilename.string();
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -171,8 +199,9 @@ bool find_c::FindNext()
 	}
 
 	for (++iter; iter != std::filesystem::directory_iterator{}; ++iter) {
-		if (GlobMatch(glob, *iter)) {
-			fileName = iter->path().filename().string();
+		auto candFilename = iter->path().filename();
+		if (GlobMatch(glob, candFilename)) {
+			fileName = candFilename.string();
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();

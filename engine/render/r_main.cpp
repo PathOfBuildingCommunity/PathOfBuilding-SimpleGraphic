@@ -8,6 +8,7 @@
 
 #include <fmt/chrono.h>
 #include <map>
+#include <sstream>
 
 // =======
 // Classes
