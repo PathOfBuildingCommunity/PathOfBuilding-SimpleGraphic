@@ -17,7 +17,7 @@ jobs:
                   - name: Setup MSBuild
                     uses: microsoft/setup-msbuild@v1
                   - name: Check dependencies
-                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static'
+                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows'
                   - name: Build DLL
                     run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
                   - name: Archive DLL
