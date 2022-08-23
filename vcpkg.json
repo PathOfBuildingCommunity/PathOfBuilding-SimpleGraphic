@@ -1,0 +1,16 @@
+{
+  "name": "path-of-building-simplegraphic",
+  "version-date": "2022-08-14",
+  "dependencies": [
+    "angle",
+    "fmt",
+    "giflib",
+    "glfw3",
+    "libjpeg-turbo",
+    "liblzma",
+    "libpng",
+    "luajit",
+    "re2",
+    "zlib"
+  ]
+}

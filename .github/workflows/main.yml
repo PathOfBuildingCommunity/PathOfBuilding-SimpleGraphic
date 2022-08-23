@@ -1,27 +1,54 @@
 name: Build DLL
-on: push     
+on: push
 jobs:
   build_dll:
-          runs-on: windows-latest
-          steps:
-                  - name: Checkout
-                    uses: actions/checkout@v2
-                    with:
-                      submodules: 'recursive'
-                  - name: run-vcpkg
-                    uses: lukka/run-vcpkg@v6.0
-                    with:
-                        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-                        vcpkgArguments: '@${{ github.workspace }}/vcpkg.txt'
-                        cleanAfterBuild: false
-                  - name: Setup MSBuild
-                    uses: microsoft/setup-msbuild@v1
-                  - name: Check dependencies
-                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows'
-                  - name: Build DLL
-                    run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
-                  - name: Archive DLL
-                    uses: actions/upload-artifact@v1.0.0
-                    with:
-                        name: SimpleGraphic.dll
-                        path: '${{ github.workspace }}/Release/SimpleGraphic.dll'
+    strategy:
+      matrix:
+        include:
+          - platform: win32
+            os: windows-latest
+            triplet: x86-windows
+          # - platform: x64
+          #   os: windows-latest
+          #   triplet: x64-windows
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/
+      DEPS_DIR: ${{ github.workspace }}/vcpkg_installed/${{ matrix.triplet }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: "recursive"
+      - name: run-vcpkg
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgJsonGlob: "./vcpkg.json"
+          runVcpkgInstall: true
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+      - name: Check dependencies
+        run: "ls ${{ env.DEPS_DIR }}"
+      - name: Build DLL
+        run: "msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=${{ matrix.platform }}"
+      - name: Archive DLL
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}.dll
+          path: "${{ github.workspace }}/Release/SimpleGraphic.dll"
+      - name: Archive DLL symbols
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}.pdb
+          path: "${{ github.workspace }}/Release/SimpleGraphic.pdb"
+      - name: Archive dependency DLLs
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}-deps.dll
+          path: "${{ env.DEPS_DIR }}/bin/*.dll"
+      - name: Archive dependency DLL symbols
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}-deps.pdb
+          path: "${{ env.DEPS_DIR }}/bin/*.pdb"
