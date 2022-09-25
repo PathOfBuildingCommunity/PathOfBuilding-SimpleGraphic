@@ -30,7 +30,11 @@ so installing it should be relatively simple.
 1) Run 'git submodule update --init'
 2) 'cd vcpkg'
 3) Type the following commands:
-   1) `bootstrap-vcpkg.sh` or `bootstrap-vcpkg.bat`
-   2) `./vcpkg.exe install @../vcpkg.txt` or `vcpkg install @../vcpkg.txt`
+   - windows:
+       1) `bootstrap-vcpkg.bat`
+       2) `vcpkg.exe install @../vcpkg.txt`
+   - linux/mac
+       1) `bootstrap-vcpkg.sh`
+       2) `./vcpkg install ../vcpkg.txt`
 4) The SimpleGraphic solution and vcproj are already configured to look in this
 location for the dependencies, so now it should build as-is.
