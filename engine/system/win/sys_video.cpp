@@ -5,6 +5,8 @@
 // Platform: Windows
 //
 
+#include <glad/gles2.h>
+
 #include "sys_local.h"
 #include "core.h"
 
@@ -228,6 +230,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			sys->con->Printf("Could not create window, %s\n", errDesc);
 		}
 		glfwMakeContextCurrent(wnd);
+		gladLoadGLES2(glfwGetProcAddress);
 		glfwSetWindowUserPointer(wnd, sys);
 		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);

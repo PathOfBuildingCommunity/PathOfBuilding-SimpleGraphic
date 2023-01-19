@@ -4,11 +4,13 @@
 // Module: Render Main
 //
 
+#define GLAD_GLES2_IMPLEMENTATION
 #include "r_local.h"
 
 #include <fmt/chrono.h>
 #include <map>
 #include <sstream>
+#include <vector>
 
 // =======
 // Classes

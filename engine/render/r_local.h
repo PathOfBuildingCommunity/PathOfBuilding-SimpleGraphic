@@ -9,23 +9,8 @@
 
 #include "render.h"
 
-#if __APPLE__ && __MACH__
-#define GL_GLEXT_PROTOTYPES
-#ifndef APIENTRY
-#define APIENTRY
-#endif
-#define GL_GLEXT_LEGACY
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#elif __linux__
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#else
-#define WINGDIAPI
-#define APIENTRY __stdcall
-#include <GLES2/gl2.h>
-#include <GLES2/gl2ext.h>
-#endif
+#include <glad/gles2.h>
+#include <glad/egl.h>
 
 #include "core/core_image.h"
 

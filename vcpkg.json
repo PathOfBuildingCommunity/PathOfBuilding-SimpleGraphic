@@ -1,6 +1,6 @@
 {
   "name": "path-of-building-simplegraphic",
-  "version-date": "2022-08-14",
+  "version-date": "2023-01-20",
   "dependencies": [
     "angle",
     "fmt",
@@ -10,6 +10,7 @@
     "liblzma",
     "libpng",
     "luajit",
+    "pkgconf",
     "re2",
     "zlib"
   ]

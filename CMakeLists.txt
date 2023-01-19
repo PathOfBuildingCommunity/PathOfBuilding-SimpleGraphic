@@ -75,6 +75,7 @@ add_library(SimpleGraphic SHARED
 
 target_compile_definitions(SimpleGraphic
     PRIVATE
+    "GLFW_INCLUDE_NONE"
     "GL_SILENCE_DEPRECATION"
     "SIMPLEGRAPHIC_EXPORTS"
 )
@@ -85,14 +86,17 @@ target_include_directories(SimpleGraphic
     "${CMAKE_CURRENT_SOURCE_DIR}/engine"
 )
 
+find_package(unofficial-angle CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJit REQUIRED)
-find_package(OpenGL REQUIRED)
+find_package(re2 CONFIG REQUIRED)
+find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
 target_include_directories(SimpleGraphic
     PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
     ${JPEG_INCLUDE_DIR}
     ${LUAJIT_INCLUDE_DIR}
 )
@@ -101,6 +105,13 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_options(SimpleGraphic
         PRIVATE
         "-export-dynamic"
+    )
+endif ()
+
+if (WIN32)
+    target_link_libraries(SimpleGraphic
+        PRIVATE
+        "winmm.lib"
     )
 endif ()
 
@@ -116,9 +127,12 @@ endif ()
 
 target_link_libraries(SimpleGraphic
     PRIVATE
+    unofficial::angle::libEGL
+    unofficial::angle::libGLESv2
     fmt::fmt
     glfw
     ${LUAJIT_LIBRARIES}
-    OpenGL::GL
+    re2::re2
+    Threads::Threads
     ZLIB::ZLIB
 )
