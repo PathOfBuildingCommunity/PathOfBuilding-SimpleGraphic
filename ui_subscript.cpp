@@ -339,6 +339,10 @@ bool ui_subscript_c::Start()
 	lua_pushlightuserdata(L, this);
 	lua_rawseti(L, LUA_REGISTRYINDEX, 0);
 	lua_pushcfunction(L, traceback);
+
+	lua_pushboolean(L, 1);
+	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
+
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);
 	luaL_openlibs(L);
