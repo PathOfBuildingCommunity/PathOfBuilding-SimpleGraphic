@@ -157,6 +157,9 @@ void sys_console_c::ThreadProc()
 	UnregisterClass(CFG_SCON_TITLE " Class", sys->hinst);
 
 	isRunning = false;
+
+	// Flush windowless messages (Like WM_QUIT)
+	sys->RunMessages();
 }
 
 sys_console_c::~sys_console_c()
@@ -187,6 +190,7 @@ LRESULT __stdcall sys_console_c::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 		}
 	case WM_CLOSE:
 		// Quit
+		conWin->doRun = false;
 		PostQuitMessage(0);
 		return FALSE;
 	}
