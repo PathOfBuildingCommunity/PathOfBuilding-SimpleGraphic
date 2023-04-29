@@ -787,6 +787,9 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 		curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
 		curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
 
+	// Make folder if it doesn't exist
+	_mkdir(CFG_DATAPATH "Screenshots");
+
 	// Save image
 	if (i->Save(ssname)) {
 		sys->con->Printf("Couldn't write screenshot!\n");
