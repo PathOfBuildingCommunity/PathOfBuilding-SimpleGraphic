@@ -87,6 +87,7 @@ target_include_directories(SimpleGraphic
 )
 
 find_package(unofficial-angle CONFIG REQUIRED)
+find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJit REQUIRED)
@@ -136,3 +137,53 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     ZLIB::ZLIB
 )
+
+install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
+install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+
+if (WIN32)
+    find_file(LUAJIT_DLL NAMES "lua51.dll" PATHS "${CMAKE_BINARY_DIR}" REQUIRED)
+    find_file(ZLIB_DLL NAMES "zlib1.dll" PATHS "${CMAKE_BINARY_DIR}" REQUIRED)
+    install(FILES ${LUAJIT_DLL} ${ZLIB_DLL} DESTINATION ".")
+endif ()
+
+
+# lcurl module
+
+set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
+file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
+add_library(lcurl SHARED ${LCURL_SOURCES})
+
+target_include_directories(lcurl
+    PRIVATE
+    ${LCURL_SOURCE_DIR}/src
+    ${LUAJIT_INCLUDE_DIR}
+)
+
+target_link_libraries(lcurl
+    PRIVATE
+    CURL::libcurl
+    ${LUAJIT_LIBRARIES}
+)
+
+install(TARGETS lcurl RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
+
+
+# lzip module
+
+add_library(lzip SHARED libs/LZip/lzip.cpp)
+
+target_include_directories(lzip
+    PRIVATE
+    ${LUAJIT_INCLUDE_DIR}
+)
+
+target_link_libraries(lzip
+    PRIVATE
+    ${LUAJIT_LIBRARIES}
+    ZLIB::ZLIB
+)
+
+install(TARGETS lzip RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")

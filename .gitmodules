@@ -1,3 +1,6 @@
 [submodule "vcpkg"]
 	path = vcpkg
 	url = https://github.com/microsoft/vcpkg
+[submodule "libs/Lua-cURLv3"]
+	path = libs/Lua-cURLv3
+	url = https://github.com/Lua-cURL/Lua-cURLv3.git
