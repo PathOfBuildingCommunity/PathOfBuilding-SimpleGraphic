@@ -86,4 +86,10 @@ public:
 	virtual void	DrawStringFormat(float x, float y, int align, int height, const col4_t col, int font, const char* fmt, ...) = 0;
 	virtual int		DrawStringWidth(int height, int font, const char* str) = 0;
 	virtual int		DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY) = 0;
+
+	virtual int		VirtualScreenWidth() = 0;
+	virtual int		VirtualScreenHeight() = 0;
+	virtual float	VirtualScreenScaleFactor() = 0;
+	virtual int		VirtualMap(int properValue) = 0;
+	virtual int		VirtualUnmap(int mappedValue) =0;
 };

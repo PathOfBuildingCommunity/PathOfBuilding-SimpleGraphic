@@ -97,7 +97,7 @@ r_shaderHnd_c::~r_shaderHnd_c()
 struct Mat4 {
 	float m[16];
 
-	float const* data() const{
+	float const* data() const {
 		return m;
 	}
 };
@@ -160,7 +160,8 @@ r_layerCmd_s* r_layer_c::NewCommand()
 	r_layerCmd_s* cmd;
 	if (renderer->layerCmdBinCount) {
 		cmd = renderer->layerCmdBin[--renderer->layerCmdBinCount];
-	} else {
+	}
+	else {
 		cmd = new r_layerCmd_s;
 	}
 	if (numCmd == cmdSize) {
@@ -289,7 +290,7 @@ void Batch::Execute()
 	glEnableVertexAttribArray(xyAttr);
 	glEnableVertexAttribArray(uvAttr);
 	glEnableVertexAttribArray(tintAttr);
-	glDrawArrays(GL_TRIANGLES, 0, vertices.size());
+	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertices.size());
 	glDisableVertexAttribArray(xyAttr);
 	glDisableVertexAttribArray(uvAttr);
 	glDisableVertexAttribArray(tintAttr);
@@ -396,7 +397,7 @@ void r_layer_c::Render()
 	}
 
 	std::optional<BatchKey> lastKey{};
-	int const numBatches = batches.size();
+	int const numBatches = (int)batches.size();
 
 	std::vector<size_t> batchPermutation(numBatches);
 	{
@@ -412,13 +413,14 @@ void r_layer_c::Render()
 		auto& batch = batches[batchPermutation[i]];
 		auto& key = batchKeys[batchPermutation[i]];
 		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
-			lastKey->viewport.width != key.viewport.width	|| lastKey->viewport.height != key.viewport.height)
+			lastKey->viewport.width != key.viewport.width || lastKey->viewport.height != key.viewport.height)
 		{
 			auto& vid = renderer->sys->video->vid;
 			float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
 			float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
+			int virtualH = renderer->VirtualScreenHeight();
 			float x = key.viewport.x * fbScaleX;
-			float y = (vid.size[1] - key.viewport.y - key.viewport.height) * fbScaleY;
+			float y = (virtualH - key.viewport.y - key.viewport.height) * fbScaleY;
 			float width = key.viewport.width * fbScaleX;
 			float height = key.viewport.height * fbScaleY;
 			glViewport((int)x, (int)y, (int)width, (int)height);
@@ -501,7 +503,7 @@ static std::string GetShaderInfoLog(GLuint id)
 	GLint len{};
 	glGetShaderiv(id, GL_INFO_LOG_LENGTH, &len);
 	std::vector<char> msg(len);
-	glGetShaderInfoLog(id, msg.size(), &len, msg.data());
+	glGetShaderInfoLog(id, (GLsizei)msg.size(), &len, msg.data());
 	return std::string(msg.data(), msg.data() + len);
 }
 
@@ -517,7 +519,7 @@ static std::string GetProgramInfoLog(GLuint id)
 	GLint len{};
 	glGetProgramiv(id, GL_INFO_LOG_LENGTH, &len);
 	std::vector<char> msg(len);
-	glGetProgramInfoLog(id, msg.size(), &len, msg.data());
+	glGetProgramInfoLog(id, (GLsizei)msg.size(), &len, msg.data());
 	return std::string(msg.data(), msg.data() + len);
 }
 
@@ -553,6 +555,31 @@ void main(void)
 {
 	vec4 color = texture2D(t_tex, v_texcoord);
 	gl_FragColor = color * v_tint;
+}
+)";
+
+std::string const s_scaleVsSource = R"(#version 100
+attribute vec4 a_position;
+attribute vec2 a_texcoord;
+
+varying vec2 v_texcoord;
+
+void main(void) {
+	gl_Position = a_position;
+	v_texcoord = a_texcoord;
+}
+)";
+
+std::string const s_scaleFsSource = R"(#version 100
+precision mediump float;
+
+uniform sampler2D s_tex;
+
+varying vec2 v_texcoord;
+
+void main(void) {
+	vec3 color = texture2D(s_tex, v_texcoord).rgb;
+	gl_FragColor = vec4(color, 1.0);
 }
 )";
 
@@ -671,6 +698,50 @@ void r_renderer_c::Init()
 
 	takeScreenshot = R_SSNONE;
 
+	// Set up DPI-scaling render target
+	{
+		glGenFramebuffers(1, &rttMain.framebuffer);
+		glGenTextures(1, &rttMain.colorTexture);
+
+		auto compileShader = [](std::string_view src, GLenum type) -> GLuint {
+			GLuint id = glCreateShader(type);
+			auto sourcePtr = src.data();
+			glShaderSource(id, 1, &sourcePtr, nullptr);
+			glCompileShader(id);
+			return id;
+			};
+
+		auto vsId = compileShader(s_scaleVsSource, GL_VERTEX_SHADER);
+		if (!GetShaderCompileSuccess(vsId)) {
+			auto log = GetShaderInfoLog(vsId);
+			sys->con->Printf("Scaling VS compile failure: %s\n", log.c_str());
+		}
+		auto fsId = compileShader(s_scaleFsSource, GL_FRAGMENT_SHADER);
+		if (!GetShaderCompileSuccess(fsId)) {
+			auto log = GetShaderInfoLog(fsId);
+			sys->con->Printf("Scaling FS compile failure: %s\n", log.c_str());
+		}
+
+		GLuint prog = rttMain.blitProg = glCreateProgram();
+		glAttachShader(prog, vsId);
+		glAttachShader(prog, fsId);
+		glLinkProgram(prog);
+		if (!GetProgramLinkSuccess(prog)) {
+			auto log = GetProgramInfoLog(prog);
+			sys->con->Printf("Scaling program link failure: %s\n", log.c_str());
+		}
+
+		GLint linked = GL_FALSE;
+		glGetProgramiv(prog, GL_LINK_STATUS, &linked);
+
+		glDeleteShader(vsId);
+		glDeleteShader(fsId);
+
+		rttMain.blitAttribLocPos = glGetAttribLocation(prog, "a_position");
+		rttMain.blitAttibLocTC = glGetAttribLocation(prog, "a_texcoord");
+		rttMain.blitSampleLocColour = glGetUniformLocation(prog, "s_tex");
+	}
+
 	// Load render resources
 	sys->con->Printf("Loading resources...\n");
 
@@ -708,6 +779,10 @@ void r_renderer_c::Shutdown()
 	}
 	delete layerCmdBin;
 
+	glDeleteTextures(1, &rttMain.colorTexture);
+	glDeleteFramebuffers(1, &rttMain.framebuffer);
+	glDeleteProgram(rttMain.blitProg);
+
 	// Shutdown texture manager
 	r_ITexManager::FreeHandle(texMan);
 
@@ -724,6 +799,35 @@ void r_renderer_c::Shutdown()
 
 void r_renderer_c::BeginFrame()
 {
+	{
+		auto& vid = sys->video->vid;
+		int wNew = VirtualScreenWidth();
+		int hNew = VirtualScreenHeight();
+		if (rttMain.width != wNew || rttMain.height != hNew) {
+			GLint prevTex2D, prevFB;
+			glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+			glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFB);
+			glBindTexture(GL_TEXTURE_2D, rttMain.colorTexture);
+			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wNew, hNew, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+			rttMain.width = wNew;
+			rttMain.height = hNew;
+
+			glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
+			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rttMain.colorTexture, 0);
+
+			glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+			glBindFramebuffer(GL_FRAMEBUFFER, prevFB);
+			glBindTexture(GL_TEXTURE_2D, prevTex2D);
+		}
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	curLayer = layerList[0];
@@ -739,11 +843,14 @@ static int layerCompFunc(const void* va, const void* vb)
 	r_layer_c* b = *(r_layer_c**)vb;
 	if (a->layer < b->layer) {
 		return -1;
-	} else if (a->layer > b->layer) {
+	}
+	else if (a->layer > b->layer) {
 		return 1;
-	} else if (a->subLayer < b->subLayer) {
+	}
+	else if (a->subLayer < b->subLayer) {
 		return -1;
-	} else {
+	}
+	else {
 		return 1;
 	}
 }
@@ -763,20 +870,47 @@ void r_renderer_c::EndFrame()
 			sprintf(str, "%d (%4d,%4d) [%2d]", layerSort[l]->numCmd, layerSort[l]->layer, layerSort[l]->subLayer, l);
 			float w = (float)DrawStringWidth(16, F_FIXED, str);
 			DrawColor(0x7F000000);
-			DrawImage(NULL, (float)sys->video->vid.size[0] - w, sys->video->vid.size[1] - (l + 2) * 16.0f, w, 16);
-			DrawStringFormat(0, sys->video->vid.size[1] - (l + 2) * 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
+			DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - (l + 2) * 16.0f, w, 16);
+			DrawStringFormat(0, VirtualScreenHeight() - (l + 2) * 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 		}
 		char str[1024];
 		sprintf(str, "%d", totalCmd);
 		float w = (float)DrawStringWidth(16, F_FIXED, str);
 		DrawColor(0xAF000000);
-		DrawImage(NULL, (float)sys->video->vid.size[0] - w, sys->video->vid.size[1] - 16.0f, w, 16);
-		DrawStringFormat(0, sys->video->vid.size[1] - 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
+		DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f, w, 16);
+		DrawStringFormat(0, VirtualScreenHeight() - 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 	}
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l]->Render();
 	}
 	delete[] layerSort;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+	float blitTriPos[] = {
+		-1.0f, -1.0f, //
+		3.0f, -1.0f, //
+		-1.0f, 3.0f, //
+	};
+	float blitTriUV[] = {
+		0.0f, 0.0f, //
+		2.0f, 0.0f, //
+		0.0f, 2.0f, //
+	};
+
+	glViewport(0, 0, sys->video->vid.fbSize[0], sys->video->vid.fbSize[1]);
+	glUseProgram(rttMain.blitProg);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriPos));
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriUV));
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glBindTexture(GL_TEXTURE_2D, rttMain.colorTexture);
+	glUniform1i(rttMain.blitSampleLocColour, 0);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glUseProgram(0);
 
 	glFlush();
 
@@ -838,7 +972,8 @@ r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
 	for (int s = 0; s < numShader; s++) {
 		if (!shaderList[s]) {
 			newId = s;
-		} else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && shaderList[s]->tex->flags == flags) {
+		}
+		else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && shaderList[s]->tex->flags == flags) {
 			// Shader already exists, return a new handle for it
 			// Ensure texture is loaded as soon as possible
 			shaderList[s]->tex->ForceLoad();
@@ -883,7 +1018,8 @@ void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& heigh
 	if (hnd && hnd->sh->tex->status == r_tex_c::DONE) {
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;
-	} else {
+	}
+	else {
 		width = 0;
 		height = 0;
 	}
@@ -949,8 +1085,9 @@ int r_renderer_c::GetDrawLayer()
 void r_renderer_c::SetViewport(int x, int y, int width, int height)
 {
 	if (height == 0) {
-		width = sys->video->vid.size[0];
-		height = sys->video->vid.size[1];
+		auto& vid = sys->video->vid;
+		width = VirtualScreenWidth();
+		height = VirtualScreenHeight();
 	}
 	curViewport.x = x;
 	curViewport.y = y;
@@ -969,7 +1106,8 @@ void r_renderer_c::DrawColor(const col4_t col)
 {
 	if (col) {
 		Vector4Copy(col, drawColor);
-	} else {
+	}
+	else {
 		drawColor[0] = 1.0f;
 		drawColor[1] = 1.0f;
 		drawColor[2] = 1.0f;
@@ -994,7 +1132,8 @@ void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, float x0, float y0, float x
 {
 	if (hnd) {
 		curLayer->Bind(hnd->sh->tex);
-	} else {
+	}
+	else {
 		curLayer->Bind(whiteImage->sh->tex);
 	}
 	curLayer->Color(drawColor);
@@ -1012,7 +1151,8 @@ void r_renderer_c::DrawString(float x, float y, int align, int height, const col
 		col4_t tcol;
 		Vector4Copy(col, tcol);
 		fonts[font]->Draw(pos, align, height, tcol, str);
-	} else {
+	}
+	else {
 		fonts[font]->Draw(pos, align, height, drawColor, str);
 	}
 }
@@ -1031,7 +1171,8 @@ void r_renderer_c::DrawStringFormat(float x, float y, int align, int height, con
 		col4_t tcol;
 		Vector4Copy(col, tcol);
 		fonts[font]->VDraw(pos, align, height, tcol, fmt, va);
-	} else {
+	}
+	else {
 		fonts[font]->VDraw(pos, align, height, drawColor, fmt, va);
 	}
 
@@ -1054,6 +1195,30 @@ int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, i
 	return fonts[font]->StringCursorIndex(height, str, curX, curY);
 }
 
+// ==============
+// Virtual screen
+// ==============
+
+int r_renderer_c::VirtualScreenWidth() {
+	return VirtualMap(sys->video->vid.size[0]);
+}
+
+int r_renderer_c::VirtualScreenHeight() {
+	return VirtualMap(sys->video->vid.size[1]);
+}
+
+float r_renderer_c::VirtualScreenScaleFactor() {
+	return sys->video->vid.dpiScale;
+}
+
+int r_renderer_c::VirtualMap(int properValue) {
+	return (int)(properValue / VirtualScreenScaleFactor());
+}
+
+int r_renderer_c::VirtualUnmap(int mappedValue) {
+	return (int)(mappedValue * VirtualScreenScaleFactor());
+}
+
 // ===========
 // Screenshots
 // ===========
@@ -1064,11 +1229,14 @@ void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c& args)
 	takeScreenshot = R_SSNONE;
 	if (!_stricmp(fmtName, "tga")) {
 		takeScreenshot = R_SSTGA;
-	} else if ( !_stricmp(fmtName, "jpg") || !_stricmp(fmtName, "jpeg") ) {
+	}
+	else if (!_stricmp(fmtName, "jpg") || !_stricmp(fmtName, "jpeg")) {
 		takeScreenshot = R_SSJPEG;
-	} else if ( !_stricmp(fmtName, "png") ) {
+	}
+	else if (!_stricmp(fmtName, "png")) {
 		takeScreenshot = R_SSPNG;
-	} else {
+	}
+	else {
 		conHnd->Warning("Unknown screenshot format '%s', valid formats: jpg, tga, png", fmtName);
 	}
 }
@@ -1111,7 +1279,8 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 // Save image
 	if (i->Save(ssname.c_str())) {
 		sys->con->Print("Couldn't write screenshot!\n");
-	} else {
+	}
+	else {
 		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
 	}
 }

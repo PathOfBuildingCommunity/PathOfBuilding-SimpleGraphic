@@ -22,6 +22,7 @@ struct sys_vidSave_s {
 	int		pos[2] = {};
 	bool	maximised = false;
 	int		fbSize[2] = {};
+	float	dpiScale = 1.0f;
 };
 
 // Video settings structure

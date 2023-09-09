@@ -112,8 +112,8 @@ bool ui_console_c::KeyEvent(int key, int type)
 
 void ui_console_c::Render()
 {
-	float uiw = (float)sys->video->vid.size[0];
-	float uih = (float)sys->video->vid.size[1];
+	float uiw = (float)renderer->VirtualScreenWidth();
+	float uih = (float)renderer->VirtualScreenHeight();
 
 	// Find y position
 

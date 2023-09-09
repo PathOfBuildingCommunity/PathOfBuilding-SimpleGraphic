@@ -238,10 +238,10 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, const 
 		double width = StringWidthInternal(fh, str) * scale;
 		switch (align) {
 		case F_CENTRE:
-			x = floor((renderer->sys->video->vid.size[0] - width) / 2.0f + pos[X]);
+			x = floor((renderer->VirtualScreenWidth() - width) / 2.0f + pos[X]);
 			break;
 		case F_RIGHT:
-			x = floor(renderer->sys->video->vid.size[0] - width - pos[X]);
+			x = floor(renderer->VirtualScreenWidth() - width - pos[X]);
 			break;
 		case F_CENTRE_X:
 			x = floor(pos[X] - width / 2.0f);
@@ -285,7 +285,7 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, const 
 		x+= glyph->spLeft * scale;
 		if (glyph->width) {
 			double w = glyph->width * scale;
-			if (x + w >= 0 && x < renderer->sys->video->vid.size[0]) {
+			if (x + w >= 0 && x < renderer->VirtualScreenWidth()) {
 				renderer->curLayer->Quad(
 					glyph->tcLeft, glyph->tcTop, x, y,
 					glyph->tcRight, glyph->tcTop, x + w, y,

@@ -350,6 +350,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYUP);
 			}
 		});
+		glfwSetWindowContentScaleCallback(wnd, [](GLFWwindow* wnd, float xScale, float yScale) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->video->vid.dpiScale = xScale;
+		});
 	}
 
 	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
@@ -357,6 +361,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	glfwSetWindowPos(wnd, vid.pos[0], vid.pos[1]);
 	glfwGetFramebufferSize(wnd, &vid.fbSize[0], &vid.fbSize[1]);
 	glfwGetWindowSize(wnd, &vid.size[0], &vid.size[1]);
+	glfwGetWindowContentScale(wnd, &sys->video->vid.dpiScale, nullptr);
 
 	initialised = true;
 	return 0;

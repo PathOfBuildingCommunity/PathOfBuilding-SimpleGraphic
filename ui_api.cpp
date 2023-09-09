@@ -50,7 +50,7 @@
 ** found = searchHandle:NextFile()
 ** fileName = searchHandle:GetFileName()
 ** fileSize = searchHandle:GetFileSize()
-** modified, date, time = searchHande:GetFileModifiedTime() 
+** modified, date, time = searchHande:GetFileModifiedTime()
 **
 ** SetWindowTitle("<title>")
 ** x, y = GetCursorPos()
@@ -106,7 +106,8 @@ static int l_SetCallback(lua_State* L)
 	if (n >= 2) {
 		ui->LAssert(L, lua_isfunction(L, 2) || lua_isnil(L, 2), "SetCallback() argument 2: expected function or nil, got %s", luaL_typename(L, 2));
 		lua_pushvalue(L, 2);
-	} else {
+	}
+	else {
 		lua_pushnil(L);
 	}
 	lua_settable(L, lua_upvalueindex(1));
@@ -132,7 +133,8 @@ static int l_SetMainObject(lua_State* L)
 	if (n >= 1) {
 		ui->LAssert(L, lua_istable(L, 1) || lua_isnil(L, 1), "SetMainObject() argument 1: expected table or nil, got %s", luaL_typename(L, 1));
 		lua_pushvalue(L, 1);
-	} else {
+	}
+	else {
 		lua_pushnil(L);
 	}
 	lua_settable(L, lua_upvalueindex(1));
@@ -175,7 +177,7 @@ static int l_imgHandleGC(lua_State* L)
 	return 0;
 }
 
-static int l_imgHandleLoad(lua_State* L) 
+static int l_imgHandleLoad(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
@@ -187,25 +189,30 @@ static int l_imgHandleLoad(lua_State* L)
 	char fullFileName[512];
 	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
 		strcpy(fullFileName, fileName);
-	} else {
+	}
+	else {
 		sprintf(fullFileName, "%s/%s", ui->scriptWorkDir, fileName);
 	}
 	delete imgHandle->hnd;
 	int flags = TF_NOMIPMAP;
 	for (int f = 2; f <= n; f++) {
-		if ( !lua_isstring(L, f) ) {
+		if (!lua_isstring(L, f)) {
 			continue;
 		}
 		const char* flag = lua_tostring(L, f);
-		if ( !strcmp(flag, "ASYNC") ) {
+		if (!strcmp(flag, "ASYNC")) {
 			// Async texture loading removed
-		} else if ( !strcmp(flag, "CLAMP") ) {
-			flags|= TF_CLAMP;
-		} else if ( !strcmp(flag, "MIPMAP") ) {
-			flags&= ~TF_NOMIPMAP;
-		} else if ( !strcmp(flag, "NEAREST") ) {
-			flags|= TF_NEAREST;
-		} else {
+		}
+		else if (!strcmp(flag, "CLAMP")) {
+			flags |= TF_CLAMP;
+		}
+		else if (!strcmp(flag, "MIPMAP")) {
+			flags &= ~TF_NOMIPMAP;
+		}
+		else if (!strcmp(flag, "NEAREST")) {
+			flags |= TF_NEAREST;
+		}
+		else {
 			ui->LAssert(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
 		}
 	}
@@ -276,8 +283,8 @@ static int l_RenderInit(lua_State* L)
 static int l_GetScreenSize(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushinteger(L, ui->sys->video->vid.size[0]);
-	lua_pushinteger(L, ui->sys->video->vid.size[1]);
+	lua_pushinteger(L, ui->renderer->VirtualScreenWidth());
+	lua_pushinteger(L, ui->renderer->VirtualScreenHeight());
 	return 2;
 }
 
@@ -290,12 +297,13 @@ static int l_SetClearColor(lua_State* L)
 	col4_t color;
 	for (int i = 1; i <= 3; i++) {
 		ui->LAssert(L, lua_isnumber(L, i), "SetClearColor() argument %d: expected number, got %s", i, luaL_typename(L, i));
-		color[i-1] = (float)lua_tonumber(L, i);
+		color[i - 1] = (float)lua_tonumber(L, i);
 	}
 	if (n >= 4 && !lua_isnil(L, 4)) {
 		ui->LAssert(L, lua_isnumber(L, 4), "SetClearColor() argument 4: expected number or nil, got %s", luaL_typename(L, 4));
 		color[3] = (float)lua_tonumber(L, 4);
-	} else {
+	}
+	else {
 		color[3] = 1.0;
 	}
 	ui->renderer->SetClearColor(color);
@@ -316,9 +324,11 @@ static int l_SetDrawLayer(lua_State* L)
 	if (lua_isnil(L, 1)) {
 		ui->LAssert(L, n >= 2, "SetDrawLayer(): must provide subLayer if layer is nil");
 		ui->renderer->SetDrawSubLayer((int)lua_tointeger(L, 2));
-	} else if (n >= 2) {
+	}
+	else if (n >= 2) {
 		ui->renderer->SetDrawLayer((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2));
-	} else {
+	}
+	else {
 		ui->renderer->SetDrawLayer((int)lua_tointeger(L, 1));
 	}
 	return 0;
@@ -343,7 +353,8 @@ static int l_SetViewport(lua_State* L)
 			ui->LAssert(L, lua_isnumber(L, i), "SetViewport() argument %d: expected number, got %s", i, luaL_typename(L, i));
 		}
 		ui->renderer->SetViewport((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)lua_tointeger(L, 4));
-	} else {
+	}
+	else {
 		ui->renderer->SetViewport();
 	}
 	return 0;
@@ -373,16 +384,18 @@ static int l_SetDrawColor(lua_State* L)
 		ui->LAssert(L, IsColorEscape(lua_tostring(L, 1)), "SetDrawColor() argument 1: invalid color escape sequence");
 		ReadColorEscape(lua_tostring(L, 1), color);
 		color[3] = 1.0;
-	} else {
+	}
+	else {
 		ui->LAssert(L, n >= 3, "Usage: SetDrawColor(red, green, blue[, alpha]) or SetDrawColor(escapeStr)");
 		for (int i = 1; i <= 3; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "SetDrawColor() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			color[i-1] = (float)lua_tonumber(L, i);
+			color[i - 1] = (float)lua_tonumber(L, i);
 		}
 		if (n >= 4 && !lua_isnil(L, 4)) {
 			ui->LAssert(L, lua_isnumber(L, 4), "SetDrawColor() argument 4: expected number or nil, got %s", luaL_typename(L, 4));
 			color[3] = (float)lua_tonumber(L, 4);
-		} else {
+		}
+		else {
 			color[3] = 1.0;
 		}
 	}
@@ -399,7 +412,7 @@ static int l_DrawImage(lua_State* L)
 	ui->LAssert(L, n >= 5, "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])");
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImage() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
-	if ( !lua_isnil(L, 1) ) {
+	if (!lua_isnil(L, 1)) {
 		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
 		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImage(): image handle has no image loaded");
 		hnd = imgHandle->hnd;
@@ -409,13 +422,14 @@ static int l_DrawImage(lua_State* L)
 		ui->LAssert(L, n >= 9, "DrawImage(): incomplete set of texture coordinates provided");
 		for (int i = 2; i <= 9; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i-2] = (float)lua_tonumber(L, i);
+			arg[i - 2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
-	} else {
+	}
+	else {
 		for (int i = 2; i <= 5; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i-2] = (float)lua_tonumber(L, i);
+			arg[i - 2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3]);
 	}
@@ -431,7 +445,7 @@ static int l_DrawImageQuad(lua_State* L)
 	ui->LAssert(L, n >= 9, "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])");
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImageQuad() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
-	if ( !lua_isnil(L, 1) ) {
+	if (!lua_isnil(L, 1)) {
 		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
 		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImageQuad(): image handle has no image loaded");
 		hnd = imgHandle->hnd;
@@ -441,13 +455,14 @@ static int l_DrawImageQuad(lua_State* L)
 		ui->LAssert(L, n >= 17, "DrawImageQuad(): incomplete set of texture coordinates provided");
 		for (int i = 2; i <= 17; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i-2] = (float)lua_tonumber(L, i);
+			arg[i - 2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7], arg[8], arg[9], arg[10], arg[11], arg[12], arg[13], arg[14], arg[15]);
-	} else {
+	}
+	else {
 		for (int i = 2; i <= 9; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i-2] = (float)lua_tonumber(L, i);
+			arg[i - 2] = (float)lua_tonumber(L, i);
 		}
 		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
 	}
@@ -470,13 +485,13 @@ static int l_DrawString(lua_State* L)
 	static const char* alignMap[6] = { "LEFT", "CENTER", "RIGHT", "CENTER_X", "RIGHT_X", NULL };
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	ui->renderer->DrawString(
-		(float)lua_tonumber(L, 1), (float)lua_tonumber(L, 2), luaL_checkoption(L, 3, "LEFT", alignMap), 
+		(float)lua_tonumber(L, 1), (float)lua_tonumber(L, 2), luaL_checkoption(L, 3, "LEFT", alignMap),
 		(int)lua_tointeger(L, 4), NULL, luaL_checkoption(L, 5, "FIXED", fontMap), lua_tostring(L, 6)
 	);
 	return 0;
 }
 
-static int l_DrawStringWidth(lua_State* L) 
+static int l_DrawStringWidth(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
@@ -490,7 +505,7 @@ static int l_DrawStringWidth(lua_State* L)
 	return 1;
 }
 
-static int l_DrawStringCursorIndex(lua_State* L) 
+static int l_DrawStringCursorIndex(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
@@ -518,8 +533,9 @@ static int l_StripEscapes(lua_State* L)
 	while (*str) {
 		int esclen = IsColorEscape(str);
 		if (esclen) {
-			str+= esclen;
-		} else {
+			str += esclen;
+		}
+		else {
 			*(p++) = *(str++);
 		}
 	}
@@ -553,13 +569,13 @@ static int l_NewFileSearch(lua_State* L)
 	ui->LAssert(L, n >= 1, "Usage: NewFileSearch(spec[, findDirectories])");
 	ui->LAssert(L, lua_isstring(L, 1), "NewFileSearch() argument 1: expected string, got %s", luaL_typename(L, 1));
 	find_c* find = new find_c();
-	if ( !find->FindFirst(lua_tostring(L, 1)) ) {
+	if (!find->FindFirst(lua_tostring(L, 1))) {
 		delete find;
 		return 0;
 	}
 	bool dirOnly = lua_toboolean(L, 2) != 0;
 	while (find->isDirectory != dirOnly || find->fileName == "." || find->fileName == "..") {
-		if ( !find->FindNext() ) {
+		if (!find->FindNext()) {
 			delete find;
 			return 0;
 		}
@@ -596,7 +612,7 @@ static int l_searchHandleNextFile(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "NextFile", true);
 	do {
-		if ( !searchHandle->find->FindNext() ) {
+		if (!searchHandle->find->FindNext()) {
 			delete searchHandle->find;
 			searchHandle->find = NULL;
 			return 0;
@@ -648,8 +664,8 @@ static int l_SetWindowTitle(lua_State* L)
 static int l_GetCursorPos(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushinteger(L, ui->cursorX);
-	lua_pushinteger(L, ui->cursorY);
+	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorX));
+	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorY));
 	return 2;
 }
 
@@ -660,7 +676,9 @@ static int l_SetCursorPos(lua_State* L)
 	ui->LAssert(L, n >= 2, "Usage: SetCursorPos(x, y)");
 	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
-	ui->sys->video->SetRelativeCursor((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2));
+	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1));
+	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2));
+	ui->sys->video->SetRelativeCursor(x, y);
 	return 0;
 }
 
@@ -705,7 +723,8 @@ static int l_Paste(lua_State* L)
 		lua_pushstring(L, data);
 		FreeString(data);
 		return 1;
-	} else {
+	}
+	else {
 		return 0;
 	}
 }
@@ -733,7 +752,8 @@ static int l_Deflate(lua_State* L)
 	if (err == Z_STREAM_END) {
 		lua_pushlstring(L, (const char*)out, z.total_out);
 		return 1;
-	} else {
+	}
+	else {
 		lua_pushnil(L);
 		lua_pushstring(L, zError(err));
 		return 2;
@@ -773,7 +793,8 @@ static int l_Inflate(lua_State* L)
 	if (err == Z_STREAM_END) {
 		lua_pushlstring(L, (const char*)out, z.total_out);
 		return 1;
-	} else {
+	}
+	else {
 		lua_pushnil(L);
 		lua_pushstring(L, zError(err));
 		return 2;
@@ -820,7 +841,8 @@ static int l_MakeDir(lua_State* L)
 		lua_pushnil(L);
 		lua_pushstring(L, strerror(ec.value()));
 		return 2;
-	} else {
+	}
+	else {
 		lua_pushboolean(L, true);
 		return 1;
 	}
@@ -838,7 +860,8 @@ static int l_RemoveDir(lua_State* L)
 		lua_pushnil(L);
 		lua_pushstring(L, strerror(ec.value()));
 		return 2;
-	} else {
+	}
+	else {
 		lua_pushboolean(L, true);
 		return 1;
 	}
@@ -851,7 +874,7 @@ static int l_SetWorkDir(lua_State* L)
 	ui->LAssert(L, n >= 1, "Usage: SetWorkDir(path)");
 	ui->LAssert(L, lua_isstring(L, 1), "SetWorkDir() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* newWorkDir = lua_tostring(L, 1);
-	if ( !ui->sys->SetWorkDir(newWorkDir) ) {
+	if (!ui->sys->SetWorkDir(newWorkDir)) {
 		if (ui->scriptWorkDir) {
 			FreeString(ui->scriptWorkDir);
 		}
@@ -876,19 +899,19 @@ static int l_LaunchSubScript(lua_State* L)
 		ui->LAssert(L, lua_isstring(L, i), "LaunchSubScript() argument %d: expected string, got %s", i, luaL_typename(L, i));
 	}
 	for (int i = 4; i <= n; i++) {
-		ui->LAssert(L, lua_isnil(L, i) || lua_isboolean(L, i) || lua_isnumber(L, i) || lua_isstring(L, i), 
+		ui->LAssert(L, lua_isnil(L, i) || lua_isboolean(L, i) || lua_isnumber(L, i) || lua_isstring(L, i),
 			"LaunchSubScript() argument %d: only nil, boolean, number and string types can be passed to sub script", i);
 	}
 	dword slot = -1;
 	for (dword i = 0; i < ui->subScriptSize; i++) {
-		if ( !ui->subScriptList[i] ) {
+		if (!ui->subScriptList[i]) {
 			slot = i;
 			break;
 		}
 	}
 	if (slot == -1) {
 		slot = ui->subScriptSize;
-		ui->subScriptSize<<= 1;
+		ui->subScriptSize <<= 1;
 		trealloc(ui->subScriptList, ui->subScriptSize);
 		for (dword i = slot; i < ui->subScriptSize; i++) {
 			ui->subScriptList[i] = NULL;
@@ -897,7 +920,8 @@ static int l_LaunchSubScript(lua_State* L)
 	ui->subScriptList[slot] = ui_ISubScript::GetHandle(ui, slot);
 	if (ui->subScriptList[slot]->Start()) {
 		lua_pushlightuserdata(L, (void*)(uintptr_t)slot);
-	} else {
+	}
+	else {
 		lua_pushnil(L);
 	}
 	return 1;
@@ -938,7 +962,7 @@ static int l_LoadModule(lua_State* L)
 	const char* modName = lua_tostring(L, 1);
 	char fileName[1024];
 	strcpy(fileName, modName);
-	if ( !strchr(fileName, '.') ) {
+	if (!strchr(fileName, '.')) {
 		strcat(fileName, ".lua");
 	}
 	ui->sys->SetWorkDir(ui->scriptPath);
@@ -959,7 +983,7 @@ static int l_PLoadModule(lua_State* L)
 	const char* modName = lua_tostring(L, 1);
 	char* fileName = AllocStringLen(strlen(modName) + 4);
 	strcpy(fileName, modName);
-	if ( !strchr(fileName, '.') ) {
+	if (!strchr(fileName, '.')) {
 		strcat(fileName, ".lua");
 	}
 	ui->sys->SetWorkDir(ui->scriptPath);
@@ -1021,7 +1045,8 @@ static void printTableItter(lua_State* L, IConsole* con, int index, int level, b
 		// Print key
 		if (lua_type(L, -2) == LUA_TSTRING) {
 			con->Printf("[\"%s^7\"] = ", lua_tostring(L, -2));
-		} else {
+		}
+		else {
 			lua_pushvalue(L, 2);	// Push tostring function
 			lua_pushvalue(L, -3);	// Push key
 			lua_call(L, 1, 1);		// Call tostring
@@ -1045,12 +1070,15 @@ static void printTableItter(lua_State* L, IConsole* con, int index, int level, b
 				printTableItter(L, con, lua_gettop(L), level + 1, true);
 				for (int t = 0; t < level; t++) con->Print("  ");
 				con->Print("}\n");
-			} else {
+			}
+			else {
 				con->Printf("table: %08x { ... }\n", lua_topointer(L, -1));
 			}
-		} else if (lua_type(L, -1) == LUA_TSTRING) {
+		}
+		else if (lua_type(L, -1) == LUA_TSTRING) {
 			con->Printf("\"%s\"\n", lua_tostring(L, -1));
-		} else {
+		}
+		else {
 			lua_pushvalue(L, 2);	// Push tostring function
 			lua_pushvalue(L, -2);	// Push value
 			lua_call(L, 1, 1);		// Call tostring
@@ -1084,7 +1112,7 @@ static int l_ConExecute(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: ConExecute(cmd)");
 	ui->LAssert(L, lua_isstring(L, 1), "ConExecute() argument 1: expected string, got %s", luaL_typename(L, 1));
-	ui->sys->con->Execute(lua_tostring(L,1));
+	ui->sys->con->Execute(lua_tostring(L, 1));
 	return 0;
 }
 
@@ -1161,8 +1189,8 @@ static int l_Exit(lua_State* L)
 	}
 	ui->sys->Exit(msg);
 	ui->didExit = true;
-//	lua_pushstring(L, "dummy");
-//	lua_error(L);
+	//	lua_pushstring(L, "dummy");
+	//	lua_error(L);
 	return 0;
 }
 

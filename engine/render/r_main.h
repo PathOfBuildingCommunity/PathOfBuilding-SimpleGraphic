@@ -80,6 +80,12 @@ public:
 	int		DrawStringWidth(int height, int font, const char* str);
 	int		DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY);
 
+	int		VirtualScreenWidth();
+	int		VirtualScreenHeight();
+	float	VirtualScreenScaleFactor();
+	int		VirtualMap(int properValue);
+	int		VirtualUnmap(int mappedValue);
+
 	// Encapsulated
 	r_renderer_c(sys_IMain* sysHnd);
 
@@ -130,6 +136,19 @@ public:
 	int		layerCmdBinCount = 0;
 	int		layerCmdBinSize = 0;
 	struct r_layerCmd_s** layerCmdBin = nullptr;
+
+	struct RenderTarget {
+		int		width = -1, height = -1;
+		GLuint	framebuffer = 0;
+		GLuint	colorTexture = 0;
+
+		GLuint	blitProg = 0;
+		GLuint	blitAttribLocPos = 0;
+		GLuint	blitAttibLocTC = 0;
+		GLuint  blitSampleLocColour = 0;
+	};
+
+	RenderTarget rttMain;
 
 	int		takeScreenshot = 0;
 	void	DoScreenshot(image_c* i, const char* ext);
