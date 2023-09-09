@@ -105,6 +105,8 @@ public:
 	conVar_c*	r_compress = nullptr;
 	conVar_c*	r_screenshotFormat = nullptr;
 	conVar_c*	r_layerDebug = nullptr;
+	conVar_c*   r_layerOptimize = nullptr;
+	conVar_c*   r_layerShuffle = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
 

@@ -9,6 +9,8 @@
 
 #include <fmt/chrono.h>
 #include <map>
+#include <numeric>
+#include <random>
 #include <sstream>
 #include <vector>
 
@@ -297,6 +299,9 @@ void Batch::Execute()
 
 void r_layer_c::Render()
 {
+	bool const optimize = renderer->r_layerOptimize->intVal == 1;
+	bool const shuffle = renderer->r_layerShuffle->intVal == 1;
+
 	struct BatchKey {
 		r_viewport_s viewport = { -1, -1, -1, -1 };
 		int blendMode = -1;
@@ -356,7 +361,7 @@ void r_layer_c::Render()
 		case r_layerCmd_s::QUAD: {
 			Batch* batch{};
 			auto I = batchIndices.find(currentKey);
-			if (I != batchIndices.end()) {
+			if (I != batchIndices.end() && optimize) {
 				batch = &batches[I->second];
 			}
 			else {
@@ -392,9 +397,20 @@ void r_layer_c::Render()
 
 	std::optional<BatchKey> lastKey{};
 	int const numBatches = batches.size();
+
+	std::vector<size_t> batchPermutation(numBatches);
+	{
+		static std::random_device rd;
+		static std::mt19937 g(rd());
+		std::iota(batchPermutation.begin(), batchPermutation.end(), 0);
+		if (shuffle) {
+			std::shuffle(batchPermutation.begin(), batchPermutation.end(), g);
+		}
+	}
+
 	for (int i = 0; i < numBatches; ++i) {
-		auto& batch = batches[i];
-		auto& key = batchKeys[i];
+		auto& batch = batches[batchPermutation[i]];
+		auto& key = batchKeys[batchPermutation[i]];
 		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
 			lastKey->viewport.width != key.viewport.width	|| lastKey->viewport.height != key.viewport.height)
 		{
@@ -467,6 +483,8 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 	r_compress = sys->con->Cvar_Add("r_compress", CV_ARCHIVE, "0");
 	r_screenshotFormat = sys->con->Cvar_Add("r_screenshotFormat", CV_ARCHIVE, "jpg");
 	r_layerDebug = sys->con->Cvar_Add("r_layerDebug", CV_ARCHIVE, "0");
+	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
+	r_layerShuffle = sys->con->Cvar_Add("r_layerShuffle", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
 
 	Cmd_Add("screenshot", 0, "[<format>]", this, &r_renderer_c::C_Screenshot);
 }
