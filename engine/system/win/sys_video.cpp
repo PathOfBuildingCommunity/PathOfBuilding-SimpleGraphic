@@ -15,6 +15,8 @@
 #include <optional>
 #include <utility>
 
+#include <imgui.h>
+
 // ====================
 // sys_IVideo Interface
 // ====================
@@ -265,10 +267,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetCharCallback(wnd, [](GLFWwindow* wnd, uint32_t codepoint) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (ImGui::GetIO().WantCaptureKeyboard) {
+				return;
+			}
 			sys->core->KeyEvent(codepoint, KE_CHAR);
 		});
 		glfwSetKeyCallback(wnd, [](GLFWwindow* wnd, int key, int scancode, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (ImGui::GetIO().WantCaptureKeyboard) {
+				return;
+			}
 			if (byte k = sys->GlfwKeyToKey(key)) {
 				bool is_down = action == GLFW_PRESS || action == GLFW_REPEAT;
 				sys->heldKeyState[k] = is_down;
@@ -281,6 +289,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (ImGui::GetIO().WantCaptureMouse) {
+				return;
+			}
 			auto video = (sys_video_c*)sys->video;
 			int sg_key;
 			switch(button) {

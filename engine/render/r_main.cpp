@@ -14,6 +14,9 @@
 #include <sstream>
 #include <vector>
 
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 // =======
 // Classes
 // =======
@@ -747,6 +750,12 @@ void r_renderer_c::Init()
 
 	whiteImage = RegisterShader("@white", 0);
 
+	imguiCtx = ImGui::CreateContext();
+	ImGui::SetCurrentContext(imguiCtx);
+
+	ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)sys->video->GetWindowHandle(), true);
+	ImGui_ImplOpenGL3_Init("#version 100");
+
 	fonts[F_FIXED] = new r_font_c(this, "Bitstream Vera Sans Mono");
 	fonts[F_VAR] = new r_font_c(this, "Liberation Sans");
 	fonts[F_VAR_BOLD] = new r_font_c(this, "Liberation Sans Bold");
@@ -759,6 +768,10 @@ void r_renderer_c::Shutdown()
 	sys->con->PrintFunc("Render Shutdown");
 
 	sys->con->Printf("Unloading resources...\n");
+
+	ImGui_ImplOpenGL3_Shutdown();
+	ImGui_ImplGlfw_Shutdown();
+	ImGui::DestroyContext(imguiCtx);
 
 	delete whiteImage;
 
@@ -799,6 +812,9 @@ void r_renderer_c::Shutdown()
 
 void r_renderer_c::BeginFrame()
 {
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
 	{
 		auto& vid = sys->video->vid;
 		int wNew = VirtualScreenWidth();
@@ -913,6 +929,9 @@ void r_renderer_c::EndFrame()
 	glUseProgram(0);
 
 	glFlush();
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 	// Swap output buffers
 	openGL->Swap();

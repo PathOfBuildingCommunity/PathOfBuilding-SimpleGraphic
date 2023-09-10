@@ -104,6 +104,41 @@ find_package(re2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
+add_library(imgui STATIC
+	dep/imgui/imconfig.h
+	dep/imgui/imgui.cpp
+	dep/imgui/imgui.h
+	dep/imgui/imgui_demo.cpp
+	dep/imgui/imgui_draw.cpp
+	dep/imgui/imgui_internal.h
+	dep/imgui/imgui_tables.cpp
+	dep/imgui/imgui_widgets.cpp
+	dep/imgui/imstb_rectpack.h
+	dep/imgui/imstb_textedit.h
+	dep/imgui/imstb_truetype.h
+	dep/imgui/backends/imgui_impl_glfw.cpp
+	dep/imgui/backends/imgui_impl_glfw.h
+	dep/imgui/backends/imgui_impl_opengl3.cpp
+	dep/imgui/backends/imgui_impl_opengl3.h
+	dep/imgui/backends/imgui_impl_opengl3_loader.h
+	dep/imgui/misc/cpp/imgui_stdlib.cpp
+	dep/imgui/misc/cpp/imgui_stdlib.h
+)
+
+target_compile_definitions(imgui PUBLIC
+	"IMGUI_IMPL_OPENGL_ES2"
+)
+
+target_include_directories(imgui PUBLIC
+	dep/imgui
+	dep/imgui/backends
+)
+
+target_link_libraries(imgui PUBLIC
+    unofficial::angle::libGLESv2
+    glfw
+)
+
 target_include_directories(SimpleGraphic
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
@@ -141,6 +176,7 @@ target_link_libraries(SimpleGraphic
     unofficial::angle::libGLESv2
     fmt::fmt
     glfw
+    imgui
     ${LUAJIT_LIBRARIES}
     re2::re2
     Threads::Threads

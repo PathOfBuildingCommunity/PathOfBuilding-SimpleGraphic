@@ -10,6 +10,8 @@
 
 #define R_MAXSHADERS 65536
 
+#include <imgui.h>
+
 // =======
 // Classes
 // =======
@@ -115,6 +117,8 @@ public:
 	conVar_c*   r_layerShuffle = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
+
+	ImGuiContext* imguiCtx = nullptr;
 
 	r_font_c* fonts[F_NUMFONTS] = {}; // Font objects
 

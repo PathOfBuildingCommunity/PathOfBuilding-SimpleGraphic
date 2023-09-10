@@ -4,3 +4,6 @@
 [submodule "libs/Lua-cURLv3"]
 	path = libs/Lua-cURLv3
 	url = https://github.com/Lua-cURL/Lua-cURLv3.git
+[submodule "dep/imgui"]
+	path = dep/imgui
+	url = https://github.com/ocornut/imgui.git
