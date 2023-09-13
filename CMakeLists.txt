@@ -7,14 +7,12 @@ if (APPLE)
     enable_language(OBJCXX)
 endif ()
 
-if (MSVC)
-    add_compile_definitions(
-    )
-endif ()
-
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
+
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+include(InstallRequiredSystemLibraries)
 
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
@@ -80,6 +78,7 @@ add_library(SimpleGraphic SHARED
 
 target_compile_definitions(SimpleGraphic
     PRIVATE
+    "UNICODE"
     "_CRT_SECURE_NO_DEPRECATE"
     "_CRT_SECURE_NO_WARNINGS"
     "_SCL_SECURE_NO_DEPRECATE"
