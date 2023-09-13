@@ -681,12 +681,12 @@ struct CloudProviderLibrary {
 		FreeLibrary(cldLib);
 	}
 
-	bool Loaded() const { return cldLib != nullptr; }
+	bool Loaded() const { return cldLib != nullptr && CfGetSyncRootInfoByPath != nullptr; }
 
 	CloudProviderLibrary(CloudProviderLibrary const&) = delete;
 	CloudProviderLibrary& operator = (CloudProviderLibrary const&) = delete;
 
-	decltype (&::CfGetSyncRootInfoByPath) CfGetSyncRootInfoByPath;
+	decltype (&::CfGetSyncRootInfoByPath) CfGetSyncRootInfoByPath{};
 
 	HMODULE cldLib{};
 };
