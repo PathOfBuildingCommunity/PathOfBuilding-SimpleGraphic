@@ -303,7 +303,7 @@ void Batch::Execute()
 
 void r_layer_c::Render()
 {
-	bool const optimize = renderer->r_layerOptimize->intVal == 1;
+	int const optLevel = renderer->r_layerOptimize->intVal;
 	bool const shuffle = renderer->r_layerShuffle->intVal == 1;
 
 	struct BatchKey {
@@ -369,11 +369,16 @@ void r_layer_c::Render()
 		case r_layerCmd_s::QUAD: {
 			Batch* batch{};
 			auto I = batchIndices.find(currentKey);
-			if (I != batchIndices.end() && optimize) {
+			if (I != batchIndices.end() && optLevel == 1 && I->second == batches.size() - 1) {
+				// Append to last batch if it matches our key.
+				batch = &batches[I->second];
+			}
+			else if (I != batchIndices.end() && optLevel == 2) {
+				// Fill earlier batches, even if it leads to order problems.
 				batch = &batches[I->second];
 			}
 			else {
-				batchIndices.insert(I, { currentKey, batches.size() });
+				batchIndices.insert_or_assign(I, currentKey, batches.size());
 				batchKeys.push_back(currentKey);
 				batches.emplace_back(prog);
 				batch = &batches.back();
@@ -416,12 +421,30 @@ void r_layer_c::Render()
 		}
 	}
 
+	bool showStats{};
+	if (renderer->debugLayers) {
+		if (ImGui::Begin("Layers", &renderer->debugLayers)) {
+			GLint maxTextureUnits{};
+			glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
+			ImGui::Text("Max texture units: %d", maxTextureUnits);
+			ImGui::BulletText("Layer %d:%d - %d batches", layer, subLayer, numBatches);
+			std::string heading = fmt::format("Layer {}:{}", layer, subLayer);
+			showStats = ImGui::CollapsingHeader(heading.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+		}
+	}
 	for (int i = 0; i < numBatches; ++i) {
 		auto& batch = batches[batchPermutation[i]];
 		auto& key = batchKeys[batchPermutation[i]];
+		if (showStats) {
+			ImGui::Text("Batch %d", batchPermutation[i]);
+			ImGui::Text("%d verts", batch.vertices.size());
+		}
 		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
 			lastKey->viewport.width != key.viewport.width || lastKey->viewport.height != key.viewport.height)
 		{
+			if (showStats) {
+				ImGui::Text("New viewport %dx%d @ %d,%d", key.viewport.width, key.viewport.height, key.viewport.x, key.viewport.y);
+			}
 			auto& vid = renderer->sys->video->vid;
 			float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
 			float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
@@ -436,6 +459,14 @@ void r_layer_c::Render()
 			glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, mvpMatrix.data());
 		}
 		if (!lastKey || lastKey->blendMode != key.blendMode) {
+			if (showStats) {
+				static std::map<r_blendMode_e, char const*> const blendModeString{
+					{RB_ALPHA, "RB_ALPHA"},
+					{RB_PRE_ALPHA, "RB_PRE_ALPHA"},
+					{RB_ADDITIVE, "RB_ADDITIVE"},
+				};
+				ImGui::Text("New blend mode %s", blendModeString.at((r_blendMode_e)key.blendMode));
+			}
 			switch (key.blendMode) {
 			case RB_ALPHA:
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -449,6 +480,9 @@ void r_layer_c::Render()
 			}
 		}
 		if (!lastKey || lastKey->tex != key.tex) {
+			if (showStats) {
+				ImGui::Text("New tex %d (%s)", key.tex->texId, key.tex->fileName.c_str());
+			}
 			key.tex->Bind();
 		}
 
@@ -457,6 +491,9 @@ void r_layer_c::Render()
 		lastKey = key;
 	}
 	glUseProgram(0);
+	if (renderer->debugLayers) {
+		ImGui::End();
+	}
 
 	for (int i = 0; i < numCmd; i++) {
 		r_layerCmd_s* cmd = cmdList[i];
@@ -492,7 +529,7 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 	r_compress = sys->con->Cvar_Add("r_compress", CV_ARCHIVE, "0");
 	r_screenshotFormat = sys->con->Cvar_Add("r_screenshotFormat", CV_ARCHIVE, "jpg");
 	r_layerDebug = sys->con->Cvar_Add("r_layerDebug", CV_ARCHIVE, "0");
-	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
+	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "0", 0, 2);
 	r_layerShuffle = sys->con->Cvar_Add("r_layerShuffle", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
 
 	Cmd_Add("screenshot", 0, "[<format>]", this, &r_renderer_c::C_Screenshot);
