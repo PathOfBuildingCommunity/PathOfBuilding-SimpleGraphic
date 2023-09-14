@@ -1,5 +1,5 @@
-project(SimpleGraphic C CXX)
 cmake_minimum_required(VERSION 3.15)
+project(SimpleGraphic C CXX)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 17)
 
@@ -8,13 +8,16 @@ if (APPLE)
 endif ()
 
 if (MSVC)
-    add_compile_definitions(
-    )
+	add_compile_options("/Zi")
+	add_link_options("/DEBUG")
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
+
+set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
+include(InstallRequiredSystemLibraries)
 
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
@@ -77,9 +80,9 @@ add_library(SimpleGraphic SHARED
     ${SIMPLEGRAPHIC_SOURCES}
     ${SIMPLEGRAPHIC_PLATFORM_SOURCES}
 )
-
 target_compile_definitions(SimpleGraphic
     PRIVATE
+    "UNICODE"
     "_CRT_SECURE_NO_DEPRECATE"
     "_CRT_SECURE_NO_WARNINGS"
     "_SCL_SECURE_NO_DEPRECATE"
@@ -187,8 +190,11 @@ install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
 if (WIN32)
-    find_file(LUAJIT_DLL NAMES "lua51.dll" PATHS "${CMAKE_BINARY_DIR}" REQUIRED)
-    find_file(ZLIB_DLL NAMES "zlib1.dll" PATHS "${CMAKE_BINARY_DIR}" REQUIRED)
+	if (DEFINED ENV{DEPS_DIR})
+		set(DEPS_BIN_DIR ${DEPS_DIR}/bin)
+	endif ()
+    find_file(LUAJIT_DLL NAMES "lua51.dll" PATHS "${CMAKE_BINARY_DIR}" ${DEPS_BIN_DIR} REQUIRED)
+    find_file(ZLIB_DLL NAMES "zlib1.dll" PATHS "${CMAKE_BINARY_DIR}" ${DEPS_BIN_DIR} REQUIRED)
     install(FILES ${LUAJIT_DLL} ${ZLIB_DLL} DESTINATION ".")
 endif ()
 

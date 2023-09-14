@@ -584,17 +584,17 @@ void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 	if ( !strchr(cmd, '.') ) {
 		strcat(cmd, ".exe");
 	}
-	SHELLEXECUTEINFO sinfo;
-	memset(&sinfo, 0, sizeof(SHELLEXECUTEINFO));
-	sinfo.cbSize       = sizeof(SHELLEXECUTEINFO);
+	SHELLEXECUTEINFOA sinfo;
+	memset(&sinfo, 0, sizeof(SHELLEXECUTEINFOA));
+	sinfo.cbSize       = sizeof(SHELLEXECUTEINFOA);
 	sinfo.fMask        = SEE_MASK_NOCLOSEPROCESS;
 	sinfo.lpFile       = cmd;
 	sinfo.lpParameters = argList;
 	sinfo.lpVerb       = "open";
 	sinfo.nShow        = SW_SHOWMAXIMIZED;
-	if ( !ShellExecuteEx(&sinfo) ) {
+	if ( !ShellExecuteExA(&sinfo) ) {
 		sinfo.lpVerb = "runas";
-		ShellExecuteEx(&sinfo);
+		ShellExecuteExA(&sinfo);
 	}
 #else
 #warning LV: Subprocesses not implemented on this OS.
@@ -606,7 +606,7 @@ void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
 void PlatformOpenURL(const char* url)
 {
 #ifdef _WIN32
-	ShellExecute(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
+	ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
 #else
 #warning LV: URL opening not implemented on this OS.
 	// TODO(LV): Implement URL opening for other OSes.

@@ -52,6 +52,8 @@
 ** fileSize = searchHandle:GetFileSize()
 ** modified, date, time = searchHande:GetFileModifiedTime()
 **
+** provider, version, status = GetCloudProvider(path)
+**
 ** SetWindowTitle("<title>")
 ** x, y = GetCursorPos()
 ** SetCursorPos(x, y)
@@ -644,6 +646,96 @@ static int l_searchHandleGetFileModifiedTime(lua_State* L)
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "GetFileModifiedTime", true);
 	lua_pushnumber(L, (double)searchHandle->find->modified);
 	return 1;
+}
+
+// ===================
+// Cloud provider info
+// ===================
+
+struct CloudProviderInfo {
+	std::string name;
+	std::string version;
+	uint32_t status;
+};
+
+#ifdef _WIN32
+#include <Windows.h>
+#include <cfapi.h>
+
+static std::string NarrowString(std::wstring_view ws) {
+	auto cb = WideCharToMultiByte(CP_UTF8, 0, ws.data(), ws.size(), nullptr, 0, nullptr, nullptr);
+	std::string ret(cb, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, ws.data(), ws.size(), ret.data(), ret.size(), nullptr, nullptr);
+	return ret;
+}
+
+struct CloudProviderLibrary {
+	CloudProviderLibrary() {
+		cldLib = LoadLibraryW(L"cldapi.dll");
+		if (cldLib != nullptr) {
+			CfGetSyncRootInfoByPath = (decltype (CfGetSyncRootInfoByPath))GetProcAddress(cldLib, "CfGetSyncRootInfoByPath");
+		}
+	}
+
+	~CloudProviderLibrary() {
+		FreeLibrary(cldLib);
+	}
+
+	bool Loaded() const { return cldLib != nullptr && CfGetSyncRootInfoByPath != nullptr; }
+
+	CloudProviderLibrary(CloudProviderLibrary const&) = delete;
+	CloudProviderLibrary& operator = (CloudProviderLibrary const&) = delete;
+
+	decltype (&::CfGetSyncRootInfoByPath) CfGetSyncRootInfoByPath{};
+
+	HMODULE cldLib{};
+};
+
+static std::optional<CloudProviderInfo> GetCloudProviderInfo(std::filesystem::path const& path) {
+	HRESULT hr{ S_OK };
+	DWORD len{};
+	static std::vector<char> buf(65536);
+	static CloudProviderLibrary lib;
+	if (!lib.Loaded()) {
+		return {};
+	}
+	hr = lib.CfGetSyncRootInfoByPath(path.generic_wstring().c_str(), CF_SYNC_ROOT_INFO_PROVIDER, buf.data(), buf.size(), &len);
+	if (FAILED(hr) && GetLastError() != ERROR_MORE_DATA) {
+		return {};
+	}
+	auto* syncRootInfo = (CF_SYNC_ROOT_PROVIDER_INFO const*)buf.data();
+	buf.resize(len);
+	hr = lib.CfGetSyncRootInfoByPath(path.c_str(), CF_SYNC_ROOT_INFO_PROVIDER, buf.data(), len, &len);
+	if (FAILED(hr)) {
+		return {};
+	}
+	CloudProviderInfo ret{};
+	ret.name = NarrowString(syncRootInfo->ProviderName);
+	ret.version = NarrowString(syncRootInfo->ProviderVersion);
+	ret.status = syncRootInfo->ProviderStatus;
+	return ret;
+}
+#else
+static std::optional<CloudProviderInfo> GetCloudProviderInfo(std::filesystem::path const& path) {
+	return {};
+}
+#endif
+
+static int l_GetCloudProvider(lua_State* L) {
+	ui_main_c* ui = GetUIPtr(L);
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: GetCloudProvider(path)");
+	ui->LAssert(L, lua_isstring(L, 1), "GetCloudProvider() argument 1: expected string, got %s", luaL_typename(L, 1));
+
+	auto info = GetCloudProviderInfo(lua_tostring(L, 1));
+	if (info) {
+		lua_pushstring(L, info->name.c_str());
+		lua_pushstring(L, info->version.c_str());
+		lua_pushinteger(L, info->status);
+		return 3;
+	}
+
+	return 0;
 }
 
 // =================
@@ -1287,6 +1379,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	lua_setfield(L, LUA_REGISTRYINDEX, "uisearchhandlemeta");
 
 	// General function
+	ADDFUNC(GetCloudProvider);
 	ADDFUNC(SetWindowTitle);
 	ADDFUNC(GetCursorPos);
 	ADDFUNC(SetCursorPos);
