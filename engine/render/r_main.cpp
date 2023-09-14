@@ -329,6 +329,10 @@ void r_layer_c::Render()
 			}
 			return std::less<r_tex_c const*>{}(tex, rhs.tex);
 		}
+
+		bool operator == (BatchKey const& rhs) const {
+			return !(*this < rhs) && !(rhs < *this);
+		}
 	};
 
 	if (renderer->glPushGroupMarkerEXT)
@@ -873,6 +877,23 @@ static int layerCompFunc(const void* va, const void* vb)
 
 void r_renderer_c::EndFrame()
 {
+	static bool showDemo = false;
+	if (debugImGui) {
+		if (ImGui::Begin("Debug Hub", &debugImGui)) {
+			if (ImGui::Button("Demo")) {
+				showDemo = true;
+			}
+			if (ImGui::Button("Layers")) {
+				debugLayers = true;
+			}
+		}
+		ImGui::End();
+	}
+
+	if (showDemo) {
+		ImGui::ShowDemoWindow(&showDemo);
+	}
+
 	r_layer_c** layerSort = new r_layer_c * [numLayer];
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l] = layerList[l];
@@ -895,6 +916,40 @@ void r_renderer_c::EndFrame()
 		DrawColor(0xAF000000);
 		DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f, w, 16);
 		DrawStringFormat(0, VirtualScreenHeight() - 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
+	}
+	if (debugLayers) {
+		if (ImGui::Begin("Layers", &debugLayers)) {
+			ImGui::Text("Layers: %d", numLayer);
+			int curOpt = r_layerOptimize->intVal;
+			if (ImGui::SliderInt("Optimization", &curOpt, r_layerOptimize->min, r_layerOptimize->max, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput)) {
+				if (curOpt != r_layerOptimize->intVal) {
+					r_layerOptimize->Set(curOpt);
+				}
+			}
+			int totalCmd{};
+			if (ImGui::BeginTable("Layer stats", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
+				ImGui::TableSetupColumn("Index");
+				ImGui::TableSetupColumn("Layer");
+				ImGui::TableSetupColumn("Sublayer");
+				ImGui::TableSetupColumn("Command count");
+				ImGui::TableHeadersRow();
+				for (int l = 0; l < numLayer; ++l) {
+					auto layer = layerSort[l];
+					totalCmd += layer->numCmd;
+					ImGui::TableNextRow();
+					ImGui::TableNextColumn();
+					ImGui::Text("%d", l);
+					ImGui::TableNextColumn();
+					ImGui::Text("%d", layer->layer);
+					ImGui::TableNextColumn();
+					ImGui::Text("%d", layer->subLayer);
+					ImGui::TableNextColumn();
+					ImGui::Text("%d", layer->numCmd);
+				}
+				ImGui::EndTable();
+			}
+		}
+		ImGui::End();
 	}
 	for (int l = 0; l < numLayer; l++) {
 		layerSort[l]->Render();
@@ -1236,6 +1291,14 @@ int r_renderer_c::VirtualMap(int properValue) {
 
 int r_renderer_c::VirtualUnmap(int mappedValue) {
 	return (int)(mappedValue * VirtualScreenScaleFactor());
+}
+
+// =====
+// Debug
+// =====
+
+void r_renderer_c::ToggleDebugImGui() {
+	debugImGui = !debugImGui;
 }
 
 // ===========

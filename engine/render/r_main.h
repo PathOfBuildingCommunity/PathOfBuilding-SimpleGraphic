@@ -88,6 +88,8 @@ public:
 	int		VirtualMap(int properValue);
 	int		VirtualUnmap(int mappedValue);
 
+	void	ToggleDebugImGui();
+
 	// Encapsulated
 	r_renderer_c(sys_IMain* sysHnd);
 
@@ -153,6 +155,9 @@ public:
 	};
 
 	RenderTarget rttMain;
+
+	bool	debugImGui = true;
+	bool	debugLayers = true;
 
 	int		takeScreenshot = 0;
 	void	DoScreenshot(image_c* i, const char* ext);

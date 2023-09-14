@@ -91,5 +91,7 @@ public:
 	virtual int		VirtualScreenHeight() = 0;
 	virtual float	VirtualScreenScaleFactor() = 0;
 	virtual int		VirtualMap(int properValue) = 0;
-	virtual int		VirtualUnmap(int mappedValue) =0;
+	virtual int		VirtualUnmap(int mappedValue) = 0;
+	
+	virtual void	ToggleDebugImGui() = 0;
 };

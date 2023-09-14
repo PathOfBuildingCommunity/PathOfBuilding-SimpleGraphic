@@ -245,6 +245,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetCursorPosCallback(wnd, [](GLFWwindow* wnd, double x, double y) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (ImGui::GetIO().WantCaptureMouse) {
+				return;
+			}
 			auto video = (sys_video_c*)sys->video;
 			video->lastCursorPos = CursorPos{(int)x, (int)y};
 		});
@@ -353,6 +356,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		});
 		glfwSetScrollCallback(wnd, [](GLFWwindow* wnd, double xoffset, double yoffset) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			if (ImGui::GetIO().WantCaptureMouse) {
+				return;
+			}
 			if (yoffset > 0) {
 				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYDOWN);
 				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYUP);

@@ -9,7 +9,7 @@ endif ()
 
 if (MSVC)
 	add_compile_options("/Zi")
-	add_link_options("/DEBUG")
+	add_link_options("/DEBUG:FULL")
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
