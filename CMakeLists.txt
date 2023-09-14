@@ -104,6 +104,7 @@ find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJit REQUIRED)
 find_package(re2 CONFIG REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -182,6 +183,7 @@ target_link_libraries(SimpleGraphic
     imgui
     ${LUAJIT_LIBRARIES}
     re2::re2
+    unofficial-sodium::sodium
     Threads::Threads
     ZLIB::ZLIB
 )

@@ -10,6 +10,7 @@
     "libjpeg-turbo",
     "liblzma",
     "libpng",
+	"libsodium",
     "luajit",
     "pkgconf",
     "re2",

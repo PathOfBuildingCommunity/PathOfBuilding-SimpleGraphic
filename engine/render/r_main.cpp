@@ -7,10 +7,12 @@
 #define GLAD_GLES2_IMPLEMENTATION
 #include "r_local.h"
 
+#include <array>
 #include <fmt/chrono.h>
 #include <map>
 #include <numeric>
 #include <random>
+#include <sodium.h>
 #include <sstream>
 #include <vector>
 
@@ -424,9 +426,6 @@ void r_layer_c::Render()
 	bool showStats{};
 	if (renderer->debugLayers) {
 		if (ImGui::Begin("Layers", &renderer->debugLayers)) {
-			GLint maxTextureUnits{};
-			glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
-			ImGui::Text("Max texture units: %d", maxTextureUnits);
 			ImGui::BulletText("Layer %d:%d - %d batches", layer, subLayer, numBatches);
 			std::string heading = fmt::format("Layer {}:{}", layer, subLayer);
 			showStats = ImGui::CollapsingHeader(heading.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
@@ -509,6 +508,19 @@ void r_layer_c::Render()
 	}
 }
 
+void r_layer_c::Discard()
+{
+	for (int i = 0; i < numCmd; i++) {
+		r_layerCmd_s* cmd = cmdList[i];
+		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
+			renderer->layerCmdBinSize <<= 1;
+			trealloc(renderer->layerCmdBin, renderer->layerCmdBinSize);
+		}
+		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
+	}
+	numCmd = 0;
+}
+
 // =====================
 // r_IRenderer Interface
 // =====================
@@ -531,6 +543,7 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 	r_layerDebug = sys->con->Cvar_Add("r_layerDebug", CV_ARCHIVE, "0");
 	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "0", 0, 2);
 	r_layerShuffle = sys->con->Cvar_Add("r_layerShuffle", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
+	r_elideFrames = sys->con->Cvar_Add("r_elideFrames", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
 
 	Cmd_Add("screenshot", 0, "[<format>]", this, &r_renderer_c::C_Screenshot);
 }
@@ -884,9 +897,6 @@ void r_renderer_c::BeginFrame()
 		}
 	}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-
 	curLayer = layerList[0];
 
 	SetViewport();
@@ -909,6 +919,22 @@ static int layerCompFunc(const void* va, const void* vb)
 	}
 	else {
 		return 1;
+	}
+}
+
+void CVarSliderInt(char const* label, conVar_c* cvar) {
+	int curOpt = cvar->intVal;
+	if (ImGui::SliderInt(label, &curOpt, cvar->min, cvar->max, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput)) {
+		if (curOpt != cvar->intVal) {
+			cvar->Set(curOpt);
+		}
+	}
+}
+
+void CVarCheckbox(char const* label, conVar_c* cvar) {
+	bool checked = cvar->intVal == 1;
+	if (ImGui::Checkbox(label, &checked)) {
+		cvar->intVal = +checked;
 	}
 }
 
@@ -957,12 +983,10 @@ void r_renderer_c::EndFrame()
 	if (debugLayers) {
 		if (ImGui::Begin("Layers", &debugLayers)) {
 			ImGui::Text("Layers: %d", numLayer);
-			int curOpt = r_layerOptimize->intVal;
-			if (ImGui::SliderInt("Optimization", &curOpt, r_layerOptimize->min, r_layerOptimize->max, "%d", ImGuiSliderFlags_AlwaysClamp | ImGuiSliderFlags_NoInput)) {
-				if (curOpt != r_layerOptimize->intVal) {
-					r_layerOptimize->Set(curOpt);
-				}
-			}
+			ImGui::Text("%d out of %d frames drawn, %d saved.", drawnFrames, totalFrames, savedFrames);
+			CVarSliderInt("Optimization", r_layerOptimize);
+			CVarCheckbox("Elide identical frames", r_elideFrames);
+
 			int totalCmd{};
 			if (ImGui::BeginTable("Layer stats", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
 				ImGui::TableSetupColumn("Index");
@@ -988,8 +1012,74 @@ void r_renderer_c::EndFrame()
 		}
 		ImGui::End();
 	}
-	for (int l = 0; l < numLayer; l++) {
-		layerSort[l]->Render();
+
+	if (elideFrames != !!r_elideFrames->intVal) {
+		elideFrames = !!r_elideFrames->intVal;
+		lastFrameHash.clear();
+	}
+
+	std::vector<uint8_t> commandDigest(crypto_shorthash_bytes());
+	if (elideFrames) {
+		{
+			std::vector<char> commandBytes;
+			commandBytes.reserve(1ull << 24);
+			auto hash_primitive = [&](auto& x) {
+				auto p = (uint8_t const*)&x;
+				commandBytes.insert(commandBytes.end(), p, p + sizeof(x));
+				};
+			for (auto lIdx = 0; lIdx < numLayer; ++lIdx) {
+				auto layer = layerSort[lIdx];
+				hash_primitive(layer->layer);
+				hash_primitive(layer->subLayer);
+				for (auto cIdx = 0; cIdx < layer->numCmd; ++cIdx) {
+					auto cmd = layer->cmdList[cIdx];
+					hash_primitive(cmd->cmd);
+					switch (cmd->cmd) {
+					case r_layerCmd_s::VIEWPORT: {
+						hash_primitive(cmd->viewport);
+					} break;
+					case r_layerCmd_s::BLEND: {
+						hash_primitive(cmd->blendMode);
+					} break;
+					case r_layerCmd_s::BIND: {
+						// not safe around handle/ID reuse but probably good enough
+						hash_primitive(cmd->tex);
+						hash_primitive(cmd->tex->texId);
+						auto status = cmd->tex->status.load();
+						hash_primitive(status);
+					} break;
+					case r_layerCmd_s::COLOR: {
+						for (auto comp : cmd->col) {
+							hash_primitive(comp);
+						}
+					} break;
+					case r_layerCmd_s::QUAD: {
+						hash_primitive(cmd->quad);
+					} break;
+					}
+				}
+			}
+			static std::vector<uint8_t> const commandKey(crypto_shorthash_keybytes());
+			crypto_shorthash((unsigned char*)commandDigest.data(), (unsigned char const*)commandBytes.data(), commandBytes.size(), (unsigned char const*)commandKey.data());
+		}
+	}
+
+	++totalFrames;
+	if (!elideFrames || lastFrameHash != commandDigest) {
+		lastFrameHash = commandDigest;
+		++drawnFrames;
+
+		glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		for (int l = 0; l < numLayer; l++) {
+			layerSort[l]->Render();
+		}
+	}
+	else {
+		++savedFrames;
+		for (int l = 0; l < numLayer; l++) {
+			layerSort[l]->Discard();
+		}
 	}
 	delete[] layerSort;
 

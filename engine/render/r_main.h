@@ -10,6 +10,7 @@
 
 #define R_MAXSHADERS 65536
 
+#include <array>
 #include <imgui.h>
 
 // =======
@@ -43,6 +44,7 @@ public:
 	void	Color(col4_t col);
 	void	Quad(double s0, double t0, double x0, double y0, double s1, double t1, double x1, double y1, double s2, double t2, double x2, double y2, double s3, double t3, double x3, double y3);
 	void	Render();
+	void    Discard();
 
 private:
 	r_renderer_c* renderer;
@@ -117,6 +119,7 @@ public:
 	conVar_c*	r_layerDebug = nullptr;
 	conVar_c*   r_layerOptimize = nullptr;
 	conVar_c*   r_layerShuffle = nullptr;
+	conVar_c*	r_elideFrames = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
 
@@ -156,6 +159,13 @@ public:
 
 	RenderTarget rttMain;
 
+	std::vector<uint8_t> lastFrameHash{};
+
+	uint64_t totalFrames{};
+	uint64_t drawnFrames{};
+	uint64_t savedFrames{};
+
+	bool	elideFrames = false;
 	bool	debugImGui = true;
 	bool	debugLayers = true;
 

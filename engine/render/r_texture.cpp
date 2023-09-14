@@ -109,7 +109,7 @@ t_manager_c::~t_manager_c()
 int t_manager_c::GetAsyncCount()
 {
 	std::lock_guard<std::mutex> lock ( mutex );
-	return textureQueue.size();
+	return (int)textureQueue.size();
 }
 
 bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
