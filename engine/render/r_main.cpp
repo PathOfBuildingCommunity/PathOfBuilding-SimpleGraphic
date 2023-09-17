@@ -237,10 +237,9 @@ struct Batch {
 	GLint uvAttr;
 	GLint tintAttr;
 
-	GLuint vbo;
 	std::vector<Vertex> vertices;
 
-	void Execute();
+	void Execute(GLuint sharedVbo, size_t vertexBase);
 };
 
 Batch::Batch(GLuint prog)
@@ -249,7 +248,6 @@ Batch::Batch(GLuint prog)
 	xyAttr = glGetAttribLocation(prog, "a_vertex");
 	uvAttr = glGetAttribLocation(prog, "a_texcoord");
 	tintAttr = glGetAttribLocation(prog, "a_tint");
-	glGenBuffers(1, &vbo);
 }
 
 Batch::Batch(Batch&& rhs)
@@ -257,10 +255,8 @@ Batch::Batch(Batch&& rhs)
 	, xyAttr(rhs.xyAttr)
 	, uvAttr(rhs.uvAttr)
 	, tintAttr(rhs.tintAttr)
-	, vbo(rhs.vbo)
 	, vertices(std::move(rhs.vertices))
 {
-	rhs.vbo = 0;
 }
 
 Batch& Batch::operator = (Batch&& rhs) {
@@ -268,27 +264,24 @@ Batch& Batch::operator = (Batch&& rhs) {
 	xyAttr = rhs.xyAttr;
 	uvAttr = rhs.uvAttr;
 	tintAttr = rhs.tintAttr;
-	vbo = rhs.vbo;
 	vertices = std::move(rhs.vertices);
-	rhs.vbo = 0;
 
 	return *this;
 }
 
-Batch::~Batch() {
-	if (vbo) {
-		glDeleteBuffers(1, &vbo);
-	}
-}
+Batch::~Batch() {}
 
-void Batch::Execute()
+void Batch::Execute(GLuint sharedVbo, size_t vertexBase)
 {
 	if (vertices.empty()) {
 		return;
 	}
 
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex), vertices.data(), GL_STREAM_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, sharedVbo);
+	auto dataPtr = (uint8_t const*)vertices.data();
+	auto dataOff = vertexBase * sizeof(Vertex);
+	auto dataSize = vertices.size() * sizeof(Vertex);
+	glBufferSubData(GL_ARRAY_BUFFER, dataOff, dataSize, dataPtr);
 	glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, x));
 	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
 	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
@@ -352,6 +345,7 @@ void r_layer_c::Render()
 		glUniform1i(texLoc, 0);
 	}
 
+	size_t vertexCount = 0;
 	std::vector<Batch> batches;
 	std::vector<BatchKey> batchKeys;
 	std::map<BatchKey, size_t> batchIndices;
@@ -403,6 +397,7 @@ void r_layer_c::Render()
 			for (auto idx : indices) {
 				batch->vertices.push_back(quad[idx]);
 			}
+			vertexCount += std::size(indices);
 		} break;
 		case r_layerCmd_s::COLOR:
 			std::copy_n(cmd->col, 4, tint);
@@ -431,6 +426,13 @@ void r_layer_c::Render()
 			showStats = ImGui::CollapsingHeader(heading.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
 		}
 	}
+
+	GLuint sharedVbo{};
+	glGenBuffers(1, &sharedVbo);
+	glBindBuffer(GL_ARRAY_BUFFER, sharedVbo);
+	glBufferData(GL_ARRAY_BUFFER, vertexCount * sizeof(Vertex), nullptr, GL_STREAM_DRAW);
+
+	size_t vertexBase = 0;
 	for (int i = 0; i < numBatches; ++i) {
 		auto& batch = batches[batchPermutation[i]];
 		auto& key = batchKeys[batchPermutation[i]];
@@ -485,10 +487,12 @@ void r_layer_c::Render()
 			key.tex->Bind();
 		}
 
-		batch.Execute();
+		batch.Execute(sharedVbo, vertexBase);
+		vertexBase += batch.vertices.size();
 
 		lastKey = key;
 	}
+	glDeleteBuffers(1, &sharedVbo);
 	glUseProgram(0);
 	if (renderer->debugLayers) {
 		ImGui::End();
