@@ -222,6 +222,7 @@ struct Vertex {
 	float x, y;
 	float u, v;
 	float r, g, b, a;
+	float viewX, viewY, viewW, viewH;
 	float texId;
 };
 
@@ -238,6 +239,7 @@ struct Batch {
 	GLint uvAttr;
 	GLint tintAttr;
 	GLint texIdAttr;
+	GLint viewportAttr;
 
 	std::vector<Vertex> vertices;
 
@@ -251,6 +253,7 @@ Batch::Batch(GLuint prog)
 	uvAttr = glGetAttribLocation(prog, "a_texcoord");
 	tintAttr = glGetAttribLocation(prog, "a_tint");
 	texIdAttr = glGetAttribLocation(prog, "a_texId");
+	viewportAttr = glGetAttribLocation(prog, "a_viewport");
 }
 
 Batch::Batch(Batch&& rhs)
@@ -258,6 +261,7 @@ Batch::Batch(Batch&& rhs)
 	, xyAttr(rhs.xyAttr)
 	, uvAttr(rhs.uvAttr)
 	, tintAttr(rhs.tintAttr)
+	, viewportAttr(rhs.viewportAttr)
 	, vertices(std::move(rhs.vertices))
 {
 }
@@ -267,6 +271,8 @@ Batch& Batch::operator = (Batch&& rhs) {
 	xyAttr = rhs.xyAttr;
 	uvAttr = rhs.uvAttr;
 	tintAttr = rhs.tintAttr;
+	texIdAttr = rhs.texIdAttr;
+	viewportAttr = rhs.viewportAttr;
 	vertices = std::move(rhs.vertices);
 
 	return *this;
@@ -289,15 +295,18 @@ void Batch::Execute(GLuint sharedVbo, size_t vertexBase)
 	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
 	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
 	glVertexAttribPointer(texIdAttr, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, texId));
+	glVertexAttribPointer(viewportAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, viewX));
 	glEnableVertexAttribArray(xyAttr);
 	glEnableVertexAttribArray(uvAttr);
 	glEnableVertexAttribArray(tintAttr);
 	glEnableVertexAttribArray(texIdAttr);
+	glEnableVertexAttribArray(viewportAttr);
 	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertices.size());
 	glDisableVertexAttribArray(xyAttr);
 	glDisableVertexAttribArray(uvAttr);
 	glDisableVertexAttribArray(tintAttr);
 	glDisableVertexAttribArray(texIdAttr);
+	glDisableVertexAttribArray(viewportAttr);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	vertices.clear();
 }
@@ -340,22 +349,9 @@ struct AdjacentMergeStrategy : RenderStrategy {
 	}
 
 	struct BatchKey {
-		r_viewport_s viewport = { -1, -1, -1, -1 };
 		int blendMode = -1;
 
 		bool operator < (BatchKey const& rhs) const {
-			if (viewport.x != rhs.viewport.x) {
-				return viewport.x < rhs.viewport.x;
-			}
-			if (viewport.y != rhs.viewport.y) {
-				return viewport.y < rhs.viewport.y;
-			}
-			if (viewport.width != rhs.viewport.width) {
-				return viewport.width < rhs.viewport.width;
-			}
-			if (viewport.height != rhs.viewport.height) {
-				return viewport.height < rhs.viewport.height;
-			}
 			return blendMode < rhs.blendMode;
 		}
 
@@ -371,7 +367,7 @@ struct AdjacentMergeStrategy : RenderStrategy {
 	void ProcessCommand(r_layerCmd_s* cmd) override {
 		switch (cmd->cmd) {
 		case r_layerCmd_s::VIEWPORT:
-			latchKey_.viewport = cmd->viewport;
+			nextViewport_ = cmd->viewport;
 			if (showStats_) {
 				// ImGui::Text("VIEWPORT: %dx%d @ %d,%d", cmd->viewport.width, cmd->viewport.height, cmd->viewport.x, cmd->viewport.y);
 			}
@@ -421,15 +417,21 @@ struct AdjacentMergeStrategy : RenderStrategy {
 
 			Vertex quad[4];
 			for (int v = 0; v < 4; v++) {
-				quad[v].u = (float)cmd->quad.s[v];
-				quad[v].v = (float)cmd->quad.t[v];
-				quad[v].x = (float)cmd->quad.x[v];
-				quad[v].y = (float)cmd->quad.y[v];
-				quad[v].r = tint_[0];
-				quad[v].g = tint_[1];
-				quad[v].b = tint_[2];
-				quad[v].a = tint_[3];
-				quad[v].texId = (float)texSlot;
+				auto& q = quad[v];
+				auto& vp = nextViewport_;
+				q.u = (float)cmd->quad.s[v];
+				q.v = (float)cmd->quad.t[v];
+				q.x = (float)cmd->quad.x[v];
+				q.y = (float)cmd->quad.y[v];
+				q.r = tint_[0];
+				q.g = tint_[1];
+				q.b = tint_[2];
+				q.a = tint_[3];
+				q.texId = (float)texSlot;
+				q.viewX = (float)vp.x;
+				q.viewY = (float)vp.y;
+				q.viewW = (float)vp.width;
+				q.viewH = (float)vp.height;
 			}
 			// 3-2
 			// |/|
@@ -468,23 +470,15 @@ private:
 			ImGui::Text("Batch %d", batchIndex);
 			ImGui::Text("%d verts", batch.vertices.size());
 		}
-		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
-			lastKey->viewport.width != key.viewport.width || lastKey->viewport.height != key.viewport.height)
+
 		{
-			if (showStats_) {
-				ImGui::Text("New viewport %dx%d @ %d,%d",
-					key.viewport.width, key.viewport.height, key.viewport.x, key.viewport.y);
-			}
 			auto& vid = renderer_->sys->video->vid;
 			float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
 			float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
+			int virtualW = renderer_->VirtualScreenWidth();
 			int virtualH = renderer_->VirtualScreenHeight();
-			float x = key.viewport.x * fbScaleX;
-			float y = (virtualH - key.viewport.y - key.viewport.height) * fbScaleY;
-			float width = key.viewport.width * fbScaleX;
-			float height = key.viewport.height * fbScaleY;
-			glViewport((int)x, (int)y, (int)width, (int)height);
-			Mat4 mvpMatrix = OrthoMatrix(0, key.viewport.width, key.viewport.height, 0, -9999, 9999);
+			glViewport(0, 0, virtualW, virtualH);
+			Mat4 mvpMatrix = OrthoMatrix(0, virtualW, virtualH, 0, -9999, 9999);
 			glUniformMatrix4fv(mvpMatrixLoc_, 1, GL_FALSE, mvpMatrix.data());
 		}
 		if (!lastKey || lastKey->blendMode != key.blendMode) {
@@ -552,6 +546,7 @@ private:
 	};
 
 	BatchKey latchKey_{};
+	r_viewport_s nextViewport_{};
 	r_tex_c* nextTex_{};
 	std::optional<BatchKey> lastDispatchKey_;
 	TexturedBatch batch_;
@@ -645,7 +640,7 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 	r_compress = sys->con->Cvar_Add("r_compress", CV_ARCHIVE, "0");
 	r_screenshotFormat = sys->con->Cvar_Add("r_screenshotFormat", CV_ARCHIVE, "jpg");
 	r_layerDebug = sys->con->Cvar_Add("r_layerDebug", CV_ARCHIVE, "0");
-	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "0", 0, 2);
+	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
 	r_layerShuffle = sys->con->Cvar_Add("r_layerShuffle", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
 	r_elideFrames = sys->con->Cvar_Add("r_elideFrames", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
 
@@ -692,17 +687,27 @@ attribute vec2 a_vertex;
 attribute vec2 a_texcoord;
 attribute vec4 a_tint;
 attribute float a_texId;
+attribute vec4 a_viewport;
 
+varying vec2 v_screenPos;
 varying vec2 v_texcoord;
 varying vec4 v_tint;
 varying float v_texId;
+varying vec4 v_viewport;
 
 void main(void)
 {
 	v_texcoord = a_texcoord;
 	v_tint = a_tint;
 	v_texId = a_texId;
-	gl_Position = mvp_matrix * vec4(a_vertex, 0.0, 1.0);
+	vec2 vp0 = a_viewport.xy + vec2(0.0, a_viewport.w);
+	vec2 vp1 = a_viewport.xy + vec2(a_viewport.z, 0.0);
+	v_viewport = vec4(
+		(mvp_matrix * vec4(vp0, 0.0, 1.0)).xy,
+		(mvp_matrix * vec4(vp1, 0.0, 1.0)).xy);
+	vec4 pos = mvp_matrix * vec4(a_vertex + a_viewport.xy, 0.0, 1.0);
+	v_screenPos = pos.xy;
+	gl_Position = pos;
 }
 )";
 
@@ -712,12 +717,21 @@ precision mediump float;
 uniform sampler2D s_tex[{SG_TEXTURE_COUNT}];
 uniform vec4 i_tint;
 
+varying vec2 v_screenPos;
 varying vec2 v_texcoord;
 varying vec4 v_tint;
 varying float v_texId;
+varying vec4 v_viewport; // x0, y0, x1, y1
 
 void main(void)
 {{
+	float x = v_screenPos[0], y = v_screenPos[1];
+	if (x < v_viewport[0] ||
+	    y < v_viewport[1] ||
+	    x >= v_viewport[2] ||
+	    y >= v_viewport[3]) {{
+		discard;
+	}}
 	vec4 color;
 	{SG_TEXTURE_SWITCH}
 	gl_FragColor = color * v_tint;
