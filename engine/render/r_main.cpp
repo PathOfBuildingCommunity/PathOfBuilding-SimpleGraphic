@@ -222,6 +222,7 @@ struct Vertex {
 	float x, y;
 	float u, v;
 	float r, g, b, a;
+	float texId;
 };
 
 struct Batch {
@@ -236,6 +237,7 @@ struct Batch {
 	GLint xyAttr;
 	GLint uvAttr;
 	GLint tintAttr;
+	GLint texIdAttr;
 
 	std::vector<Vertex> vertices;
 
@@ -248,6 +250,7 @@ Batch::Batch(GLuint prog)
 	xyAttr = glGetAttribLocation(prog, "a_vertex");
 	uvAttr = glGetAttribLocation(prog, "a_texcoord");
 	tintAttr = glGetAttribLocation(prog, "a_tint");
+	texIdAttr = glGetAttribLocation(prog, "a_texId");
 }
 
 Batch::Batch(Batch&& rhs)
@@ -285,26 +288,60 @@ void Batch::Execute(GLuint sharedVbo, size_t vertexBase)
 	glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, x));
 	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
 	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
+	glVertexAttribPointer(texIdAttr, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, texId));
 	glEnableVertexAttribArray(xyAttr);
 	glEnableVertexAttribArray(uvAttr);
 	glEnableVertexAttribArray(tintAttr);
+	glEnableVertexAttribArray(texIdAttr);
 	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertices.size());
 	glDisableVertexAttribArray(xyAttr);
 	glDisableVertexAttribArray(uvAttr);
 	glDisableVertexAttribArray(tintAttr);
+	glDisableVertexAttribArray(texIdAttr);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	vertices.clear();
 }
 
-void r_layer_c::Render()
-{
-	int const optLevel = renderer->r_layerOptimize->intVal;
-	bool const shuffle = renderer->r_layerShuffle->intVal == 1;
+struct RenderStrategy {
+	virtual ~RenderStrategy() = default;
+
+	virtual void ProcessCommand(r_layerCmd_s* cmd) = 0;
+	virtual void Flush() = 0;
+	virtual void SetShowStats(bool showStats) { showStats_ = showStats; }
+
+protected:
+	bool showStats_{};
+};
+
+static std::map<r_blendMode_e, char const*> const s_blendModeString{
+	{RB_ALPHA, "RB_ALPHA"},
+	{RB_PRE_ALPHA, "RB_PRE_ALPHA"},
+	{RB_ADDITIVE, "RB_ADDITIVE"},
+};
+
+struct AdjacentMergeStrategy : RenderStrategy {
+	AdjacentMergeStrategy(r_layer_c* layer, r_renderer_c* renderer, GLuint prog)
+		: layer_(layer), renderer_(renderer), prog_(prog), batch_(prog)
+	{
+		for (size_t i = 0;; ++i) {
+			GLint loc = glGetUniformLocation(prog, fmt::format("s_tex[{}]", i).c_str());
+			if (loc == -1) {
+				break;
+			}
+			texLocs_.push_back(loc);
+		}
+		mvpMatrixLoc_ = glGetUniformLocation(prog_, "mvp_matrix");
+		batchTextureCap_ = texLocs_.size();
+		glGenBuffers(1, &vbo_);
+	}
+
+	~AdjacentMergeStrategy() {
+		glDeleteBuffers(1, &vbo_);
+	}
 
 	struct BatchKey {
 		r_viewport_s viewport = { -1, -1, -1, -1 };
 		int blendMode = -1;
-		r_tex_c* tex = NULL;
 
 		bool operator < (BatchKey const& rhs) const {
 			if (viewport.x != rhs.viewport.x) {
@@ -319,154 +356,140 @@ void r_layer_c::Render()
 			if (viewport.height != rhs.viewport.height) {
 				return viewport.height < rhs.viewport.height;
 			}
-			if (blendMode != rhs.blendMode) {
-				return blendMode < rhs.blendMode;
-			}
-			return std::less<r_tex_c const*>{}(tex, rhs.tex);
+			return blendMode < rhs.blendMode;
 		}
 
 		bool operator == (BatchKey const& rhs) const {
 			return !(*this < rhs) && !(rhs < *this);
 		}
+
+		bool operator != (BatchKey const& rhs) const {
+			return !(*this == rhs);
+		}
 	};
 
-	if (renderer->glPushGroupMarkerEXT)
-	{
-		std::ostringstream oss;
-		oss << "Layer " << layer << ", sub-layer " << subLayer;
-		renderer->glPushGroupMarkerEXT(0, oss.str().c_str());
-	}
-	BatchKey currentKey{};
-	GLuint prog = renderer->tintedTextureProgram;
-	float tint[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
-	glUseProgram(prog);
-	{
-		GLint texLoc = glGetUniformLocation(prog, "t_tex");
-		glUniform1i(texLoc, 0);
-	}
-
-	size_t vertexCount = 0;
-	std::vector<Batch> batches;
-	std::vector<BatchKey> batchKeys;
-	std::map<BatchKey, size_t> batchIndices;
-
-	for (int i = 0; i < numCmd; i++) {
-		r_layerCmd_s* cmd = cmdList[i];
+	void ProcessCommand(r_layerCmd_s* cmd) override {
 		switch (cmd->cmd) {
 		case r_layerCmd_s::VIEWPORT:
-			currentKey.viewport = cmd->viewport;
+			latchKey_.viewport = cmd->viewport;
+			if (showStats_) {
+				// ImGui::Text("VIEWPORT: %dx%d @ %d,%d", cmd->viewport.width, cmd->viewport.height, cmd->viewport.x, cmd->viewport.y);
+			}
 			break;
 		case r_layerCmd_s::BLEND:
-			currentKey.blendMode = cmd->blendMode;
+			latchKey_.blendMode = cmd->blendMode;
+			if (showStats_) {
+				// ImGui::Text("BLEND: %s", s_blendModeString.at((r_blendMode_e)cmd->blendMode));
+			}
 			break;
 		case r_layerCmd_s::BIND:
-			currentKey.tex = cmd->tex;
+			nextTex_ = cmd->tex;
+			if (showStats_) {
+				// ImGui::Text("TEX: %s", cmd->tex->fileName.c_str());
+			}
+			break;
+		case r_layerCmd_s::COLOR:
+			std::copy_n(cmd->col, 4, tint_.data());
 			break;
 		case r_layerCmd_s::QUAD: {
-			Batch* batch{};
-			auto I = batchIndices.find(currentKey);
-			if (I != batchIndices.end() && optLevel == 1 && I->second == batches.size() - 1) {
-				// Append to last batch if it matches our key.
-				batch = &batches[I->second];
+			if (showStats_) {
+				// ImGui::Text("QUAD");
 			}
-			else if (I != batchIndices.end() && optLevel == 2) {
-				// Fill earlier batches, even if it leads to order problems.
-				batch = &batches[I->second];
+
+			// If the current batch is incompatible key-wise, dispatch it to get a fresh
+			// batch to grow in.
+			if (!batch_.batch.vertices.empty() && batch_.key != latchKey_) {
+				Dispatch();
 			}
-			else {
-				batchIndices.insert_or_assign(I, currentKey, batches.size());
-				batchKeys.push_back(currentKey);
-				batches.emplace_back(prog);
-				batch = &batches.back();
+			batch_.key = latchKey_;
+
+			// Check current (and only) batch if the texture set has the latched texture.
+			// If it's there, use its index as vertex attribute.
+			// If it's not, insert it if room, otherwise dispatch batch and prepare a fresh one.
+			size_t texSlot{};
+			{
+				auto& textures = batch_.textures;
+				auto texI = std::find(textures.begin(), textures.end(), nextTex_);
+				if (texI == textures.end()) {
+					if (textures.size() == batchTextureCap_) {
+						Dispatch();
+					}
+					texI = textures.insert(textures.end(), nextTex_);
+				}
+				texSlot = std::distance(textures.begin(), texI);
 			}
+
 			Vertex quad[4];
 			for (int v = 0; v < 4; v++) {
 				quad[v].u = (float)cmd->quad.s[v];
 				quad[v].v = (float)cmd->quad.t[v];
 				quad[v].x = (float)cmd->quad.x[v];
 				quad[v].y = (float)cmd->quad.y[v];
-				quad[v].r = tint[0];
-				quad[v].g = tint[1];
-				quad[v].b = tint[2];
-				quad[v].a = tint[3];
+				quad[v].r = tint_[0];
+				quad[v].g = tint_[1];
+				quad[v].b = tint_[2];
+				quad[v].a = tint_[3];
+				quad[v].texId = (float)texSlot;
 			}
 			// 3-2
 			// |/|
 			// 0-1
 			size_t indices[] = { 0, 1, 2, 0, 2, 3 };
 			for (auto idx : indices) {
-				batch->vertices.push_back(quad[idx]);
+				batch_.batch.vertices.push_back(quad[idx]);
 			}
-			vertexCount += std::size(indices);
+			totalVertexCount_ += std::size(indices);
 		} break;
-		case r_layerCmd_s::COLOR:
-			std::copy_n(cmd->col, 4, tint);
-			break;
 		}
 	}
 
-	std::optional<BatchKey> lastKey{};
-	int const numBatches = (int)batches.size();
-
-	std::vector<size_t> batchPermutation(numBatches);
-	{
-		static std::random_device rd;
-		static std::mt19937 g(rd());
-		std::iota(batchPermutation.begin(), batchPermutation.end(), 0);
-		if (shuffle) {
-			std::shuffle(batchPermutation.begin(), batchPermutation.end(), g);
+	void Flush() {
+		if (!batch_.batch.vertices.empty()) {
+			Dispatch();
+		}
+		if (showStats_) {
+			ImGui::BulletText("Layer %d:%d - %d batches", layer_->layer, layer_->subLayer, batchIndex);
 		}
 	}
 
-	bool showStats{};
-	if (renderer->debugLayers) {
-		if (ImGui::Begin("Layers", &renderer->debugLayers)) {
-			ImGui::BulletText("Layer %d:%d - %d batches", layer, subLayer, numBatches);
-			std::string heading = fmt::format("Layer {}:{}", layer, subLayer);
-			showStats = ImGui::CollapsingHeader(heading.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
-		}
-	}
+private:
+	void Dispatch() {
+		glBindBuffer(GL_ARRAY_BUFFER, vbo_);
+		auto& batch = batch_.batch;
+		auto& textures = batch_.textures;
+		size_t vertexCount = batch.vertices.size();
+		glBufferData(GL_ARRAY_BUFFER, vertexCount * sizeof(Vertex), nullptr, GL_STREAM_DRAW);
+		glUseProgram(prog_);
 
-	GLuint sharedVbo{};
-	glGenBuffers(1, &sharedVbo);
-	glBindBuffer(GL_ARRAY_BUFFER, sharedVbo);
-	glBufferData(GL_ARRAY_BUFFER, vertexCount * sizeof(Vertex), nullptr, GL_STREAM_DRAW);
+		auto& key = batch_.key;
+		auto& lastKey = lastDispatchKey_;
 
-	size_t vertexBase = 0;
-	for (int i = 0; i < numBatches; ++i) {
-		auto& batch = batches[batchPermutation[i]];
-		auto& key = batchKeys[batchPermutation[i]];
-		if (showStats) {
-			ImGui::Text("Batch %d", batchPermutation[i]);
+		if (showStats_) {
+			ImGui::Text("Batch %d", batchIndex);
 			ImGui::Text("%d verts", batch.vertices.size());
 		}
 		if (!lastKey || lastKey->viewport.x != key.viewport.x || lastKey->viewport.y != key.viewport.y ||
 			lastKey->viewport.width != key.viewport.width || lastKey->viewport.height != key.viewport.height)
 		{
-			if (showStats) {
-				ImGui::Text("New viewport %dx%d @ %d,%d", key.viewport.width, key.viewport.height, key.viewport.x, key.viewport.y);
+			if (showStats_) {
+				ImGui::Text("New viewport %dx%d @ %d,%d",
+					key.viewport.width, key.viewport.height, key.viewport.x, key.viewport.y);
 			}
-			auto& vid = renderer->sys->video->vid;
+			auto& vid = renderer_->sys->video->vid;
 			float fbScaleX = vid.fbSize[0] / (float)vid.size[0];
 			float fbScaleY = vid.fbSize[1] / (float)vid.size[1];
-			int virtualH = renderer->VirtualScreenHeight();
+			int virtualH = renderer_->VirtualScreenHeight();
 			float x = key.viewport.x * fbScaleX;
 			float y = (virtualH - key.viewport.y - key.viewport.height) * fbScaleY;
 			float width = key.viewport.width * fbScaleX;
 			float height = key.viewport.height * fbScaleY;
 			glViewport((int)x, (int)y, (int)width, (int)height);
 			Mat4 mvpMatrix = OrthoMatrix(0, key.viewport.width, key.viewport.height, 0, -9999, 9999);
-			GLint mvpMatrixLoc = glGetUniformLocation(prog, "mvp_matrix");
-			glUniformMatrix4fv(mvpMatrixLoc, 1, GL_FALSE, mvpMatrix.data());
+			glUniformMatrix4fv(mvpMatrixLoc_, 1, GL_FALSE, mvpMatrix.data());
 		}
 		if (!lastKey || lastKey->blendMode != key.blendMode) {
-			if (showStats) {
-				static std::map<r_blendMode_e, char const*> const blendModeString{
-					{RB_ALPHA, "RB_ALPHA"},
-					{RB_PRE_ALPHA, "RB_PRE_ALPHA"},
-					{RB_ADDITIVE, "RB_ADDITIVE"},
-				};
-				ImGui::Text("New blend mode %s", blendModeString.at((r_blendMode_e)key.blendMode));
+			if (showStats_) {
+				ImGui::Text("New blend mode %s", s_blendModeString.at((r_blendMode_e)key.blendMode));
 			}
 			switch (key.blendMode) {
 			case RB_ALPHA:
@@ -480,22 +503,99 @@ void r_layer_c::Render()
 				break;
 			}
 		}
-		if (!lastKey || lastKey->tex != key.tex) {
-			if (showStats) {
-				ImGui::Text("New tex %d (%s)", key.tex->texId, key.tex->fileName.c_str());
+		{
+			for (size_t i = 0, numTex = texLocs_.size(); i < numTex; ++i) {
+				glUniform1i(texLocs_[i], (GLint)i);
+				glActiveTexture((GLenum)(GL_TEXTURE0 + i));
+				if (i < textures.size()) {
+					auto tex = textures[i];
+					tex->Bind();
+					if (showStats_) {
+						ImGui::Text("New tex %d (%s)", tex->texId, tex->fileName.c_str());
+					}
+				}
+				else {
+					glBindTexture(GL_TEXTURE_2D, 0);
+				}
 			}
-			key.tex->Bind();
+			glActiveTexture(GL_TEXTURE0);
 		}
 
-		batch.Execute(sharedVbo, vertexBase);
-		vertexBase += batch.vertices.size();
+		batch.Execute(vbo_, 0);
 
-		lastKey = key;
+		lastDispatchKey_ = key;
+		batch_.batch.vertices.clear();
+		batch_.textures.clear();
+
+		glUseProgram(0);
+
+		batchIndex += 1;
 	}
-	glDeleteBuffers(1, &sharedVbo);
-	glUseProgram(0);
-	if (renderer->debugLayers) {
-		ImGui::End();
+
+	r_layer_c* layer_{};
+	r_renderer_c* renderer_{};
+	GLuint prog_{};
+	std::vector<GLint> texLocs_;
+	GLint mvpMatrixLoc_{};
+
+	size_t batchTextureCap_{};
+	GLuint vbo_{};
+
+	struct TexturedBatch {
+		explicit TexturedBatch(GLuint prog) : batch(prog) {
+			textures.reserve(1ull << 20);
+		}
+
+		BatchKey key{};
+		Batch batch;
+		std::vector<r_tex_c*> textures;
+	};
+
+	BatchKey latchKey_{};
+	r_tex_c* nextTex_{};
+	std::optional<BatchKey> lastDispatchKey_;
+	TexturedBatch batch_;
+
+	std::array<float, 4> tint_{ 1.0f, 1.0f, 1.0f, 1.0f };
+
+	size_t totalVertexCount_ = 0;
+	size_t batchIndex = 0;
+};
+
+void r_layer_c::Render()
+{
+	int const optLevel = renderer->r_layerOptimize->intVal;
+	bool const shuffle = renderer->r_layerShuffle->intVal == 1;
+
+	std::unique_ptr<RenderStrategy> strat(new AdjacentMergeStrategy(this, renderer, renderer->tintedTextureProgram));
+
+	if (renderer->glPushGroupMarkerEXT)
+	{
+		std::ostringstream oss;
+		oss << "Layer " << layer << ", sub-layer " << subLayer;
+		renderer->glPushGroupMarkerEXT(0, oss.str().c_str());
+	}
+
+	if (strat) {
+		bool showStats{};
+		if (renderer->debugLayers) {
+			if (ImGui::Begin("Layers", &renderer->debugLayers)) {
+				std::string heading = fmt::format("Layer {}:{}", layer, subLayer);
+				showStats = ImGui::CollapsingHeader(heading.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+			}
+		}
+		strat->SetShowStats(showStats);
+
+		for (int i = 0; i < numCmd; i++) {
+			r_layerCmd_s* cmd = cmdList[i];
+			strat->ProcessCommand(cmd);
+		}
+
+		strat->Flush();
+
+		if (renderer->debugLayers) {
+			ImGui::End();
+		}
 	}
 
 	for (int i = 0; i < numCmd; i++) {
@@ -591,32 +691,37 @@ uniform mat4 mvp_matrix;
 attribute vec2 a_vertex;
 attribute vec2 a_texcoord;
 attribute vec4 a_tint;
+attribute float a_texId;
 
 varying vec2 v_texcoord;
 varying vec4 v_tint;
+varying float v_texId;
 
 void main(void)
 {
 	v_texcoord = a_texcoord;
 	v_tint = a_tint;
+	v_texId = a_texId;
 	gl_Position = mvp_matrix * vec4(a_vertex, 0.0, 1.0);
 }
 )";
 
-static char const* s_tintedTextureFragmentSource = R"(#version 100
+static char const* s_tintedTextureFragmentTemplate = R"(#version 100
 precision mediump float;
 
-uniform sampler2D t_tex;
+uniform sampler2D s_tex[{SG_TEXTURE_COUNT}];
 uniform vec4 i_tint;
 
 varying vec2 v_texcoord;
 varying vec4 v_tint;
+varying float v_texId;
 
 void main(void)
-{
-	vec4 color = texture2D(t_tex, v_texcoord);
+{{
+	vec4 color;
+	{SG_TEXTURE_SWITCH}
 	gl_FragColor = color * v_tint;
-}
+}}
 )";
 
 std::string const s_scaleVsSource = R"(#version 100
@@ -715,6 +820,9 @@ void r_renderer_c::Init()
 	numShader = 0;
 	memset(shaderList, 0, sizeof(shaderList));
 
+	GLint maxTextureImageUnits{};
+	glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureImageUnits);
+
 	// Initialise vertex programs
 	{
 		GLint success = GL_FALSE;
@@ -727,7 +835,28 @@ void r_renderer_c::Init()
 			sys->Error("Failed to compile vertex shader:\n%s", log.c_str());
 		}
 		GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(fs, 1, &s_tintedTextureFragmentSource, nullptr);
+		std::string textureSwitch;
+		{
+			fmt::memory_buffer buf;
+			for (size_t i = 0; i < maxTextureImageUnits; ++i) {
+				if (i == 0) {
+					fmt::format_to(fmt::appender(buf), "if (v_texId < {}.5) ", i);
+				}
+				else if (i == maxTextureImageUnits - 1) {
+					fmt::format_to(fmt::appender(buf), "else ");
+				}
+				else {
+					fmt::format_to(fmt::appender(buf), "else if (v_texId < {}.5)", i);
+				}
+				fmt::format_to(fmt::appender(buf), "color = texture2D(s_tex[{}], v_texcoord);\n", i);
+			}
+			textureSwitch = to_string(buf);
+		}
+		std::string fragSource = fmt::format(s_tintedTextureFragmentTemplate,
+			fmt::arg("SG_TEXTURE_COUNT", maxTextureImageUnits),
+			fmt::arg("SG_TEXTURE_SWITCH", textureSwitch));
+		char const* fragSourcePtr = fragSource.c_str();
+		glShaderSource(fs, 1, &fragSourcePtr, nullptr);
 		glCompileShader(fs);
 		if (!GetShaderCompileSuccess(fs)) {
 			std::string log = GetShaderInfoLog(fs);
@@ -945,10 +1074,14 @@ void CVarCheckbox(char const* label, conVar_c* cvar) {
 void r_renderer_c::EndFrame()
 {
 	static bool showDemo = false;
+	static bool showMetrics = true;
 	if (debugImGui) {
 		if (ImGui::Begin("Debug Hub", &debugImGui)) {
 			if (ImGui::Button("Demo")) {
 				showDemo = true;
+			}
+			if (ImGui::Button("Metrics")) {
+				showMetrics = true;
 			}
 			if (ImGui::Button("Layers")) {
 				debugLayers = true;
@@ -959,6 +1092,9 @@ void r_renderer_c::EndFrame()
 
 	if (showDemo) {
 		ImGui::ShowDemoWindow(&showDemo);
+	}
+	if (showMetrics) {
+		ImGui::ShowMetricsWindow(&showMetrics);
 	}
 
 	r_layer_c** layerSort = new r_layer_c * [numLayer];
@@ -984,6 +1120,8 @@ void r_renderer_c::EndFrame()
 		DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f, w, 16);
 		DrawStringFormat(0, VirtualScreenHeight() - 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 	}
+
+	std::optional<std::pair<int, int>> layerBreak;
 	if (debugLayers) {
 		if (ImGui::Begin("Layers", &debugLayers)) {
 			ImGui::Text("Layers: %d", numLayer);
@@ -992,14 +1130,17 @@ void r_renderer_c::EndFrame()
 			CVarCheckbox("Elide identical frames", r_elideFrames);
 
 			int totalCmd{};
-			if (ImGui::BeginTable("Layer stats", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
+			if (ImGui::BeginTable("Layer stats", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
 				ImGui::TableSetupColumn("Index");
 				ImGui::TableSetupColumn("Layer");
 				ImGui::TableSetupColumn("Sublayer");
 				ImGui::TableSetupColumn("Command count");
+				ImGui::TableSetupColumn("Debug");
 				ImGui::TableHeadersRow();
 				for (int l = 0; l < numLayer; ++l) {
 					auto layer = layerSort[l];
+					ImGui::PushID(layer->layer);
+					ImGui::PushID(layer->subLayer);
 					totalCmd += layer->numCmd;
 					ImGui::TableNextRow();
 					ImGui::TableNextColumn();
@@ -1010,6 +1151,12 @@ void r_renderer_c::EndFrame()
 					ImGui::Text("%d", layer->subLayer);
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", layer->numCmd);
+					ImGui::TableNextColumn();
+					if (ImGui::Button("Debug")) {
+						layerBreak = { layer->layer, layer->subLayer };
+					}
+					ImGui::PopID();
+					ImGui::PopID();
 				}
 				ImGui::EndTable();
 			}
@@ -1076,7 +1223,11 @@ void r_renderer_c::EndFrame()
 		glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 		for (int l = 0; l < numLayer; l++) {
-			layerSort[l]->Render();
+			auto& layer = layerSort[l];
+			if (layerBreak && layerBreak->first == layer->layer && layerBreak->second == layer->subLayer) {
+				DebugBreak();
+			}
+			layer->Render();
 		}
 	}
 	else {
@@ -1088,7 +1239,7 @@ void r_renderer_c::EndFrame()
 	delete[] layerSort;
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glClearColor(0.1f, 0.2f, 0.3f, 1.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	float blitTriPos[] = {
