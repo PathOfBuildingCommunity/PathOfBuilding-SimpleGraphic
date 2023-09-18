@@ -120,6 +120,7 @@ public:
 	conVar_c*   r_layerOptimize = nullptr;
 	conVar_c*   r_layerShuffle = nullptr;
 	conVar_c*	r_elideFrames = nullptr;
+	conVar_c*	r_drawCull = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
 

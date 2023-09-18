@@ -5,6 +5,7 @@
 //
 
 #define GLAD_GLES2_IMPLEMENTATION
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "r_local.h"
 
 #include <array>
@@ -218,6 +219,49 @@ void r_layer_c::Quad(double s0, double t0, double x0, double y0, double s1, doub
 	cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
 }
 
+// =================
+// Geometric queries
+// =================
+
+struct r_aabb_s {
+	float lo[2];
+	float hi[2];
+};
+
+r_aabb_s AabbFromCmdQuad(decltype(r_layerCmd_s::quad)& q, r_viewport_s& vp)
+{
+	r_aabb_s r{
+		{+FLT_MAX, +FLT_MAX},
+		{-FLT_MAX, -FLT_MAX},
+	};
+	for (size_t i = 0; i < 4; ++i) {
+		r.lo[0] = (std::min)(r.lo[0], (float)q.x[i]);
+		r.lo[1] = (std::min)(r.lo[1], (float)q.y[i]);
+		r.hi[0] = (std::max)(r.hi[0], (float)q.x[i]);
+		r.hi[1] = (std::max)(r.hi[1], (float)q.y[i]);
+	}
+	r.lo[0] += vp.x;
+	r.lo[1] += vp.y;
+	r.hi[0] += vp.x;
+	r.hi[1] += vp.y;
+	return r;
+}
+
+r_aabb_s AabbFromViewport(r_viewport_s& vp)
+{
+	r_aabb_s r{
+		{(float)vp.x, (float)vp.y },
+		{(float)(vp.x + vp.width), (float)(vp.y + vp.height) },
+	};
+	return r;
+}
+
+bool AabbAabbIntersects(r_aabb_s& a, r_aabb_s& b)
+{
+	// A.lo <= B.hi && A.hi >= B.lo
+	return a.lo[0] <= b.hi[0] && a.lo[1] <= b.hi[1] && a.hi[0] >= b.lo[0] && a.hi[1] >= b.lo[1];
+}
+
 struct Vertex {
 	float x, y;
 	float u, v;
@@ -390,6 +434,16 @@ struct AdjacentMergeStrategy : RenderStrategy {
 		case r_layerCmd_s::QUAD: {
 			if (showStats_) {
 				// ImGui::Text("QUAD");
+			}
+
+			// Cull the quad first before it influences any boundary cuts.
+			if (!!renderer_->r_drawCull->intVal) {
+				auto a = AabbFromCmdQuad(cmd->quad, nextViewport_);
+				auto b = AabbFromViewport(nextViewport_);
+				bool intersects = AabbAabbIntersects(a, b);
+				if (!intersects) {
+					break;
+				}
 			}
 
 			// If the current batch is incompatible key-wise, dispatch it to get a fresh
@@ -643,6 +697,7 @@ r_renderer_c::r_renderer_c(sys_IMain* sysHnd)
 	r_layerOptimize = sys->con->Cvar_Add("r_layerOptimize", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
 	r_layerShuffle = sys->con->Cvar_Add("r_layerShuffle", CV_ARCHIVE | CV_CLAMP, "0", 0, 1);
 	r_elideFrames = sys->con->Cvar_Add("r_elideFrames", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
+	r_drawCull = sys->con->Cvar_Add("r_drawCull", CV_ARCHIVE | CV_CLAMP, "1", 0, 1);
 
 	Cmd_Add("screenshot", 0, "[<format>]", this, &r_renderer_c::C_Screenshot);
 }
@@ -1142,6 +1197,7 @@ void r_renderer_c::EndFrame()
 			ImGui::Text("%d out of %d frames drawn, %d saved.", drawnFrames, totalFrames, savedFrames);
 			CVarSliderInt("Optimization", r_layerOptimize);
 			CVarCheckbox("Elide identical frames", r_elideFrames);
+			CVarCheckbox("Draw command culling", r_drawCull);
 
 			int totalCmd{};
 			if (ImGui::BeginTable("Layer stats", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
