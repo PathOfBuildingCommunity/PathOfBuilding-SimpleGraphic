@@ -233,6 +233,11 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		}
 		glfwMakeContextCurrent(wnd);
 		gladLoadGLES2(glfwGetProcAddress);
+
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glfwSwapBuffers(wnd);
+
 		glfwSetWindowUserPointer(wnd, sys);
 		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
