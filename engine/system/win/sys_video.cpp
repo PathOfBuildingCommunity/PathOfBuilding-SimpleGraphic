@@ -269,6 +269,12 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			bool maximized = glfwGetWindowAttrib(wnd, GLFW_MAXIMIZED);
 			sys->video->SizeChanged(width, height, maximized);
 		});
+		glfwSetWindowMaximizeCallback(wnd, [](GLFWwindow* wnd, int maximized) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			int width{}, height{};
+			glfwGetWindowSize(wnd, &width, &height);
+			sys->video->SizeChanged(width, height, maximized == GLFW_TRUE);
+		});
 		glfwSetWindowPosCallback(wnd, [](GLFWwindow* wnd, int x, int y) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->PosChanged(x, y);
