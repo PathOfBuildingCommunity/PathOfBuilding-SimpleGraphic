@@ -167,8 +167,8 @@ public:
 	uint64_t savedFrames{};
 
 	bool	elideFrames = false;
-	bool	debugImGui = true;
-	bool	debugLayers = true;
+	bool	debugImGui = false;
+	bool	debugLayers = false;
 
 	int		takeScreenshot = 0;
 	void	DoScreenshot(image_c* i, const char* ext);

@@ -1143,7 +1143,7 @@ void CVarCheckbox(char const* label, conVar_c* cvar) {
 void r_renderer_c::EndFrame()
 {
 	static bool showDemo = false;
-	static bool showMetrics = true;
+	static bool showMetrics = false;
 	if (debugImGui) {
 		if (ImGui::Begin("Debug Hub", &debugImGui)) {
 			if (ImGui::Button("Demo")) {
