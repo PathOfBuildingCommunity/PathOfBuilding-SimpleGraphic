@@ -1,9 +1,0 @@
-{
-    "versions": [
-      {
-        "version-date": "2022-08-11",
-        "port-version": 1,
-        "path": "$/ports/luajit/2022-08-11_1"
-      }
-    ]
-}

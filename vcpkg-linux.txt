@@ -1,2 +1,0 @@
-fmt:x64-linux
-glfw3:x64-linux

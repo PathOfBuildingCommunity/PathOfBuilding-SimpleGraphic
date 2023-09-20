@@ -21,6 +21,8 @@ include(InstallRequiredSystemLibraries)
 
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
+    "dep/stb/stb_image.h"
+    "dep/stb/stb_image_write.h"
     "engine/common/common.cpp"
     "engine/common/console.cpp"
     "engine/common/console.h"
@@ -54,8 +56,6 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
     "win/entry.cpp"
-    "stb_image.h"
-    "stb_image_write.h"
     "ui.h"
     "ui_api.cpp"
     "ui_console.cpp"
@@ -146,6 +146,7 @@ target_link_libraries(imgui PUBLIC
 target_include_directories(SimpleGraphic
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/stb
     ${JPEG_INCLUDE_DIR}
     ${LUAJIT_INCLUDE_DIR}
 )

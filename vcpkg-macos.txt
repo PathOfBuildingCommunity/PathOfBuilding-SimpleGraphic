@@ -1,3 +1,0 @@
-fmt:x64-osx
-glfw3:x64-osx
-zlib:x64-osx

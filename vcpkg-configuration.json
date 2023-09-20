@@ -1,14 +1,6 @@
 {
   "default-registry": {
     "kind": "builtin",
-    "baseline": "f14984af3738e69f197bf0e647a8dca12de92996"
-  },
-  "registries": [
-    {
-      "kind": "filesystem",
-      "path": "vcpkg-ports",
-      "baseline": "2022-08-14",
-      "packages": []
-    }
-  ]
+    "baseline": "4cfabe769eaceb209ea37267e8c50c43b86a4a7b"
+  }
 }
