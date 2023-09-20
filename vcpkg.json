@@ -1,6 +1,6 @@
 {
   "name": "path-of-building-simplegraphic",
-  "version-date": "2023-01-20",
+  "version": "2.0",
   "dependencies": [
     "angle",
     "curl",
