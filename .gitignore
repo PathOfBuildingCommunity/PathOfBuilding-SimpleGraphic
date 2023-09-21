@@ -1,14 +1,1 @@
 /build/
-/dependencies/detect_compiler_x86-windows-static
-/dependencies/giflib_x86-windows-static
-/dependencies/libjpeg-turbo_x86-windows-static
-/dependencies/liblzma_x86-windows-static
-/dependencies/libpng_x86-windows-static
-/dependencies/luajit_x86-windows-static
-/dependencies/tiff_x86-windows-static
-/dependencies/zlib_x86-windows-static
-.vs
-/Debug/
-/Release/
-/SimpleGraphic.vcxproj.user
-vcpkg_installed/
