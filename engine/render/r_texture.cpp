@@ -63,7 +63,7 @@ private:
 	std::vector<r_tex_c *> textureQueue;
 	std::mutex mutex;
 
-	void	ThreadProc();
+	void	ThreadProc() override;
 };
 
 r_ITexManager* r_ITexManager::GetHandle(r_renderer_c* renderer)
@@ -109,7 +109,7 @@ t_manager_c::~t_manager_c()
 int t_manager_c::GetAsyncCount()
 {
 	std::lock_guard<std::mutex> lock ( mutex );
-	return textureQueue.size();
+	return (int)textureQueue.size();
 }
 
 bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
@@ -157,7 +157,6 @@ bool t_manager_c::AsyncRemove(r_tex_c* tex)
 
 void t_manager_c::ThreadProc()
 {
-	renderer->openGL->CaptureSecondary();
 	isRunning = true;
 	while (doRun) {
 		r_tex_c *doTex = nullptr;
@@ -191,7 +190,6 @@ void t_manager_c::ThreadProc()
 			renderer->sys->Sleep(1);
 		}
 	}
-	renderer->openGL->ReleaseSecondary();
 	isRunning = false;
 }
 
@@ -292,8 +290,8 @@ int r_tex_c::GLTypeForImgType(int type)
 		GL_LUMINANCE,
 		GL_RGB,
 		GL_RGBA,
-		GL_BGR,
-		GL_BGRA,
+		0,
+		0,
 		GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
 		GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
 		GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
@@ -343,11 +341,7 @@ void r_tex_c::Disable()
 }
 
 void r_tex_c::StartLoad()
-{
-	if ((flags & TF_ASYNC) != 0 && status == INIT && fileWidth == 0) {
-		manager->AsyncAdd(this);
-	}
-}
+{}
 
 void r_tex_c::AbortLoad()
 {
@@ -356,10 +350,7 @@ void r_tex_c::AbortLoad()
 
 void r_tex_c::ForceLoad()
 {
-	manager->AsyncRemove( this );
-
 	if (status == INIT) {
-		flags &= ~TF_ASYNC;
 		LoadFile();
 	} else if (fileWidth == 0) {
 		// Load not pending, do it now
@@ -419,8 +410,8 @@ void r_tex_c::Upload(image_c* image, int flags)
 
 	// Set repeating
 	if (flags & TF_CLAMP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	} else {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -443,7 +434,7 @@ void r_tex_c::Upload(image_c* image, int flags)
 
 	// Special case for precompressed textures (BLP DXT)
 	if (image->type >= IMGTYPE_RGB_DXT1 && image->type <= IMGTYPE_RGBA_DXT5) {
-		if ( !renderer->glCompressedTexImage2DARB ) {
+		if ( !renderer->glCompressedTexImage2D ) {
 			image_c raw;
 			raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
 			Upload(&raw, TF_NOMIPMAP);
@@ -455,7 +446,7 @@ void r_tex_c::Upload(image_c* image, int flags)
 		while (1) {
 			mipSize = *(dword*)datPtr;
 			datPtr+= sizeof(dword);
-			renderer->glCompressedTexImage2DARB(GL_TEXTURE_2D, miplevel, GLTypeForImgType(image->type), up_w, up_h, 0, mipSize, datPtr);
+			renderer->glCompressedTexImage2D(GL_TEXTURE_2D, miplevel, GLTypeForImgType(image->type), up_w, up_h, 0, mipSize, datPtr);
 			datPtr+= mipSize;
 			if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
 				break;
@@ -463,10 +454,6 @@ void r_tex_c::Upload(image_c* image, int flags)
 			up_w = (up_w > 1)? up_w >> 1 : 1;
 			up_h = (up_h > 1)? up_h >> 1 : 1;
 			miplevel++;
-		}
-		if (flags & TF_ASYNC) {
-			// Needed to ensure texture is usable immediately
-			glFlush();
 		}
 		fileWidth = image->width;
 		fileHeight = image->height;
@@ -484,14 +471,17 @@ void r_tex_c::Upload(image_c* image, int flags)
 		mipBuf[2] = image->dat;
 	}
 
-	int intformat = image->comp;
-	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2DARB) {
+	int intformat = 0;
+	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2D) {
 		// Enable compression
 		if (image->comp == 3) {
 			intformat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
 		} else if (image->comp == 4) {
 			intformat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
 		}
+	}
+	if (!intformat) {
+		intformat = GLTypeForImgType(image->type);
 	}
 
 	int miplevel = 0;
@@ -575,10 +565,6 @@ void r_tex_c::Upload(image_c* image, int flags)
 		delete mipBuf[2];
 	}
 
-	if (flags & TF_ASYNC) {
-		// Needed to ensure texture is usable immediately
-		glFlush();
-	}
 	fileWidth = image->width;
 	fileHeight = image->height;
 }

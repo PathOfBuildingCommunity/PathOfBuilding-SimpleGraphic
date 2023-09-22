@@ -9,10 +9,8 @@
 
 #include "render.h"
 
-#define WINGDIAPI
-#define APIENTRY __stdcall
-#include <GL/gl.h>
-#include <GL/glext.h>
+#include <glad/gles2.h>
+#include <glad/egl.h>
 
 #include "core/core_image.h"
 

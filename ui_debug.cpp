@@ -11,15 +11,15 @@
 // =======
 
 struct d_lineHit_s {
-	char*	source;
-	char*	name;
+	char* source;
+	char* name;
 	int		line;
 	int		count;
 };
 
 struct d_callHit_s {
-	char*	source;
-	char*	name;
+	char* source;
+	char* name;
 	int		count;
 	int		lineHitNum;
 	int		lineHitSz;
@@ -30,11 +30,11 @@ struct d_callHit_s {
 // ui_IDebug Interface
 // ===================
 
-class ui_debug_c: public ui_IDebug, public thread_c {
+class ui_debug_c : public ui_IDebug, public thread_c {
 public:
 	// Interface
-	void	SetProfiling(bool enable);
-	void	ToggleProfiling();
+	void	SetProfiling(bool enable) override;
+	void	ToggleProfiling() override;
 
 	// Encapsulated
 	ui_debug_c(ui_main_c* ui);
@@ -119,7 +119,7 @@ static ui_debug_c* GetDebugPtr(lua_State* L)
 	return (ui_debug_c*)ui->debug;
 }
 
-static void debugHook(lua_State* L, lua_Debug *ar)
+static void debugHook(lua_State* L, lua_Debug* ar)
 {
 	ui_debug_c* d = GetDebugPtr(L);
 	d->hookHolding = true;
@@ -133,8 +133,9 @@ static int lineComp(const void* aVoid, const void* bVoid)
 	d_lineHit_s* b = (d_lineHit_s*)bVoid;
 	if (a->count == b->count) {
 		return 0;
-	} else {
-		return a->count > b->count? -1 : 1;
+	}
+	else {
+		return a->count > b->count ? -1 : 1;
 	}
 }
 
@@ -144,8 +145,9 @@ static int callComp(const void* aVoid, const void* bVoid)
 	d_callHit_s* b = (d_callHit_s*)bVoid;
 	if (a->count == b->count) {
 		return 0;
-	} else {
-		return a->count > b->count? -1 : 1;
+	}
+	else {
+		return a->count > b->count ? -1 : 1;
 	}
 }
 
@@ -156,14 +158,14 @@ void ui_debug_c::ThreadProc()
 		ui->sys->Sleep(1);
 
 		if (profiling) {
-			if ( !ui->inLua ) {
+			if (!ui->inLua) {
 				continue;
 			}
 			hookHold = true;
 			lua_sethook(ui->L, &debugHook, LUA_MASKLINE, 0);
 			while (profiling && !hookHolding);
 			lua_sethook(ui->L, &debugHook, 0, 0);
-			if ( !profiling ) {
+			if (!profiling) {
 				hookHold = false;
 				continue;
 			}
@@ -182,7 +184,7 @@ void ui_debug_c::ThreadProc()
 				}
 				if (l == lineHitNum) {
 					if (lineHitNum == lineHitSz) {
-						lineHitSz<<= 1;
+						lineHitSz <<= 1;
 						trealloc(lineHits, lineHitSz);
 					}
 					lineHits[l].source = AllocString(dbg.source);
@@ -196,14 +198,14 @@ void ui_debug_c::ThreadProc()
 				if (funcName && lua_getstack(ui->L, 1, &dbg) && lua_getinfo(ui->L, "Sln", &dbg) && dbg.source) {
 					int c;
 					for (c = 0; c < callHitNum; c++) {
-						if ( !strcmp(funcSource, callHits[c].source) && !strcmp(funcName, callHits[c].name) ) {
+						if (!strcmp(funcSource, callHits[c].source) && !strcmp(funcName, callHits[c].name)) {
 							callHits[c].count++;
 							break;
 						}
 					}
 					if (c == callHitNum) {
 						if (callHitNum == callHitSz) {
-							callHitSz<<= 1;
+							callHitSz <<= 1;
 							trealloc(callHits, callHitSz);
 						}
 						if (callHitNum == callHitInitCount) {
@@ -230,7 +232,7 @@ void ui_debug_c::ThreadProc()
 					}
 					if (l == call->lineHitNum) {
 						if (call->lineHitNum == call->lineHitSz) {
-							call->lineHitSz<<= 1;
+							call->lineHitSz <<= 1;
 							trealloc(call->lineHits, call->lineHitSz);
 						}
 						call->lineHits[l].source = AllocString(dbg.source);
@@ -243,12 +245,13 @@ void ui_debug_c::ThreadProc()
 			}
 			hookHold = false;
 			while (hookHolding);
-		} else if (lineHitNum) {
+		}
+		else if (lineHitNum) {
 			ui->sys->con->Printf("Hot lines:\n");
 			qsort(lineHits, lineHitNum, sizeof(d_lineHit_s), lineComp);
 			for (int l = 0; l < lineHitNum; l++) {
 				if (l < 20) {
-					ui->sys->con->Printf("%s(%d) in '%s': %d\n", lineHits[l].source, lineHits[l].line, lineHits[l].name? lineHits[l].name : "?", lineHits[l].count);
+					ui->sys->con->Printf("%s(%d) in '%s': %d\n", lineHits[l].source, lineHits[l].line, lineHits[l].name ? lineHits[l].name : "?", lineHits[l].count);
 				}
 				delete lineHits[l].source;
 				delete lineHits[l].name;
@@ -263,7 +266,7 @@ void ui_debug_c::ThreadProc()
 				}
 				for (int l = 0; l < callHits[c].lineHitNum; l++) {
 					if (c < 10 && l < 5) {
-						ui->sys->con->Printf("\t%s(%d) in '%s': %d\n", callHits[c].lineHits[l].source, callHits[c].lineHits[l].line, callHits[c].lineHits[l].name? callHits[c].lineHits[l].name : "?", callHits[c].lineHits[l].count);
+						ui->sys->con->Printf("\t%s(%d) in '%s': %d\n", callHits[c].lineHits[l].source, callHits[c].lineHits[l].line, callHits[c].lineHits[l].name ? callHits[c].lineHits[l].name : "?", callHits[c].lineHits[l].count);
 					}
 					delete callHits[c].lineHits[l].source;
 					delete callHits[c].lineHits[l].name;
@@ -282,7 +285,8 @@ void ui_debug_c::SetProfiling(bool enable)
 	if (enable) {
 		ui->sys->con->Printf("Profiling enabled.\n");
 		profiling = true;
-	} else {
+	}
+	else {
 		ui->sys->con->Printf("Profiling finished:\n");
 		profiling = false;
 		while (lineHitNum || callHitNum);
@@ -291,5 +295,5 @@ void ui_debug_c::SetProfiling(bool enable)
 
 void ui_debug_c::ToggleProfiling()
 {
-	SetProfiling( !profiling );
+	SetProfiling(!profiling);
 }

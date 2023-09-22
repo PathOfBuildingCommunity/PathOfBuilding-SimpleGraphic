@@ -4,6 +4,9 @@
 // Console Header
 //
 
+#include <optional>
+#include <string>
+
 // =======
 // Classes
 // =======
@@ -40,15 +43,15 @@ enum conVarFlags_e {
 // Cvar
 class conVar_c {
 public:
-	char*	name = nullptr;		// Cvar name
+	std::string	name;			// Cvar name
 	int		flags = 0;			// Flags
 	bool	mod = false;		// Modified?
 
 	int		intVal = 0;			// Integer value
 	float	floatVal = 0.f;		// Float value
-	char*	strVal = nullptr;	// String value
+	std::string strVal;			// String value
 
-	char*	defVal = nullptr;	// Default string
+	std::string	defVal;			// Default string
 	int		min = 0, max = 0;	// Clamp limits
 
 	conVar_c(IConsole* conHnd);
@@ -56,9 +59,8 @@ public:
 
 	void	Set(int val);
 	void	Set(float val);
-	void	Set(const char* val);
+	void	Set(char const* val);
 	void	Toggle();
-	int		Get(char* out = NULL, int outSz = 0);
 	bool	GetMod();	// Return and clear modified flag
 	void	Reset();
 	void	Clamp();
@@ -99,16 +101,11 @@ private:
 
 // Command class
 struct conCmd_c {
-	char*		name;	// Command name
+	std::string	name;	// Command name
 	int			minArgs;// Required number of arguments
-	char*		usage;	// Usage string
+	std::string	usage;	// Usage string
 	conCmdHandler_c* obj;  // Handler
 	conCmdMethod_t method;	// Method
-	~conCmd_c()
-	{
-		FreeString(name);
-		FreeString(usage);
-	}
 };
 
 // ==========
@@ -134,8 +131,8 @@ public:
 	virtual void	Executef(const char* fmt, ...) = 0;	// Execute formatted string
 	virtual void	ExecCommands(bool deferUnknown = false) = 0; // Flush command buffer
 
-	virtual conVar_c* Cvar_Add(const char* name, int flags, const char* def, int minVal = 0, int maxVal = 0) = 0; // Add a variable
-	virtual conVar_c* Cvar_Ptr(const char* name) = 0;	// Get pointer to an existing variable
+	virtual conVar_c* Cvar_Add(std::string_view name, int flags, std::string_view def, int minVal = 0, int maxVal = 0) = 0; // Add a variable
+	virtual conVar_c* Cvar_Ptr(std::string_view name) = 0;	// Get pointer to an existing variable
 
 	virtual conCmd_c* EnumCmd(int* index) = 0;			// Retrieve commands
 	virtual conVar_c* EnumCvar(int* index) = 0;			// Retrieve variables

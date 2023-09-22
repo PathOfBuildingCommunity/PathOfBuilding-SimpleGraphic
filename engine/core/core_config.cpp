@@ -9,6 +9,8 @@
 
 #include "core_config.h"
 
+#include <fmt/core.h>
+
 // =======================
 // core_IConfig Interface
 // =======================
@@ -104,7 +106,7 @@ void core_config_c::C_CmdList(IConsole* conHnd, args_c &args)
 {
 	int index = -1;
 	while (conCmd_c* cmd = conHnd->EnumCmd(&index)) {
-		conHnd->Printf(" %s %s\n", cmd->name, cmd->usage);
+		conHnd->Print(fmt::format(" {} {}\n", cmd->name, cmd->usage).c_str());
 	}
 }
 
@@ -112,7 +114,7 @@ void core_config_c::C_CvarList(IConsole* conHnd, args_c &args)
 {
 	int index = -1;
 	while (conVar_c* cv = conHnd->EnumCvar(&index)) {
-		conHnd->Printf("%c%c%c  %s = \"%s\"\n", cv->flags & CV_ARCHIVE? 'A':' ', cv->flags & CV_READONLY? 'R':' ', cv->flags & CV_CLAMP? 'C':' ', cv->name, cv->strVal);
+		conHnd->Print(fmt::format("{}{}{}  {} = \"{}\"\n", cv->flags & CV_ARCHIVE? 'A':' ', cv->flags & CV_READONLY? 'R':' ', cv->flags & CV_CLAMP? 'C':' ', cv->name, cv->strVal).c_str());
 	}
 }
 
@@ -153,17 +155,16 @@ void core_config_c::C_MemReport(IConsole* conHnd, args_c &args)
 bool core_config_c::LoadConfig(const char* cfgName)
 {
 	// Make sure it has .cfg extension
-	char fileName[260];
-	strcpy_s(fileName, 260, cfgName);
-	if (strchr(fileName, '.') == NULL) {
-		strcat_s(fileName, 260, ".cfg");
+	std::string fileName = cfgName;
+	if (fileName.find('.') == fileName.npos) {
+		fileName += ".cfg";
 	}
 
-	sys->con->Printf("Executing %s\n", fileName);
+	sys->con->Print(fmt::format("Executing {}\n", fileName).c_str());
 
 	// Read the config file
 	fileInputStream_c f;
-	if (f.FileOpen(fileName, true)) {
+	if (f.FileOpen(fileName.c_str(), true)) {
 		sys->con->Warning("config file not found");
 		return true;
 	}
@@ -200,17 +201,16 @@ bool core_config_c::LoadConfig(const char* cfgName)
 bool core_config_c::SaveConfig(const char* cfgName)
 {
 	// Make sure it has .cfg extension
-	char fileName[260];
-	strcpy_s(fileName, 260, cfgName);
-	if (strchr(fileName, '.') == NULL) {
-		strcat_s(fileName, 260, ".cfg");
+	std::string fileName = cfgName;
+	if (fileName.find('.') == fileName.npos) {
+		fileName += ".cfg";
 	}
 
-	sys->con->Printf("Saving %s\n", fileName);
+	sys->con->Print(fmt::format("Saving {}\n", fileName).c_str());
 
 	// Open the config file
 	fileOutputStream_c f;
-	if (f.FileOpen(fileName, false)) {
+	if (f.FileOpen(fileName.c_str(), false)) {
 		sys->con->Warning("couldnt write config file");
 		return true;
 	}
@@ -219,7 +219,7 @@ bool core_config_c::SaveConfig(const char* cfgName)
 	int index = -1;
 	while (conVar_c* cv = sys->con->EnumCvar(&index)) {
 		if (cv->flags & CV_ARCHIVE) {
-			f.FilePrintf("set %s \"%s\"\n", cv->name, cv->strVal);
+			f.FilePrintf("set %s \"%s\"\n", cv->name.c_str(), cv->strVal.c_str());
 		}
 	}
 

@@ -4,6 +4,9 @@
 // System Main Header
 //
 
+#include <filesystem>
+#include <string>
+
 // =======
 // Classes
 // =======
@@ -15,7 +18,7 @@ public:
 	void	Start();
 	int		Get();
 private:
-	int		startTime;
+	std::chrono::system_clock::time_point startTime;
 };
 
 // Thread
@@ -23,31 +26,27 @@ class thread_c {
 public:
 	thread_c(class sys_IMain* sys);
 	void	ThreadStart(bool lowPri = false);
-	static int atomicInc(volatile int* val);
-	static int atomicDec(volatile int* val);
-	static int atomicExch(volatile int* out, int val);
 private:
 	class sys_main_c* _sysMain;
 	virtual void ThreadProc() = 0;
-	static unsigned long __stdcall statThreadProc(void* obj);
+	static unsigned long statThreadProc(void* obj);
 };
 
 // File finder
 class find_c {
 public:
-	char	fileName[512] = {};
+	std::string fileName;
 	bool	isDirectory = false;
-	dword	fileSize = 0;
+	uintmax_t	fileSize = 0;
 	unsigned long long modified = 0;
-	char	modifiedDate[256] = {};
-	char	modifiedTime[256] = {};
 
 	find_c();
 	~find_c();
 	bool	FindFirst(const char* fileSpec);
 	bool	FindNext();
 private:
-	void*	handle;
+	std::filesystem::path glob;
+	std::filesystem::directory_iterator iter;
 };
 
 // ==========
@@ -61,17 +60,16 @@ public:
 	sys_IConsole* conWin = nullptr;
 	sys_IVideo* video = nullptr;
 
-	bool	x64 = false;
-	bool	debug = false;
-	bool	debuggerRunning = false;
-	int		processorCount = 0;
-	char	basePath[512] = {};
-	char	userPath[512] = {};
+	bool		x64 = false;
+	bool		debug = false;
+	bool		debuggerRunning = false;
+	int			processorCount = 0;
+	std::string	basePath;
+	std::string	userPath;
 
 	virtual int		GetTime() = 0;
 	virtual void	Sleep(int msec) = 0;
 	virtual bool	IsKeyDown(byte key) = 0;
-	virtual void	ShowCursor(int doShow) = 0;
 	virtual void	ClipboardCopy(const char* str) = 0;
 	virtual char*	ClipboardPaste() = 0;
 	virtual bool	SetWorkDir(const char* newCwd = NULL) = 0;

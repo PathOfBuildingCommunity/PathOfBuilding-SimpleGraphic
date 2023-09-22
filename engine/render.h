@@ -30,7 +30,6 @@ enum r_texFlag_e {
 	TF_CLAMP	= 0x01,	// Clamp texture
 	TF_NOMIPMAP	= 0x02,	// No mipmaps
 	TF_NEAREST	= 0x04,	// Use nearest-pixel magnification instead of linear
-	TF_ASYNC	= 0x08	// Asynchronous loading
 };
 
 // Blend modes
@@ -87,4 +86,12 @@ public:
 	virtual void	DrawStringFormat(float x, float y, int align, int height, const col4_t col, int font, const char* fmt, ...) = 0;
 	virtual int		DrawStringWidth(int height, int font, const char* str) = 0;
 	virtual int		DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY) = 0;
+
+	virtual int		VirtualScreenWidth() = 0;
+	virtual int		VirtualScreenHeight() = 0;
+	virtual float	VirtualScreenScaleFactor() = 0;
+	virtual int		VirtualMap(int properValue) = 0;
+	virtual int		VirtualUnmap(int mappedValue) = 0;
+	
+	virtual void	ToggleDebugImGui() = 0;
 };

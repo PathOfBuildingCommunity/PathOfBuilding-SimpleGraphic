@@ -1,27 +1,70 @@
 name: Build DLL
-on: push     
+on: push
 jobs:
   build_dll:
-          runs-on: windows-latest
-          steps:
-                  - name: Checkout
-                    uses: actions/checkout@v2
-                    with:
-                      submodules: 'recursive'
-                  - name: run-vcpkg
-                    uses: lukka/run-vcpkg@v6.0
-                    with:
-                        vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-                        vcpkgArguments: '@${{ github.workspace }}/vcpkg.txt'
-                        cleanAfterBuild: false
-                  - name: Setup MSBuild
-                    uses: microsoft/setup-msbuild@v1
-                  - name: Check dependencies
-                    run: 'ls ${{ github.workspace }}/vcpkg/installed/x86-windows-static'
-                  - name: Build DLL
-                    run: 'msbuild SimpleGraphic.vcxproj /p:configuration=release /p:platform=win32'
-                  - name: Archive DLL
-                    uses: actions/upload-artifact@v1.0.0
-                    with:
-                        name: SimpleGraphic.dll
-                        path: '${{ github.workspace }}/Release/SimpleGraphic.dll'
+    strategy:
+      matrix:
+        include:
+          - platform: x64
+            os: windows-latest
+            triplet: x64-windows
+    runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/
+      DEPS_DIR: ${{ github.workspace }}/vcpkg_installed/${{ matrix.triplet }}
+      INST_DIR: ${{ github.workspace }}/install-prefix
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: "recursive"
+
+      - name: run-vcpkg
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgJsonGlob: "./vcpkg.json"
+          runVcpkgInstall: true
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1
+
+      - name: Obtain and run CMake
+        uses: threeal/cmake-action@v1.3.0
+        with:
+          source-dir: "."
+          build-dir: "build"
+          generator: "Visual Studio 17 2022"
+          options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}"
+
+      - name: Build DLL
+        run: "cmake --build build --config Release -t INSTALL"
+        
+      - name: Archive DLL
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}.dll
+          path: "${{ env.INST_DIR }}/SimpleGraphic.dll"
+
+      - name: Archive DLL symbols
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}.pdb
+          path: "${{ github.workspace }}/build/Release/SimpleGraphic.pdb"
+
+      - name: Archive dependency DLLs
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}-deps.dll
+          path: |
+            ${{ env.INST_DIR }}/*.dll
+            !${{ env.INST_DIR }}/SimpleGraphic.dll
+
+      - name: Archive dependency DLL symbols
+        uses: actions/upload-artifact@v3
+        with:
+          name: SimpleGraphic-${{ matrix.triplet }}-deps.pdb
+          path: |
+            ${{ env.DEPS_DIR }}/bin/*.pdb
+            ${{ github.workspace }}/build/Release/lzip.pdb
+            ${{ github.workspace }}/build/Release/lcurl.pdb

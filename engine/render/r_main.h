@@ -10,6 +10,9 @@
 
 #define R_MAXSHADERS 65536
 
+#include <array>
+#include <imgui.h>
+
 // =======
 // Classes
 // =======
@@ -41,6 +44,7 @@ public:
 	void	Color(col4_t col);
 	void	Quad(double s0, double t0, double x0, double y0, double s1, double t1, double x1, double y1, double s2, double t2, double x2, double y2, double s3, double t3, double x3, double y3);
 	void	Render();
+	void    Discard();
 
 private:
 	r_renderer_c* renderer;
@@ -80,6 +84,14 @@ public:
 	int		DrawStringWidth(int height, int font, const char* str);
 	int		DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY);
 
+	int		VirtualScreenWidth();
+	int		VirtualScreenHeight();
+	float	VirtualScreenScaleFactor();
+	int		VirtualMap(int properValue);
+	int		VirtualUnmap(int mappedValue);
+
+	void	ToggleDebugImGui();
+
 	// Encapsulated
 	r_renderer_c(sys_IMain* sysHnd);
 
@@ -97,13 +109,22 @@ public:
 	bool	texNonPOT = false;			// Non power-of-2 textures supported?
 	dword	texMaxDim = 0;				// Maximum texture dimension
 
-	PFNGLCOMPRESSEDTEXIMAGE2DARBPROC	glCompressedTexImage2DARB = nullptr;
+	PFNGLCOMPRESSEDTEXIMAGE2DPROC	glCompressedTexImage2D = nullptr;
+	PFNGLINSERTEVENTMARKEREXTPROC	glInsertEventMarkerEXT = nullptr;
+	PFNGLPUSHGROUPMARKEREXTPROC		glPushGroupMarkerEXT = nullptr;
+	PFNGLPOPGROUPMARKEREXTPROC		glPopGroupMarkerEXT = nullptr;
 	
 	conVar_c*	r_compress = nullptr;
 	conVar_c*	r_screenshotFormat = nullptr;
 	conVar_c*	r_layerDebug = nullptr;
+	conVar_c*   r_layerOptimize = nullptr;
+	conVar_c*   r_layerShuffle = nullptr;
+	conVar_c*	r_elideFrames = nullptr;
+	conVar_c*	r_drawCull = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
+
+	ImGuiContext* imguiCtx = nullptr;
 
 	r_font_c* fonts[F_NUMFONTS] = {}; // Font objects
 
@@ -115,6 +136,8 @@ public:
 	int		numShader = 0;
 	class r_shader_c *shaderList[R_MAXSHADERS] = {};
 
+	int		tintedTextureProgram = 0;
+
 	int		numLayer = 0;
 	int		layerListSize = 0;
 	r_layer_c** layerList = nullptr;
@@ -123,6 +146,29 @@ public:
 	int		layerCmdBinCount = 0;
 	int		layerCmdBinSize = 0;
 	struct r_layerCmd_s** layerCmdBin = nullptr;
+
+	struct RenderTarget {
+		int		width = -1, height = -1;
+		GLuint	framebuffer = 0;
+		GLuint	colorTexture = 0;
+
+		GLuint	blitProg = 0;
+		GLuint	blitAttribLocPos = 0;
+		GLuint	blitAttibLocTC = 0;
+		GLuint  blitSampleLocColour = 0;
+	};
+
+	RenderTarget rttMain;
+
+	std::vector<uint8_t> lastFrameHash{};
+
+	uint64_t totalFrames{};
+	uint64_t drawnFrames{};
+	uint64_t savedFrames{};
+
+	bool	elideFrames = false;
+	bool	debugImGui = false;
+	bool	debugLayers = false;
 
 	int		takeScreenshot = 0;
 	void	DoScreenshot(image_c* i, const char* ext);

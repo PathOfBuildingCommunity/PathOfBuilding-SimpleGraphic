@@ -87,36 +87,10 @@ ui_main_c::ui_main_c(sys_IMain* sysHnd, core_IMain* coreHnd)
 void ui_main_c::LAssert(lua_State* L, int cond, const char* fmt, ...)
 {
 	if ( !cond ) {
-		char* newFmt = AllocString(fmt);
 		va_list va;
 		va_start(va, fmt);
-		char* p = newFmt;
-		while ((p = strchr(p, '%')) && *++p) {
-			if (*p == '%') continue;
-			switch (*p) {
-			case 's':
-			case 'p':
-				va_arg(va, char *);
-				break;
-			case 'c':
-			case 'd':
-				va_arg(va, int);
-				break;
-			case 'f':
-				va_arg(va, double);
-				break;
-			case 't':
-				*p = 's';
-				int* arg = &va_arg(va, int);
-				*(char**)arg = (char*)luaL_typename(L, *arg);
-				break;
-			}
-		}
+		lua_pushvfstring(L, fmt, va);
 		va_end(va);
-		va_start(va, fmt);
-		lua_pushvfstring(L, newFmt, va);
-		va_end(va);
-		FreeString(newFmt);
 		lua_error(L);
 	}
 }
@@ -238,8 +212,8 @@ void ui_main_c::Init(int argc, char** argv)
 		scriptPath = AllocString(tmpDir);
 		scriptWorkDir = AllocString(tmpDir);
 	} else {
-		scriptPath = AllocString(sys->basePath);
-		scriptWorkDir = AllocString(sys->basePath);
+		scriptPath = AllocString(sys->basePath.c_str());
+		scriptWorkDir = AllocString(sys->basePath.c_str());
 	}
 	scriptArgc = argc;
 	scriptArgv = new char*[argc];
@@ -528,6 +502,9 @@ void ui_main_c::KeyEvent(int key, int type)
 		switch (key) {
 		case KEY_PRINTSCRN:
 			sys->con->Execute("screenshot");
+			break;
+		case KEY_F10:
+			renderer->ToggleDebugImGui();
 			break;
 		case KEY_PAUSE:
 			if (sys->IsKeyDown(KEY_SHIFT)) {

@@ -50,13 +50,40 @@
 #endif
 #endif
 
-extern "C" __declspec(dllexport) int RunLuaFileAsWin(int argc, char** argv)
+#if defined _WIN32 || defined __CYGWIN__
+  #ifdef SIMPLEGRAPHIC_EXPORTS
+    #ifdef __GNUC__
+      #define SIMPLEGRAPHIC_DLL_PUBLIC __attribute__ ((dllexport))
+    #else
+      #define SIMPLEGRAPHIC_DLL_PUBLIC __declspec(dllexport) // Note: actually gcc seems to also supports this syntax.
+    #endif
+  #else
+    #ifdef __GNUC__
+      #define SIMPLEGRAPHIC_DLL_PUBLIC __attribute__ ((dllimport))
+    #else
+      #define SIMPLEGRAPHIC_DLL_PUBLIC __declspec(dllimport) // Note: actually gcc seems to also supports this syntax.
+    #endif
+  #endif
+  #define SIMPLEGRAPHIC_DLL_LOCAL
+#else
+  #if __GNUC__ >= 4
+    #define SIMPLEGRAPHIC_DLL_PUBLIC __attribute__ ((visibility ("default")))
+    #define SIMPLEGRAPHIC_DLL_LOCAL  __attribute__ ((visibility ("hidden")))
+  #else
+    #define SIMPLEGRAPHIC_DLL_PUBLIC
+    #define SIMPLEGRAPHIC_DLL_LOCAL
+  #endif
+#endif
+
+extern "C" SIMPLEGRAPHIC_DLL_PUBLIC int RunLuaFileAsWin(int argc, char** argv)
 {
 #ifdef _MEMTRAK_H
 	strcpy_s(_memTrak_reportName, 512, "SimpleGraphic/memtrak.log");
 #endif
 
+#ifdef _WIN32
 	timeBeginPeriod(1);
+#endif
 
 	sys_main_c* sys = new sys_main_c;
 
@@ -64,6 +91,8 @@ extern "C" __declspec(dllexport) int RunLuaFileAsWin(int argc, char** argv)
 
 	delete sys;
 
+#ifdef _WIN32
 	timeEndPeriod(1);
+#endif
 	return 0;
 }
