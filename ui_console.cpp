@@ -98,7 +98,7 @@ void ui_console_c::Hide()
 
 bool ui_console_c::KeyEvent(int key, int type)
 {
-	if (type == KE_KEYDOWN && key == '`' && sys->IsKeyDown(KEY_CTRL)) {
+	if (type == KE_KEYDOWN && (key == '`' || key == KEY_F1) && sys->IsKeyDown(KEY_CTRL)) {
 		Toggle();
 		return true;
 	}
