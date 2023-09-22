@@ -102,7 +102,7 @@ find_package(unofficial-angle CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(LuaJit REQUIRED)
+find_package(LuaJIT REQUIRED)
 find_package(re2 CONFIG REQUIRED)
 find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(Threads REQUIRED)
@@ -148,7 +148,6 @@ target_include_directories(SimpleGraphic
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/stb
     ${JPEG_INCLUDE_DIR}
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -182,7 +181,7 @@ target_link_libraries(SimpleGraphic
     fmt::fmt
     glfw
     imgui
-    ${LUAJIT_LIBRARIES}
+	LuaJIT::LuaJIT
     re2::re2
     unofficial-sodium::sodium
     Threads::Threads
@@ -193,14 +192,47 @@ install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
 if (WIN32)
-	if (DEFINED ENV{DEPS_DIR})
-		set(DEPS_BIN_DIR ${DEPS_DIR}/bin)
-    else ()
-        set(DEPS_BIN_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
-    endif ()
-    find_file(LUAJIT_DLL NAMES "lua51.dll" PATHS "${DEPS_BIN_DIR}" REQUIRED)
-    find_file(ZLIB_DLL NAMES "zlib1.dll" PATHS "${DEPS_BIN_DIR}" REQUIRED)
-    install(FILES ${LUAJIT_DLL} ${ZLIB_DLL} DESTINATION ".")
+	set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+	function(Honk result_var item)
+		message("Considering ${item}...")
+		set(${result_var} FALSE PARENT_SCOPE)
+	endfunction()
+
+	find_file(LuaJIT_DLL_DEBUG
+		NAMES "lua51.dll"
+		PATHS "${DEPS_DIR}"
+		PATH_SUFFIXES "debug/bin"
+		REQUIRED
+		NO_DEFAULT_PATH
+	)
+    find_file(LuaJIT_DLL_RELEASE
+		NAMES "lua51.dll"
+		PATHS "${DEPS_DIR}"
+		PATH_SUFFIXES "bin"
+		REQUIRED
+		NO_DEFAULT_PATH
+	)
+    find_file(ZLIB_DLL_DEBUG
+		NAMES "zlibd1.dll"
+		PATHS "${DEPS_DIR}"
+		PATH_SUFFIXES "debug/bin"
+		REQUIRED
+		NO_DEFAULT_PATH
+	)
+	find_file(ZLIB_DLL_RELEASE
+		NAMES "zlib1.dll"
+		PATHS "${DEPS_DIR}"
+		PATH_SUFFIXES "bin"
+		REQUIRED
+		NO_DEFAULT_PATH
+	)
+
+	install(FILES ${LuaJIT_DLL_DEBUG} ${ZLIB_DLL_DEBUG} DESTINATION "."
+		CONFIGURATIONS Debug
+	)
+    install(FILES ${LuaJIT_DLL_RELEASE} ${ZLIB_DLL_RELEASE} DESTINATION "."
+		CONFIGURATIONS Release MinSizeRel RelWithDebInfo
+	)
 endif ()
 
 
@@ -213,13 +245,12 @@ add_library(lcurl SHARED ${LCURL_SOURCES})
 target_include_directories(lcurl
     PRIVATE
     ${LCURL_SOURCE_DIR}/src
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
-    ${LUAJIT_LIBRARIES}
+	LuaJIT::LuaJIT
 )
 
 install(TARGETS lcurl RUNTIME DESTINATION ".")
@@ -232,12 +263,11 @@ add_library(lzip SHARED libs/LZip/lzip.cpp)
 
 target_include_directories(lzip
     PRIVATE
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 target_link_libraries(lzip
     PRIVATE
-    ${LUAJIT_LIBRARIES}
+	LuaJIT::LuaJIT
     ZLIB::ZLIB
 )
 
