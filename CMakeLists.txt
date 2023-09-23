@@ -22,6 +22,7 @@ include(InstallRequiredSystemLibraries)
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
     "dep/stb/stb_image.h"
+    "dep/stb/stb_image_resize.h"
     "dep/stb/stb_image_write.h"
     "engine/common/common.cpp"
     "engine/common/console.cpp"

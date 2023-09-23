@@ -12,16 +12,19 @@
 
 #include <GLFW/glfw3.h>
 
+#include <deque>
+#include <map>
 #include <optional>
 #include <utility>
 
 #include <imgui.h>
+#include <stb_image_resize.h>
 
 // ====================
 // sys_IVideo Interface
 // ====================
 
-class sys_video_c: public sys_IVideo {
+class sys_video_c : public sys_IVideo {
 public:
 	// Interface
 	int		Apply(sys_vidSet_s* set);
@@ -32,12 +35,12 @@ public:
 	void	FramebufferSizeChanged(int width, int height);
 	void	SizeChanged(int width, int height, bool max);
 	void	PosChanged(int x, int y);
-	void	GetMinSize(int &width, int &height);
+	void	GetMinSize(int& width, int& height);
 	void	SetVisible(bool vis);
 	bool	IsVisible();
 	void	SetTitle(const char* title);
-	void*	GetWindowHandle();
-	void	GetRelativeCursor(int &x, int &y);
+	void* GetWindowHandle();
+	void	GetRelativeCursor(int& x, int& y);
 	void	SetRelativeCursor(int x, int y);
 	bool	IsCursorOverWindow();
 
@@ -121,11 +124,159 @@ std::optional<std::pair<double, double>> PlatformGetCursorPos() {
 	GetCursorPos(&curPos);
 	return std::make_pair((double)curPos.x, (double)curPos.y);
 #else
-#warning LV: Global cursor position queries not implemented yet on this OS.
-	// TODO(LV): Implement on other OSes
-	return {};
+	#warning LV : Global cursor position queries not implemented yet on this OS.
+		// TODO(LV): Implement on other OSes
+		return {};
 #endif
 }
+
+struct sys_programIcons_c {
+#if _WIN32
+	sys_programIcons_c()
+	{
+#pragma pack( push )
+#pragma pack( 2 )
+		typedef struct
+		{
+			BYTE   bWidth;               // Width, in pixels, of the image
+			BYTE   bHeight;              // Height, in pixels, of the image
+			BYTE   bColorCount;          // Number of colors in image (0 if >=8bpp)
+			BYTE   bReserved;            // Reserved
+			WORD   wPlanes;              // Color Planes
+			WORD   wBitCount;            // Bits per pixel
+			DWORD  dwBytesInRes;         // how many bytes in this resource?
+			WORD   nID;                  // the ID
+		} GRPICONDIRENTRY, * LPGRPICONDIRENTRY;
+
+		typedef struct
+		{
+			WORD            idReserved;   // Reserved (must be 0)
+			WORD            idType;       // Resource type (1 for icons)
+			WORD            idCount;      // How many images?
+			GRPICONDIRENTRY idEntries[1]; // The entries for each image
+		} GRPICONDIR, * LPGRPICONDIR;
+#pragma pack( pop )
+
+		// Find the first icon group in the executable.
+		HMODULE mod = nullptr;
+		LPWSTR firstIconId{};
+		auto enumFunc = [](HMODULE mod, LPCWSTR type, LPWSTR name, LONG_PTR lparam) -> BOOL {
+			*(LPWSTR*)lparam = name;
+			return FALSE;
+			};
+		if (EnumResourceNamesW(mod, RT_GROUP_ICON, enumFunc, (LONG_PTR)&firstIconId) == FALSE
+			&& GetLastError() != ERROR_RESOURCE_ENUM_USER_STOP)
+		{
+			return;
+		}
+
+		// Find and decode all existing icons.
+		std::map<int, GLFWimage> imagesBySize;
+		{
+			HDC dc = GetDC(nullptr);
+			HRSRC groupRsrc = FindResourceW(mod, firstIconId, RT_GROUP_ICON);
+			HGLOBAL groupGlobal = LoadResource(mod, groupRsrc);
+			auto* groupIconDir = (GRPICONDIR*)LockResource(groupGlobal);
+
+			for (int i = 0; i < groupIconDir->idCount; ++i) {
+				auto& e = groupIconDir->idEntries[i];
+
+				HRSRC iconRsrc = FindResourceW(mod, MAKEINTRESOURCEW(e.nID), RT_ICON);
+				HGLOBAL iconGlobal = LoadResource(mod, iconRsrc);
+				auto* data = (BYTE*)LockResource(iconGlobal);
+				DWORD size = SizeofResource(mod, iconRsrc);
+				HICON icon = CreateIconFromResourceEx(data, size, TRUE, 0x0003'0000, 0, 0, LR_DEFAULTCOLOR);
+
+				ICONINFO iconInfo{};
+				GetIconInfo(icon, &iconInfo);
+
+				BITMAP bmp{};
+				GetObject(iconInfo.hbmColor, sizeof(bmp), &bmp);
+
+				std::vector<uint8_t> bytes(bmp.bmWidthBytes * bmp.bmHeight);
+				std::vector<uint8_t> rgba(bmp.bmWidthBytes * bmp.bmHeight);
+
+				BITMAPINFO bmi{};
+				bmi.bmiHeader.biSize = sizeof(bmi.bmiHeader);
+				GetDIBits(dc, iconInfo.hbmColor, 0, 0, nullptr, &bmi, DIB_RGB_COLORS);
+
+				bmi.bmiHeader.biBitCount = 32;
+				bmi.bmiHeader.biCompression = BI_RGB;
+				bmi.bmiHeader.biHeight = abs(bmi.bmiHeader.biHeight);
+				if (GetDIBits(dc, iconInfo.hbmColor, 0, bmi.bmiHeader.biHeight, bytes.data(), &bmi, DIB_RGB_COLORS)) {
+					GLFWimage image{};
+					image.width = bmi.bmiHeader.biWidth;
+					image.height = bmi.bmiHeader.biHeight;
+					SwizzleFlipImage(image.width, image.height, bytes.data(), rgba.data());
+					imageDatas.push_back(std::move(rgba));
+					image.pixels = (unsigned char*)imageDatas.back().data();
+					imagesBySize[image.width] = image;
+				}
+				DeleteObject(iconInfo.hbmColor);
+				DeleteObject(iconInfo.hbmMask);
+				DestroyIcon(icon);
+				UnlockResource(iconGlobal);
+			}
+
+			UnlockResource(groupGlobal);
+			ReleaseDC(nullptr, dc);
+		}
+
+		// Generate most smaller sizes that icons can be for different display scale factors.
+		int desiredSizes[] = { 64, 48, 40, 32, 24, 20, 16 };
+		auto srcImage = imagesBySize.rbegin()->second;
+		for (auto size : desiredSizes) {
+			if (imagesBySize.count(size) != 0) {
+				continue;
+			}
+			std::vector<uint8_t> newRgba(size * size * 4);
+			stbir_resize_uint8(srcImage.pixels, srcImage.width, srcImage.height, srcImage.width * 4,
+				newRgba.data(), size, size, size * 4, 4);
+			imageDatas.push_back(std::move(newRgba));
+			GLFWimage newImage;
+			newImage.width = size;
+			newImage.height = size;
+			newImage.pixels = imageDatas.back().data();
+			imagesBySize[size] = newImage;
+		}
+
+		for (auto I = imagesBySize.rbegin(); I != imagesBySize.rend(); ++I) {
+			images.push_back(I->second);
+		}
+	}
+
+private:
+	void SwizzleFlipImage(int width, int height, uint8_t const* inPtr, uint8_t* outPtr) {
+		// Map from upside down rows of BGRA to RGBA.
+		for (size_t row = 0; row < height; ++row) {
+			size_t stride = width * 4;
+			auto* src = &inPtr[row * stride];
+			auto* dst = &outPtr[(height - row - 1) * stride];
+			for (size_t col = 0; col < width; ++col) {
+				*dst++ = src[2];
+				*dst++ = src[1];
+				*dst++ = src[0];
+				*dst++ = src[3];
+				src += 4;
+			}
+		}
+	}
+#endif
+
+public:
+	size_t Size()
+	{
+		return images.size();
+	}
+
+	GLFWimage const* Data()
+	{
+		return images.data();
+	}
+
+	std::vector<GLFWimage> images;
+	std::deque<std::vector<uint8_t>> imageDatas;
+};
 
 // ==================
 // System Video Class
@@ -149,7 +300,8 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	if (cur.display >= numMon) {
 		sys->con->Warning("display #%d doesn't exist (max display number is %d)", cur.display, numMon - 1);
 		cur.display = 0;
-	} else if (cur.display < 0) {
+	}
+	else if (cur.display < 0) {
 		// Use monitor containing the mouse cursor if available, otherwise primary monitor
 		cur.display = 0;
 		if (auto curPos = PlatformGetCursorPos()) {
@@ -171,7 +323,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 
 	if (sys->debuggerRunning) {
 		// Force topmost off if debugger is attached
-		cur.flags&= ~VID_TOPMOST;
+		cur.flags &= ~VID_TOPMOST;
 	}
 	if (cur.mode[0] == 0) {
 		// Use default resolution if one isn't specified
@@ -192,14 +344,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		wrec.left = cur.save.pos[0];
 		wrec.top = cur.save.pos[1];
 		if (cur.save.maximised) {
-			cur.flags|= VID_MAXIMIZE;
-		} else {
+			cur.flags |= VID_MAXIMIZE;
+		}
+		else {
 			cur.mode[0] = cur.save.size[0];
 			cur.mode[1] = cur.save.size[1];
 		}
-	} else {
-		wrec.left = (scrSize[0] - cur.mode[0])/2 + mon[cur.display].left;
-		wrec.top = (scrSize[1] - cur.mode[1])/2 + mon[cur.display].top;
+	}
+	else {
+		wrec.left = (scrSize[0] - cur.mode[0]) / 2 + mon[cur.display].left;
+		wrec.top = (scrSize[1] - cur.mode[1]) / 2 + mon[cur.display].top;
 	}
 	vid.pos[0] = wrec.left;
 	vid.pos[1] = wrec.top;
@@ -231,6 +385,13 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			glfwGetError(&errDesc);
 			sys->con->Printf("Could not create window, %s\n", errDesc);
 		}
+
+		{
+			sys_programIcons_c icons;
+			if (icons.Size() > 0) {
+				glfwSetWindowIcon(wnd, (int)icons.Size(), icons.Data());
+			}
+		}
 		glfwMakeContextCurrent(wnd);
 		gladLoadGLES2(glfwGetProcAddress);
 
@@ -247,45 +408,45 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			if (!is_inside) {
 				video->lastCursorPos.reset();
 			}
-		});
+			});
 		glfwSetCursorPosCallback(wnd, [](GLFWwindow* wnd, double x, double y) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureMouse) {
 				return;
 			}
 			auto video = (sys_video_c*)sys->video;
-			video->lastCursorPos = CursorPos{(int)x, (int)y};
-		});
+			video->lastCursorPos = CursorPos{ (int)x, (int)y };
+			});
 		glfwSetWindowCloseCallback(wnd, [](GLFWwindow* wnd) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			glfwSetWindowShouldClose(wnd, sys->initialised && sys->core->CanExit());
-		});
+			});
 		glfwSetFramebufferSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->FramebufferSizeChanged(width, height);
-		});
+			});
 		glfwSetWindowSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			bool maximized = glfwGetWindowAttrib(wnd, GLFW_MAXIMIZED);
 			sys->video->SizeChanged(width, height, maximized);
-		});
+			});
 		glfwSetWindowMaximizeCallback(wnd, [](GLFWwindow* wnd, int maximized) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			int width{}, height{};
 			glfwGetWindowSize(wnd, &width, &height);
 			sys->video->SizeChanged(width, height, maximized == GLFW_TRUE);
-		});
+			});
 		glfwSetWindowPosCallback(wnd, [](GLFWwindow* wnd, int x, int y) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->PosChanged(x, y);
-		});
+			});
 		glfwSetCharCallback(wnd, [](GLFWwindow* wnd, uint32_t codepoint) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureKeyboard) {
 				return;
 			}
 			sys->core->KeyEvent(codepoint, KE_CHAR);
-		});
+			});
 		glfwSetKeyCallback(wnd, [](GLFWwindow* wnd, int key, int scancode, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureKeyboard) {
@@ -300,7 +461,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 					sys->core->KeyEvent(ch, KE_CHAR);
 				}
 			}
-		});
+			});
 		glfwSetMouseButtonCallback(wnd, [](GLFWwindow* wnd, int button, int action, int mods) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureMouse) {
@@ -308,7 +469,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			}
 			auto video = (sys_video_c*)sys->video;
 			int sg_key;
-			switch(button) {
+			switch (button) {
 			case GLFW_MOUSE_BUTTON_LEFT:
 				sg_key = KEY_LMOUSE;
 				break;
@@ -349,7 +510,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 						abs(prevPos.x - curPos.x) <= DOUBLECLICK_RANGE &&
 						abs(prevPos.y - curPos.y) <= DOUBLECLICK_RANGE)
 					{
-							sg_type = KE_DBLCLK;
+						sg_type = KE_DBLCLK;
 					}
 				}
 				if (sg_type == KE_DBLCLK) {
@@ -364,7 +525,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 				}
 			}
 			sys->core->KeyEvent(sg_key, sg_type);
-		});
+			});
 		glfwSetScrollCallback(wnd, [](GLFWwindow* wnd, double xoffset, double yoffset) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureMouse) {
@@ -373,15 +534,16 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			if (yoffset > 0) {
 				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYDOWN);
 				sys->core->KeyEvent(KEY_MWHEELUP, KE_KEYUP);
-			} else if (yoffset < 0) {
+			}
+			else if (yoffset < 0) {
 				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYDOWN);
 				sys->core->KeyEvent(KEY_MWHEELDOWN, KE_KEYUP);
 			}
-		});
+			});
 		glfwSetWindowContentScaleCallback(wnd, [](GLFWwindow* wnd, float xScale, float yScale) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->vid.dpiScale = xScale;
-		});
+			});
 	}
 
 	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
@@ -432,7 +594,7 @@ void sys_video_c::PosChanged(int x, int y)
 	vid.pos[1] = y;
 }
 
-void sys_video_c::GetMinSize(int &width, int &height)
+void sys_video_c::GetMinSize(int& width, int& height)
 {
 	width = minSize[0];
 	height = minSize[1];
@@ -440,23 +602,24 @@ void sys_video_c::GetMinSize(int &width, int &height)
 
 void sys_video_c::SetVisible(bool vis)
 {
-	if ( !initialised ) return;
+	if (!initialised) return;
 	if (vis) {
 		glfwShowWindow(wnd);
-	} else {
+	}
+	else {
 		glfwHideWindow(wnd);
 	}
 }
 
 bool sys_video_c::IsVisible()
 {
-	if ( !initialised || !wnd ) return false;
+	if (!initialised || !wnd) return false;
 	return !!glfwGetWindowAttrib(wnd, GLFW_VISIBLE);
 }
 
 void sys_video_c::SetTitle(const char* title)
 {
-	strcpy(curTitle, (title && *title)? title : CFG_TITLE);
+	strcpy(curTitle, (title && *title) ? title : CFG_TITLE);
 	if (initialised) {
 		glfwSetWindowTitle(wnd, curTitle);
 	}
@@ -467,9 +630,9 @@ void* sys_video_c::GetWindowHandle()
 	return wnd;
 }
 
-void sys_video_c::GetRelativeCursor(int &x, int &y)
+void sys_video_c::GetRelativeCursor(int& x, int& y)
 {
-	if ( !initialised ) return;
+	if (!initialised) return;
 	double xpos, ypos;
 	glfwGetCursorPos(wnd, &xpos, &ypos);
 	x = (int)floor(xpos);
@@ -478,7 +641,7 @@ void sys_video_c::GetRelativeCursor(int &x, int &y)
 
 void sys_video_c::SetRelativeCursor(int x, int y)
 {
-	if ( !initialised ) return;
+	if (!initialised) return;
 	glfwSetCursorPos(wnd, (double)x, (double)y);
 }
 
