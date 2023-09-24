@@ -8,8 +8,8 @@ if (APPLE)
 endif ()
 
 if (MSVC)
-	add_compile_options("/Zi")
-	add_link_options("/DEBUG:FULL")
+    add_compile_options("/Zi")
+    add_link_options("/DEBUG:FULL")
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -109,33 +109,33 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
 add_library(imgui STATIC
-	dep/imgui/imconfig.h
-	dep/imgui/imgui.cpp
-	dep/imgui/imgui.h
-	dep/imgui/imgui_demo.cpp
-	dep/imgui/imgui_draw.cpp
-	dep/imgui/imgui_internal.h
-	dep/imgui/imgui_tables.cpp
-	dep/imgui/imgui_widgets.cpp
-	dep/imgui/imstb_rectpack.h
-	dep/imgui/imstb_textedit.h
-	dep/imgui/imstb_truetype.h
-	dep/imgui/backends/imgui_impl_glfw.cpp
-	dep/imgui/backends/imgui_impl_glfw.h
-	dep/imgui/backends/imgui_impl_opengl3.cpp
-	dep/imgui/backends/imgui_impl_opengl3.h
-	dep/imgui/backends/imgui_impl_opengl3_loader.h
-	dep/imgui/misc/cpp/imgui_stdlib.cpp
-	dep/imgui/misc/cpp/imgui_stdlib.h
+    dep/imgui/imconfig.h
+    dep/imgui/imgui.cpp
+    dep/imgui/imgui.h
+    dep/imgui/imgui_demo.cpp
+    dep/imgui/imgui_draw.cpp
+    dep/imgui/imgui_internal.h
+    dep/imgui/imgui_tables.cpp
+    dep/imgui/imgui_widgets.cpp
+    dep/imgui/imstb_rectpack.h
+    dep/imgui/imstb_textedit.h
+    dep/imgui/imstb_truetype.h
+    dep/imgui/backends/imgui_impl_glfw.cpp
+    dep/imgui/backends/imgui_impl_glfw.h
+    dep/imgui/backends/imgui_impl_opengl3.cpp
+    dep/imgui/backends/imgui_impl_opengl3.h
+    dep/imgui/backends/imgui_impl_opengl3_loader.h
+    dep/imgui/misc/cpp/imgui_stdlib.cpp
+    dep/imgui/misc/cpp/imgui_stdlib.h
 )
 
 target_compile_definitions(imgui PUBLIC
-	"IMGUI_IMPL_OPENGL_ES2"
+    "IMGUI_IMPL_OPENGL_ES2"
 )
 
 target_include_directories(imgui PUBLIC
-	dep/imgui
-	dep/imgui/backends
+    dep/imgui
+    dep/imgui/backends
 )
 
 target_link_libraries(imgui PUBLIC
@@ -181,7 +181,7 @@ target_link_libraries(SimpleGraphic
     fmt::fmt
     glfw
     imgui
-	LuaJIT::LuaJIT
+    LuaJIT::LuaJIT
     re2::re2
     unofficial-sodium::sodium
     Threads::Threads
@@ -192,47 +192,47 @@ install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
 if (WIN32)
-	set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
-	function(Honk result_var item)
-		message("Considering ${item}...")
-		set(${result_var} FALSE PARENT_SCOPE)
-	endfunction()
+    set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+    function(Honk result_var item)
+        message("Considering ${item}...")
+        set(${result_var} FALSE PARENT_SCOPE)
+    endfunction()
 
-	find_file(LuaJIT_DLL_DEBUG
-		NAMES "lua51.dll"
-		PATHS "${DEPS_DIR}"
-		PATH_SUFFIXES "debug/bin"
-		REQUIRED
-		NO_DEFAULT_PATH
-	)
+    find_file(LuaJIT_DLL_DEBUG
+        NAMES "lua51.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "debug/bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
     find_file(LuaJIT_DLL_RELEASE
-		NAMES "lua51.dll"
-		PATHS "${DEPS_DIR}"
-		PATH_SUFFIXES "bin"
-		REQUIRED
-		NO_DEFAULT_PATH
-	)
+        NAMES "lua51.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
     find_file(ZLIB_DLL_DEBUG
-		NAMES "zlibd1.dll"
-		PATHS "${DEPS_DIR}"
-		PATH_SUFFIXES "debug/bin"
-		REQUIRED
-		NO_DEFAULT_PATH
-	)
-	find_file(ZLIB_DLL_RELEASE
-		NAMES "zlib1.dll"
-		PATHS "${DEPS_DIR}"
-		PATH_SUFFIXES "bin"
-		REQUIRED
-		NO_DEFAULT_PATH
-	)
+        NAMES "zlibd1.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "debug/bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
+    find_file(ZLIB_DLL_RELEASE
+        NAMES "zlib1.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
 
-	install(FILES ${LuaJIT_DLL_DEBUG} ${ZLIB_DLL_DEBUG} DESTINATION "."
-		CONFIGURATIONS Debug
-	)
+    install(FILES ${LuaJIT_DLL_DEBUG} ${ZLIB_DLL_DEBUG} DESTINATION "."
+        CONFIGURATIONS Debug
+    )
     install(FILES ${LuaJIT_DLL_RELEASE} ${ZLIB_DLL_RELEASE} DESTINATION "."
-		CONFIGURATIONS Release MinSizeRel RelWithDebInfo
-	)
+        CONFIGURATIONS Release MinSizeRel RelWithDebInfo
+    )
 endif ()
 
 
@@ -250,7 +250,7 @@ target_include_directories(lcurl
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
-	LuaJIT::LuaJIT
+    LuaJIT::LuaJIT
 )
 
 install(TARGETS lcurl RUNTIME DESTINATION ".")
@@ -267,7 +267,7 @@ target_include_directories(lzip
 
 target_link_libraries(lzip
     PRIVATE
-	LuaJIT::LuaJIT
+    LuaJIT::LuaJIT
     ZLIB::ZLIB
 )
 
