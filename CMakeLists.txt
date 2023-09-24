@@ -193,10 +193,6 @@ install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
-    function(Honk result_var item)
-        message("Considering ${item}...")
-        set(${result_var} FALSE PARENT_SCOPE)
-    endfunction()
 
     find_file(LuaJIT_DLL_DEBUG
         NAMES "lua51.dll"
