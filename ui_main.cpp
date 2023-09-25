@@ -286,8 +286,11 @@ void ui_main_c::ScriptInit()
 	lua_pushcfunction(L, traceback);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "traceback");
+
+#if _WIN32
 	lua_pushboolean(L, 1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "LUA_NOENV");
+#endif
 
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);

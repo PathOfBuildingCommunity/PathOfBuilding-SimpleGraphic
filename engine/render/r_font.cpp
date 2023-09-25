@@ -44,7 +44,7 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 	numFontHeight = 0;
 	fontHeightMap = NULL;
 
-	std::string fileNameBase = fmt::format(CFG_DATAPATH "fonts/{}", fontName);
+	std::string fileNameBase = fmt::format(CFG_DATAPATH "Fonts/{}", fontName);
 
 	// Open info file
 	std::string tgfName = fileNameBase + ".tgf";

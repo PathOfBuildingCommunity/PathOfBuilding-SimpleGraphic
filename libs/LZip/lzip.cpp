@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <io.h>
 
 #include "zlib.h"
+
+#ifdef _WIN32
+#define LZIP_EXPORT __declspec(dllexport)
+#else
+#define LZIP_EXPORT
+#endif
 
 extern "C" {
 #include "lua.h"
@@ -326,7 +331,7 @@ void fs_file_c::Seek(int pos, int mode)
 			// Seek forward
 			byte* sk = new byte[diff];
 			Read(sk, diff);
-			delete sk;
+			delete[] sk;
 		} else if (diff < 0) {
 			// Restart reading
 			pU = 0;
@@ -337,7 +342,7 @@ void fs_file_c::Seek(int pos, int mode)
 				// Seek forward
 				byte* sk = new byte[seekto];
 				Read(sk, seekto);
-				delete sk;
+				delete[] sk;
 			}
 		}
 	} else {
@@ -668,7 +673,7 @@ static int l_zipFile_Length(lua_State* L)
 	return 1;
 }
 
-extern "C" __declspec(dllexport) int luaopen_lzip(lua_State* L)
+extern "C" LZIP_EXPORT int luaopen_lzip(lua_State* L)
 {
 	lua_settop(L, 0);
 	lua_newtable(L); // Library table
