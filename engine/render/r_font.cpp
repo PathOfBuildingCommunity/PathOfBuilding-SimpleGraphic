@@ -32,6 +32,14 @@ struct f_fontHeight_s {
 	int		height;
 	int		numGlyph;
 	f_glyph_s glyphs[128];
+	f_glyph_s defGlyph{0.0, 0.0, 0.0, 0.0, 0, 0, 0};
+
+	f_glyph_s const& Glyph(char ch) const {
+		if ((unsigned char)ch >= numGlyph) {
+			return defGlyph;
+		}
+		return glyphs[(unsigned char)ch];
+	}
 };
 
 // ===========
@@ -126,11 +134,13 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, const char* str)
 		if (escLen) {
 			str+= escLen;
 		} else if (*str == '\t') {
-			int spWidth = fh->glyphs[' '].width + fh->glyphs[' '].spLeft + fh->glyphs[' '].spRight;
-			width+= spWidth << 2;
+			auto& glyph = fh->Glyph(' ');
+			int spWidth = glyph.width + glyph.spLeft + glyph.spRight;
+			width += spWidth << 2;
 			str++;
 		} else {
-			width+= fh->glyphs[*str].width + fh->glyphs[*str].spLeft + fh->glyphs[*str].spRight;
+			auto& glyph = fh->Glyph(*str);
+			width+= glyph.width + glyph.spLeft + glyph.spRight;
 			str++;
 		}
 	}
@@ -165,7 +175,8 @@ const char* r_font_c::StringCursorInternal(f_fontHeight_s* fh, const char* str, 
 		if (escLen) {
 			str+= escLen;
 		} else if (*str == '\t') {
-			int spWidth = fh->glyphs[' '].width + fh->glyphs[' '].spLeft + fh->glyphs[' '].spRight;
+			auto& glyph = fh->Glyph(' ');
+			int spWidth = glyph.width + glyph.spLeft + glyph.spRight;
 			x+= spWidth << 1;
 			if (curX <= x) {
 				break;
@@ -173,7 +184,8 @@ const char* r_font_c::StringCursorInternal(f_fontHeight_s* fh, const char* str, 
 			x+= spWidth << 1;
 			str++;
 		} else {
-			x+= fh->glyphs[*str].width + fh->glyphs[*str].spLeft + fh->glyphs[*str].spRight;
+			auto& glyph = fh->Glyph(*str);
+			x+= glyph.width + glyph.spLeft + glyph.spRight;
 			if (curX <= x) {
 				break;
 			}
@@ -274,28 +286,29 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, const 
 
 		// Handle tabs
 		if (*str == '\t') {
-			int spWidth = fh->glyphs[' '].width + fh->glyphs[' '].spLeft + fh->glyphs[' '].spRight;
+			auto& glyph = fh->Glyph(' ');
+			int spWidth = glyph.width + glyph.spLeft + glyph.spRight;
 			x+= (spWidth << 2) * scale;
 			str++;
 			continue;
 		}
 
 		// Draw glyph
-		f_glyph_s* glyph = fh->glyphs + *(str++);
-		x+= glyph->spLeft * scale;
-		if (glyph->width) {
-			double w = glyph->width * scale;
+		auto& glyph = fh->Glyph(*str++);
+		x+= glyph.spLeft * scale;
+		if (glyph.width) {
+			double w = glyph.width * scale;
 			if (x + w >= 0 && x < renderer->VirtualScreenWidth()) {
 				renderer->curLayer->Quad(
-					glyph->tcLeft, glyph->tcTop, x, y,
-					glyph->tcRight, glyph->tcTop, x + w, y,
-					glyph->tcRight, glyph->tcBottom, x + w, y + height,
-					glyph->tcLeft, glyph->tcBottom, x, y + height
+					glyph.tcLeft, glyph.tcTop, x, y,
+					glyph.tcRight, glyph.tcTop, x + w, y,
+					glyph.tcRight, glyph.tcBottom, x + w, y + height,
+					glyph.tcLeft, glyph.tcBottom, x, y + height
 				);
 			}
 			x+= w;
 		}
-		x+= glyph->spRight * scale;
+		x+= glyph.spRight * scale;
 	}
 }
 
