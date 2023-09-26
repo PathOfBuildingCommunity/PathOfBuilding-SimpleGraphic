@@ -8,8 +8,8 @@ if (APPLE)
 endif ()
 
 if (MSVC)
-	add_compile_options("/Zi")
-	add_link_options("/DEBUG:FULL")
+    add_compile_options("/Zi")
+    add_link_options("/DEBUG:FULL")
 endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
@@ -103,40 +103,40 @@ find_package(unofficial-angle CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
-find_package(LuaJit REQUIRED)
+find_package(LuaJIT REQUIRED)
 find_package(re2 CONFIG REQUIRED)
 find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
 add_library(imgui STATIC
-	dep/imgui/imconfig.h
-	dep/imgui/imgui.cpp
-	dep/imgui/imgui.h
-	dep/imgui/imgui_demo.cpp
-	dep/imgui/imgui_draw.cpp
-	dep/imgui/imgui_internal.h
-	dep/imgui/imgui_tables.cpp
-	dep/imgui/imgui_widgets.cpp
-	dep/imgui/imstb_rectpack.h
-	dep/imgui/imstb_textedit.h
-	dep/imgui/imstb_truetype.h
-	dep/imgui/backends/imgui_impl_glfw.cpp
-	dep/imgui/backends/imgui_impl_glfw.h
-	dep/imgui/backends/imgui_impl_opengl3.cpp
-	dep/imgui/backends/imgui_impl_opengl3.h
-	dep/imgui/backends/imgui_impl_opengl3_loader.h
-	dep/imgui/misc/cpp/imgui_stdlib.cpp
-	dep/imgui/misc/cpp/imgui_stdlib.h
+    dep/imgui/imconfig.h
+    dep/imgui/imgui.cpp
+    dep/imgui/imgui.h
+    dep/imgui/imgui_demo.cpp
+    dep/imgui/imgui_draw.cpp
+    dep/imgui/imgui_internal.h
+    dep/imgui/imgui_tables.cpp
+    dep/imgui/imgui_widgets.cpp
+    dep/imgui/imstb_rectpack.h
+    dep/imgui/imstb_textedit.h
+    dep/imgui/imstb_truetype.h
+    dep/imgui/backends/imgui_impl_glfw.cpp
+    dep/imgui/backends/imgui_impl_glfw.h
+    dep/imgui/backends/imgui_impl_opengl3.cpp
+    dep/imgui/backends/imgui_impl_opengl3.h
+    dep/imgui/backends/imgui_impl_opengl3_loader.h
+    dep/imgui/misc/cpp/imgui_stdlib.cpp
+    dep/imgui/misc/cpp/imgui_stdlib.h
 )
 
 target_compile_definitions(imgui PUBLIC
-	"IMGUI_IMPL_OPENGL_ES2"
+    "IMGUI_IMPL_OPENGL_ES2"
 )
 
 target_include_directories(imgui PUBLIC
-	dep/imgui
-	dep/imgui/backends
+    dep/imgui
+    dep/imgui/backends
 )
 
 target_link_libraries(imgui PUBLIC
@@ -149,7 +149,6 @@ target_include_directories(SimpleGraphic
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/stb
     ${JPEG_INCLUDE_DIR}
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -183,7 +182,7 @@ target_link_libraries(SimpleGraphic
     fmt::fmt
     glfw
     imgui
-    ${LUAJIT_LIBRARIES}
+    LuaJIT::LuaJIT
     re2::re2
     unofficial-sodium::sodium
     Threads::Threads
@@ -194,14 +193,43 @@ install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
 if (WIN32)
-	if (DEFINED ENV{DEPS_DIR})
-		set(DEPS_BIN_DIR ${DEPS_DIR}/bin)
-    else ()
-        set(DEPS_BIN_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
-    endif ()
-    find_file(LUAJIT_DLL NAMES "lua51.dll" PATHS "${DEPS_BIN_DIR}" REQUIRED)
-    find_file(ZLIB_DLL NAMES "zlib1.dll" PATHS "${DEPS_BIN_DIR}" REQUIRED)
-    install(FILES ${LUAJIT_DLL} ${ZLIB_DLL} DESTINATION ".")
+    set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+
+    find_file(LuaJIT_DLL_DEBUG
+        NAMES "lua51.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "debug/bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
+    find_file(LuaJIT_DLL_RELEASE
+        NAMES "lua51.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
+    find_file(ZLIB_DLL_DEBUG
+        NAMES "zlibd1.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "debug/bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
+    find_file(ZLIB_DLL_RELEASE
+        NAMES "zlib1.dll"
+        PATHS "${DEPS_DIR}"
+        PATH_SUFFIXES "bin"
+        REQUIRED
+        NO_DEFAULT_PATH
+    )
+
+    install(FILES ${LuaJIT_DLL_DEBUG} ${ZLIB_DLL_DEBUG} DESTINATION "."
+        CONFIGURATIONS Debug
+    )
+    install(FILES ${LuaJIT_DLL_RELEASE} ${ZLIB_DLL_RELEASE} DESTINATION "."
+        CONFIGURATIONS Release MinSizeRel RelWithDebInfo
+    )
 endif ()
 
 
@@ -214,13 +242,12 @@ add_library(lcurl SHARED ${LCURL_SOURCES})
 target_include_directories(lcurl
     PRIVATE
     ${LCURL_SOURCE_DIR}/src
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 target_link_libraries(lcurl
     PRIVATE
     CURL::libcurl
-    ${LUAJIT_LIBRARIES}
+    LuaJIT::LuaJIT
 )
 
 install(TARGETS lcurl RUNTIME DESTINATION ".")
@@ -233,12 +260,11 @@ add_library(lzip SHARED libs/LZip/lzip.cpp)
 
 target_include_directories(lzip
     PRIVATE
-    ${LUAJIT_INCLUDE_DIR}
 )
 
 target_link_libraries(lzip
     PRIVATE
-    ${LUAJIT_LIBRARIES}
+    LuaJIT::LuaJIT
     ZLIB::ZLIB
 )
 
