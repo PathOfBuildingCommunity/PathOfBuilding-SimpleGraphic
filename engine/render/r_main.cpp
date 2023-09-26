@@ -9,6 +9,7 @@
 #include "r_local.h"
 
 #include <array>
+#include <filesystem>
 #include <fmt/chrono.h>
 #include <map>
 #include <numeric>
@@ -1295,7 +1296,9 @@ void r_renderer_c::EndFrame()
 		for (int l = 0; l < numLayer; l++) {
 			auto& layer = layerSort[l];
 			if (layerBreak && layerBreak->first == layer->layer && layerBreak->second == layer->subLayer) {
+#ifdef _WIN32
 				DebugBreak();
+#endif
 			}
 			layer->Render();
 		}
@@ -1711,7 +1714,7 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
 
 	// Make folder if it doesn't exist
-	_mkdir(CFG_DATAPATH "Screenshots");
+	std::filesystem::create_directory(CFG_DATAPATH "Screenshots");
 	
 	// Save image
 	if (i->Save(ssname.c_str())) {
