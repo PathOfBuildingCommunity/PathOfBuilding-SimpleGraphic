@@ -296,35 +296,30 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 	priMon = 0;
 
+	struct WindowRect {
+		int left, top;
+		int right, bottom;
+	};
+
 	// Determine which monitor to create window on
-	if (cur.display >= numMon) {
-		sys->con->Warning("display #%d doesn't exist (max display number is %d)", cur.display, numMon - 1);
-		cur.display = 0;
-	}
-	else if (cur.display < 0) {
-		// Use monitor containing the mouse cursor if available, otherwise primary monitor
-		cur.display = 0;
-		if (auto curPos = PlatformGetCursorPos()) {
-			auto [curX, curY] = *curPos;
-			for (int m = 0; m < numMon; ++m) {
-				int right = mon[m].left + mon[m].width;
-				int bottom = mon[m].top + mon[m].height;
-				if (curX >= mon[m].left && curY >= mon[m].top && curX < right && curY < bottom) {
-					cur.display = m;
-					break;
-				}
+	// Use monitor containing the mouse cursor if available, otherwise primary monitor
+	int display = 0;
+	if (auto curPos = PlatformGetCursorPos()) {
+		auto [curX, curY] = *curPos;
+		for (int m = 0; m < numMon; ++m) {
+			int right = mon[m].left + mon[m].width;
+			int bottom = mon[m].top + mon[m].height;
+			if (curX >= mon[m].left && curY >= mon[m].top && curX < right && curY < bottom) {
+				display = m;
+				break;
 			}
 		}
 	}
-	defRes[0] = mon[cur.display].width;
-	defRes[1] = mon[cur.display].height;
+	defRes[0] = mon[display].width;
+	defRes[1] = mon[display].height;
 
 	minSize[0] = minSize[1] = 0;
 
-	if (sys->debuggerRunning) {
-		// Force topmost off if debugger is attached
-		cur.flags &= ~VID_TOPMOST;
-	}
 	if (cur.mode[0] == 0) {
 		// Use default resolution if one isn't specified
 		Vector2Copy(defRes, cur.mode);
@@ -332,17 +327,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	Vector2Copy(cur.mode, vid.size);
 	Vector2Copy(defRes, scrSize);
 
-	struct WindowRect {
-		int left, top;
-		int right, bottom;
-	};
-
 	// Get window rectangle
-	WindowRect wrec;
+	WindowRect wrec{};
+	std::optional<int> intersectedMonitor;
 	if (cur.flags & VID_USESAVED) {
-		// TODO(LV): Move offscreen windows to a monitor.
-		wrec.left = cur.save.pos[0];
-		wrec.top = cur.save.pos[1];
 		if (cur.save.maximised) {
 			cur.flags |= VID_MAXIMIZE;
 		}
@@ -350,35 +338,61 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			cur.mode[0] = cur.save.size[0];
 			cur.mode[1] = cur.save.size[1];
 		}
+
+		wrec.left = cur.save.pos[0];
+		wrec.top = cur.save.pos[1];
+		wrec.right = wrec.left + cur.mode[0];
+		wrec.bottom = wrec.top + cur.mode[1];
+
+		for (int m = 0; m < numMon; ++m) {
+			WindowRect drec{ mon[m].left, mon[m].top };
+			drec.right = drec.left + mon[m].width;
+			drec.bottom = drec.top + mon[m].height;
+
+			// A.lo < B.hi && A.hi > B.lo (half-open rects)
+			bool intersectsDisplay = drec.left < wrec.right && drec.top < wrec.bottom && drec.right > wrec.left && drec.bottom > wrec.top;
+			if (!intersectedMonitor && intersectsDisplay) {
+				intersectedMonitor = m;
+				break;
+			}	
+		}
 	}
-	else {
-		wrec.left = (scrSize[0] - cur.mode[0]) / 2 + mon[cur.display].left;
-		wrec.top = (scrSize[1] - cur.mode[1]) / 2 + mon[cur.display].top;
+
+	if (!intersectedMonitor) {
+		wrec.left = (scrSize[0] - cur.mode[0]) / 2 + mon[display].left;
+		wrec.top = (scrSize[1] - cur.mode[1]) / 2 + mon[display].top;
 	}
 	vid.pos[0] = wrec.left;
 	vid.pos[1] = wrec.top;
-	wrec.right = wrec.left + cur.mode[0];
-	wrec.bottom = wrec.top + cur.mode[1];
-	// TODO(LV): Verify that stored coordinates are aligned right.
 
 	if (initialised) {
-		glfwSetWindowSize(wnd, cur.mode[0], cur.mode[1]);
+		if (!!glfwGetWindowAttrib(wnd, GLFW_MAXIMIZED)) {
+			glfwRestoreWindow(wnd);
+		}
+		glfwSetWindowPos(wnd, wrec.left, wrec.top);
+		glfwSetWindowSize(wnd, wrec.right - wrec.left, wrec.bottom - wrec.top);
+		if (cur.flags & VID_MAXIMIZE) {
+			glfwMaximizeWindow(wnd);
+		}
 		if (cur.shown) {
 			glfwShowWindow(wnd);
 			sys->conWin->SetForeground();
 		}
+		else {
+			glfwHideWindow(wnd);
+		}
 	}
 	else {
 		glfwWindowHint(GLFW_RESIZABLE, !!(cur.flags & VID_RESIZABLE));
-		glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-		glfwWindowHint(GLFW_FLOATING, !!(cur.flags & VID_TOPMOST));
-		glfwWindowHint(GLFW_MAXIMIZED, !!(cur.flags & VID_MAXIMIZE));
+		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden to not flash the user with a stock window.
+		glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE); // Start restored in order to position the window before maximizing.
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 		glfwWindowHint(GLFW_DEPTH_BITS, 24);
 		//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);
+
 		wnd = glfwCreateWindow(cur.mode[0], cur.mode[1], curTitle, nullptr, nullptr);
 		if (!wnd) {
 			char const* errDesc = "Unknown error";
@@ -386,19 +400,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			sys->con->Printf("Could not create window, %s\n", errDesc);
 		}
 
-		{
-			sys_programIcons_c icons;
-			if (icons.Size() > 0) {
-				glfwSetWindowIcon(wnd, (int)icons.Size(), icons.Data());
-			}
-		}
 		glfwMakeContextCurrent(wnd);
 		gladLoadGLES2(glfwGetProcAddress);
 
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-		glfwSwapBuffers(wnd);
-
+		// Set up all our window callbacks
 		glfwSetWindowUserPointer(wnd, sys);
 		glfwSetCursorEnterCallback(wnd, [](GLFWwindow* wnd, int entered) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
@@ -544,11 +549,27 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->vid.dpiScale = xScale;
 			});
+
+		// Adjust window look and position
+		{
+			sys_programIcons_c icons;
+			if (icons.Size() > 0) {
+				glfwSetWindowIcon(wnd, (int)icons.Size(), icons.Data());
+			}
+		}
+		glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
+		glfwSetWindowPos(wnd, vid.pos[0], vid.pos[1]);
+		if (!!(cur.flags & VID_MAXIMIZE)) {
+			glfwMaximizeWindow(wnd);
+		}
+		glfwShowWindow(wnd);
+
+		// Clear early to avoid flash
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+		glfwSwapBuffers(wnd);
 	}
 
-	glfwSetWindowSizeLimits(wnd, cur.minSize[0], cur.minSize[1], GLFW_DONT_CARE, GLFW_DONT_CARE);
-
-	glfwSetWindowPos(wnd, vid.pos[0], vid.pos[1]);
 	glfwGetFramebufferSize(wnd, &vid.fbSize[0], &vid.fbSize[1]);
 	glfwGetWindowSize(wnd, &vid.size[0], &vid.size[1]);
 	glfwGetWindowContentScale(wnd, &sys->video->vid.dpiScale, nullptr);
