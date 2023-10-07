@@ -8,9 +8,11 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "r_local.h"
 
+#include <algorithm>
 #include <array>
 #include <filesystem>
 #include <fmt/chrono.h>
+#include <future>
 #include <map>
 #include <numeric>
 #include <random>
@@ -20,6 +22,9 @@
 
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <imgui_stdlib.h>
+
+static uint64_t MurmurHash64A(void const* data, int len, uint64_t seed);
 
 // =======
 // Classes
@@ -128,96 +133,150 @@ Mat4 OrthoMatrix(double left, double right, double bottom, double top, double ne
 // =================
 
 struct r_layerCmd_s {
-	enum {
+	enum Command {
 		VIEWPORT,
 		BLEND,
 		BIND,
 		COLOR,
 		QUAD,
 	} cmd;
-	union {
-		r_viewport_s viewport;
-		int blendMode;
-		r_tex_c* tex;
-		col4_t col;
-		struct {
-			double s[4];
-			double t[4];
-			double x[4];
-			double y[4];
-		} quad;
-	};
+};
+
+struct r_layerCmdViewport_s {
+	r_layerCmd_s::Command cmd;
+	r_viewport_s viewport;
+};
+
+struct r_layerCmdBlend_s {
+	r_layerCmd_s::Command cmd;
+	int blendMode;
+};
+
+struct r_layerCmdBind_s {
+	r_layerCmd_s::Command cmd;
+	r_tex_c* tex;
+};
+
+struct r_layerCmdColor_s {
+	r_layerCmd_s::Command cmd;
+	col4_t col;
+};
+
+struct r_layerCmdQuad_s {
+	r_layerCmd_s::Command cmd;
+	struct {
+		float s[4];
+		float t[4];
+		float x[4];
+		float y[4];
+	} quad;
 };
 
 r_layer_c::r_layer_c(r_renderer_c* renderer, int layer, int subLayer)
 	: renderer(renderer), layer(layer), subLayer(subLayer)
 {
+	cmdStorage.resize(1ull << 23);
+	cmdCursor = 0;
 	numCmd = 0;
-	cmdSize = 8;
-	cmdList = new r_layerCmd_s * [cmdSize];
 }
 
 r_layer_c::~r_layer_c()
 {
-	delete cmdList;
 }
 
-r_layerCmd_s* r_layer_c::NewCommand()
+static size_t CommandSize(r_layerCmd_s::Command cmd, size_t extraSize = 0) {
+	using Tag = r_layerCmd_s::Command;
+	switch (cmd) {
+	case Tag::VIEWPORT: return sizeof(r_layerCmdViewport_s);
+	case Tag::BLEND: return sizeof(r_layerCmdBlend_s);
+	case Tag::BIND: return sizeof(r_layerCmdBind_s);
+	case Tag::COLOR: return sizeof(r_layerCmdColor_s);
+	case Tag::QUAD: return sizeof(r_layerCmdQuad_s);
+	default:
+		abort();
+	}
+}
+
+r_layer_c::CmdHandle r_layer_c::GetFirstCommand()
 {
-	r_layerCmd_s* cmd;
-	if (renderer->layerCmdBinCount) {
-		cmd = renderer->layerCmdBin[--renderer->layerCmdBinCount];
+	CmdHandle ret{};
+	ret.offset = 0;
+	if (cmdCursor > 0) {
+		ret.cmd = (r_layerCmd_s*)cmdStorage.data();
 	}
-	else {
-		cmd = new r_layerCmd_s;
+	return ret;
+}
+
+bool r_layer_c::GetNextCommand(r_layer_c::CmdHandle& handle)
+{
+	if (handle.cmd == nullptr) {
+		return false;
 	}
-	if (numCmd == cmdSize) {
-		cmdSize <<= 1;
-		trealloc(cmdList, cmdSize);
+	handle.offset += (uint32_t)CommandSize(handle.cmd->cmd);
+	if (handle.offset >= cmdCursor) {
+		handle.cmd = nullptr;
+		return false;
 	}
-	cmdList[numCmd++] = cmd;
-	return cmd;
+	handle.cmd = (r_layerCmd_s*)(cmdStorage.data() + handle.offset);
+	return true;
+}
+
+r_layerCmd_s* r_layer_c::NewCommand(size_t size)
+{
+	size_t const cmdEnd = cmdCursor + size;
+	if (cmdEnd >= cmdStorage.size()) {
+		return nullptr;
+	}
+	auto *ret = (r_layerCmd_s*)(cmdStorage.data() + cmdCursor);
+	cmdCursor = cmdEnd;
+	++numCmd;
+	return ret;
 }
 
 void r_layer_c::SetViewport(r_viewport_s* viewport)
 {
-	r_layerCmd_s* cmd = NewCommand();
-	cmd->cmd = r_layerCmd_s::VIEWPORT;
-	cmd->viewport.x = viewport->x;
-	cmd->viewport.y = viewport->y;
-	cmd->viewport.width = viewport->width;
-	cmd->viewport.height = viewport->height;
+	if (auto* cmd = (r_layerCmdViewport_s*)NewCommand(CommandSize(r_layerCmd_s::VIEWPORT))) {
+		cmd->cmd = r_layerCmd_s::VIEWPORT;
+		cmd->viewport.x = viewport->x;
+		cmd->viewport.y = viewport->y;
+		cmd->viewport.width = viewport->width;
+		cmd->viewport.height = viewport->height;
+	}
 }
 
 void r_layer_c::SetBlendMode(int mode)
 {
-	r_layerCmd_s* cmd = NewCommand();
-	cmd->cmd = r_layerCmd_s::BLEND;
-	cmd->blendMode = mode;
+	if (auto* cmd = (r_layerCmdBlend_s*)NewCommand(CommandSize(r_layerCmd_s::BLEND))) {
+		cmd->cmd = r_layerCmd_s::BLEND;
+		cmd->blendMode = mode;
+	}
 }
 
 void r_layer_c::Bind(r_tex_c* tex)
 {
-	r_layerCmd_s* cmd = NewCommand();
-	cmd->cmd = r_layerCmd_s::BIND;
-	cmd->tex = tex;
+	if (auto* cmd = (r_layerCmdBind_s*)NewCommand(CommandSize(r_layerCmd_s::BIND))) {
+		cmd->cmd = r_layerCmd_s::BIND;
+		cmd->tex = tex;
+	}
 }
 
 void r_layer_c::Color(col4_t col)
 {
-	r_layerCmd_s* cmd = NewCommand();
-	cmd->cmd = r_layerCmd_s::COLOR;
-	Vector4Copy(col, cmd->col);
+	if (auto* cmd = (r_layerCmdColor_s*)NewCommand(CommandSize(r_layerCmd_s::COLOR))) {
+		cmd->cmd = r_layerCmd_s::COLOR;
+		Vector4Copy(col, cmd->col);
+	}
 }
 
-void r_layer_c::Quad(double s0, double t0, double x0, double y0, double s1, double t1, double x1, double y1, double s2, double t2, double x2, double y2, double s3, double t3, double x3, double y3)
+void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3)
 {
-	r_layerCmd_s* cmd = NewCommand();
-	cmd->cmd = r_layerCmd_s::QUAD;
-	cmd->quad.s[0] = s0; cmd->quad.s[1] = s1; cmd->quad.s[2] = s2; cmd->quad.s[3] = s3;
-	cmd->quad.t[0] = t0; cmd->quad.t[1] = t1; cmd->quad.t[2] = t2; cmd->quad.t[3] = t3;
-	cmd->quad.x[0] = x0; cmd->quad.x[1] = x1; cmd->quad.x[2] = x2; cmd->quad.x[3] = x3;
-	cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
+	if (auto* cmd = (r_layerCmdQuad_s*)NewCommand(CommandSize(r_layerCmd_s::QUAD))) {
+		cmd->cmd = r_layerCmd_s::QUAD;
+		cmd->quad.s[0] = s0; cmd->quad.s[1] = s1; cmd->quad.s[2] = s2; cmd->quad.s[3] = s3;
+		cmd->quad.t[0] = t0; cmd->quad.t[1] = t1; cmd->quad.t[2] = t2; cmd->quad.t[3] = t3;
+		cmd->quad.x[0] = x0; cmd->quad.x[1] = x1; cmd->quad.x[2] = x2; cmd->quad.x[3] = x3;
+		cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
+	}
 }
 
 // =================
@@ -229,7 +288,7 @@ struct r_aabb_s {
 	float hi[2];
 };
 
-r_aabb_s AabbFromCmdQuad(decltype(r_layerCmd_s::quad)& q, r_viewport_s& vp)
+r_aabb_s AabbFromCmdQuad(decltype(r_layerCmdQuad_s::quad)& q, r_viewport_s& vp)
 {
 	r_aabb_s r{
 		{+FLT_MAX, +FLT_MAX},
@@ -411,35 +470,40 @@ struct AdjacentMergeStrategy : RenderStrategy {
 
 	void ProcessCommand(r_layerCmd_s* cmd) override {
 		switch (cmd->cmd) {
-		case r_layerCmd_s::VIEWPORT:
-			nextViewport_ = cmd->viewport;
+		case r_layerCmd_s::VIEWPORT: {
+			auto* c = (r_layerCmdViewport_s*)cmd;
+			nextViewport_ = c->viewport;
 			if (showStats_) {
-				// ImGui::Text("VIEWPORT: %dx%d @ %d,%d", cmd->viewport.width, cmd->viewport.height, cmd->viewport.x, cmd->viewport.y);
+				// ImGui::Text("VIEWPORT: %dx%d @ %d,%d", c->viewport.width, c->viewport.height, c->viewport.x, c->viewport.y);
 			}
-			break;
-		case r_layerCmd_s::BLEND:
-			latchKey_.blendMode = cmd->blendMode;
+		} break;
+		case r_layerCmd_s::BLEND: {
+			auto* c = (r_layerCmdBlend_s*)cmd;
+			latchKey_.blendMode = c->blendMode;
 			if (showStats_) {
-				// ImGui::Text("BLEND: %s", s_blendModeString.at((r_blendMode_e)cmd->blendMode));
+				// ImGui::Text("BLEND: %s", s_blendModeString.at((r_blendMode_e)c->blendMode));
 			}
-			break;
-		case r_layerCmd_s::BIND:
-			nextTex_ = cmd->tex;
+		} break;
+		case r_layerCmd_s::BIND: {
+			auto* c = (r_layerCmdBind_s*)cmd;
+			nextTex_ = c->tex;
 			if (showStats_) {
-				// ImGui::Text("TEX: %s", cmd->tex->fileName.c_str());
+				// ImGui::Text("TEX: %s", c->tex->fileName.c_str());
 			}
-			break;
-		case r_layerCmd_s::COLOR:
-			std::copy_n(cmd->col, 4, tint_.data());
-			break;
+		} break;
+		case r_layerCmd_s::COLOR: {
+			auto* c = (r_layerCmdColor_s*)cmd;
+			std::copy_n(c->col, 4, tint_.data());
+		} break;
 		case r_layerCmd_s::QUAD: {
+			auto* c = (r_layerCmdQuad_s*)cmd;
 			if (showStats_) {
 				// ImGui::Text("QUAD");
 			}
 
 			// Cull the quad first before it influences any boundary cuts.
 			if (!!renderer_->r_drawCull->intVal) {
-				auto a = AabbFromCmdQuad(cmd->quad, nextViewport_);
+				auto a = AabbFromCmdQuad(c->quad, nextViewport_);
 				auto b = AabbFromViewport(nextViewport_);
 				bool intersects = AabbAabbIntersects(a, b);
 				if (!intersects) {
@@ -474,10 +538,10 @@ struct AdjacentMergeStrategy : RenderStrategy {
 			for (int v = 0; v < 4; v++) {
 				auto& q = quad[v];
 				auto& vp = nextViewport_;
-				q.u = (float)cmd->quad.s[v];
-				q.v = (float)cmd->quad.t[v];
-				q.x = (float)cmd->quad.x[v];
-				q.y = (float)cmd->quad.y[v];
+				q.u = c->quad.s[v];
+				q.v = c->quad.t[v];
+				q.x = c->quad.x[v];
+				q.y = c->quad.y[v];
 				q.r = tint_[0];
 				q.g = tint_[1];
 				q.b = tint_[2];
@@ -636,9 +700,8 @@ void r_layer_c::Render()
 		}
 		strat->SetShowStats(showStats);
 
-		for (int i = 0; i < numCmd; i++) {
-			r_layerCmd_s* cmd = cmdList[i];
-			strat->ProcessCommand(cmd);
+		for (CmdHandle cmdH = GetFirstCommand(); cmdH.cmd != nullptr; GetNextCommand(cmdH)) {
+			strat->ProcessCommand(cmdH.cmd);
 		}
 
 		strat->Flush();
@@ -648,15 +711,6 @@ void r_layer_c::Render()
 		}
 	}
 
-	for (int i = 0; i < numCmd; i++) {
-		r_layerCmd_s* cmd = cmdList[i];
-		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
-			renderer->layerCmdBinSize <<= 1;
-			trealloc(renderer->layerCmdBin, renderer->layerCmdBinSize);
-		}
-		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
-	}
-	numCmd = 0;
 	if (renderer->glPopGroupMarkerEXT) {
 		renderer->glPopGroupMarkerEXT();
 	}
@@ -664,14 +718,7 @@ void r_layer_c::Render()
 
 void r_layer_c::Discard()
 {
-	for (int i = 0; i < numCmd; i++) {
-		r_layerCmd_s* cmd = cmdList[i];
-		if (renderer->layerCmdBinCount == renderer->layerCmdBinSize) {
-			renderer->layerCmdBinSize <<= 1;
-			trealloc(renderer->layerCmdBin, renderer->layerCmdBinSize);
-		}
-		renderer->layerCmdBin[renderer->layerCmdBinCount++] = cmd;
-	}
+	cmdCursor = 0;
 	numCmd = 0;
 }
 
@@ -959,47 +1006,53 @@ void r_renderer_c::Init()
 	takeScreenshot = R_SSNONE;
 
 	// Set up DPI-scaling render target
-	{
-		glGenFramebuffers(1, &rttMain.framebuffer);
-		glGenTextures(1, &rttMain.colorTexture);
-
-		auto compileShader = [](std::string_view src, GLenum type) -> GLuint {
-			GLuint id = glCreateShader(type);
-			auto sourcePtr = src.data();
-			glShaderSource(id, 1, &sourcePtr, nullptr);
-			glCompileShader(id);
-			return id;
-			};
-
-		auto vsId = compileShader(s_scaleVsSource, GL_VERTEX_SHADER);
-		if (!GetShaderCompileSuccess(vsId)) {
-			auto log = GetShaderInfoLog(vsId);
-			sys->con->Printf("Scaling VS compile failure: %s\n", log.c_str());
+	for (int i = 0; i < 2; ++i) {
+		auto& rtt = rttMain[i];
+		if (i > 0) {
+			rtt = rttMain[0]; // Reuse shared parts like dimensions and program/locations.
 		}
-		auto fsId = compileShader(s_scaleFsSource, GL_FRAGMENT_SHADER);
-		if (!GetShaderCompileSuccess(fsId)) {
-			auto log = GetShaderInfoLog(fsId);
-			sys->con->Printf("Scaling FS compile failure: %s\n", log.c_str());
+		glGenFramebuffers(1, &rtt.framebuffer);
+		glGenTextures(1, &rtt.colorTexture);
+		
+		if (i == 0) {
+			auto compileShader = [](std::string_view src, GLenum type) -> GLuint {
+				GLuint id = glCreateShader(type);
+				auto sourcePtr = src.data();
+				glShaderSource(id, 1, &sourcePtr, nullptr);
+				glCompileShader(id);
+				return id;
+				};
+
+			auto vsId = compileShader(s_scaleVsSource, GL_VERTEX_SHADER);
+			if (!GetShaderCompileSuccess(vsId)) {
+				auto log = GetShaderInfoLog(vsId);
+				sys->con->Printf("Scaling VS compile failure: %s\n", log.c_str());
+			}
+			auto fsId = compileShader(s_scaleFsSource, GL_FRAGMENT_SHADER);
+			if (!GetShaderCompileSuccess(fsId)) {
+				auto log = GetShaderInfoLog(fsId);
+				sys->con->Printf("Scaling FS compile failure: %s\n", log.c_str());
+			}
+
+			GLuint prog = rtt.blitProg = glCreateProgram();
+			glAttachShader(prog, vsId);
+			glAttachShader(prog, fsId);
+			glLinkProgram(prog);
+			if (!GetProgramLinkSuccess(prog)) {
+				auto log = GetProgramInfoLog(prog);
+				sys->con->Printf("Scaling program link failure: %s\n", log.c_str());
+			}
+
+			GLint linked = GL_FALSE;
+			glGetProgramiv(prog, GL_LINK_STATUS, &linked);
+
+			glDeleteShader(vsId);
+			glDeleteShader(fsId);
+
+			rtt.blitAttribLocPos = glGetAttribLocation(prog, "a_position");
+			rtt.blitAttribLocTC = glGetAttribLocation(prog, "a_texcoord");
+			rtt.blitSampleLocColour = glGetUniformLocation(prog, "s_tex");
 		}
-
-		GLuint prog = rttMain.blitProg = glCreateProgram();
-		glAttachShader(prog, vsId);
-		glAttachShader(prog, fsId);
-		glLinkProgram(prog);
-		if (!GetProgramLinkSuccess(prog)) {
-			auto log = GetProgramInfoLog(prog);
-			sys->con->Printf("Scaling program link failure: %s\n", log.c_str());
-		}
-
-		GLint linked = GL_FALSE;
-		glGetProgramiv(prog, GL_LINK_STATUS, &linked);
-
-		glDeleteShader(vsId);
-		glDeleteShader(fsId);
-
-		rttMain.blitAttribLocPos = glGetAttribLocation(prog, "a_position");
-		rttMain.blitAttibLocTC = glGetAttribLocation(prog, "a_texcoord");
-		rttMain.blitSampleLocColour = glGetUniformLocation(prog, "s_tex");
 	}
 
 	// Load render resources
@@ -1049,9 +1102,12 @@ void r_renderer_c::Shutdown()
 	}
 	delete layerCmdBin;
 
-	glDeleteTextures(1, &rttMain.colorTexture);
-	glDeleteFramebuffers(1, &rttMain.framebuffer);
-	glDeleteProgram(rttMain.blitProg);
+	for (int i = 0; i < 2; ++i) {
+		auto& rtt = rttMain[i];
+		glDeleteTextures(1, &rtt.colorTexture);
+		glDeleteFramebuffers(1, &rtt.framebuffer);
+	}
+	glDeleteProgram(rttMain[0].blitProg);
 
 	// Shutdown texture manager
 	r_ITexManager::FreeHandle(texMan);
@@ -1076,27 +1132,30 @@ void r_renderer_c::BeginFrame()
 		auto& vid = sys->video->vid;
 		int wNew = VirtualScreenWidth();
 		int hNew = VirtualScreenHeight();
-		if (rttMain.width != wNew || rttMain.height != hNew) {
-			GLint prevTex2D, prevFB;
-			glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
-			glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFB);
-			glBindTexture(GL_TEXTURE_2D, rttMain.colorTexture);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wNew, hNew, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-			glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		for (int i = 0; i < 2; ++i) {
+			auto& rtt = rttMain[i];
+			if (rtt.width != wNew || rtt.height != hNew) {
+				GLint prevTex2D, prevFB;
+				glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+				glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFB);
+				glBindTexture(GL_TEXTURE_2D, rtt.colorTexture);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wNew, hNew, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
-			rttMain.width = wNew;
-			rttMain.height = hNew;
+				rtt.width = wNew;
+				rtt.height = hNew;
 
-			glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
-			glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rttMain.colorTexture, 0);
+				glBindFramebuffer(GL_FRAMEBUFFER, rtt.framebuffer);
+				glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rtt.colorTexture, 0);
 
-			glCheckFramebufferStatus(GL_FRAMEBUFFER);
+				glCheckFramebufferStatus(GL_FRAMEBUFFER);
 
-			glBindFramebuffer(GL_FRAMEBUFFER, prevFB);
-			glBindTexture(GL_TEXTURE_2D, prevTex2D);
+				glBindFramebuffer(GL_FRAMEBUFFER, prevFB);
+				glBindTexture(GL_TEXTURE_2D, prevTex2D);
+			}
 		}
 	}
 
@@ -1105,6 +1164,8 @@ void r_renderer_c::BeginFrame()
 	SetViewport();
 	SetBlendMode(RB_ALPHA);
 	DrawColor();
+
+	beginFrameToc = std::chrono::steady_clock::now();
 }
 
 static int layerCompFunc(const void* va, const void* vb)
@@ -1141,13 +1202,40 @@ void CVarCheckbox(char const* label, conVar_c* cvar) {
 	}
 }
 
+static std::string BinaryUnitPrefix(uint64_t quantity) {
+	if (quantity < 1ull<<10) {
+		return fmt::format("{} ", quantity);
+	}
+	if (quantity < 1ull << 20) {
+		return fmt::format("{:0.2f} Ki", quantity / 1024.0);
+	}
+	if (quantity < 1ull << 30) {
+		return fmt::format("{:0.2f} Mi", quantity / 1024.0 / 1024.0);
+	}
+	if (quantity < 1ull << 40) {
+		return fmt::format("{:0.2f} Gi", quantity / 1024.0 / 1024.0 / 1024.0);
+	}
+	if (quantity < 1ull << 50) {
+		return fmt::format("{:0.2f} Ti", quantity / 1024.0 / 1024.0 / 1024.0 / 1024.0);
+	}
+	if (quantity < 1ull << 60) {
+		return fmt::format("{:0.2f} Ti", quantity / 1024.0 / 1024.0 / 1024.0 / 1024.0 / 1024.0);
+	}
+	return fmt::format("{:0.2f} Pi", quantity / 1024.0 / 1024.0 / 1024.0 / 1024.0 / 1024.0);
+}
+
 void r_renderer_c::EndFrame()
 {
+	std::chrono::time_point endFrameTic = std::chrono::steady_clock::now();
+	frameStats.AppendDuration(&FrameStats::midFrameStepDurations, endFrameTic - beginFrameToc);
+
 	static bool showDemo = false;
 	static bool showMetrics = false;
+	static bool showHash = false;
+	static bool showTiming = false;
 	if (debugImGui) {
 		if (ImGui::Begin("Debug Hub", &debugImGui)) {
-			if (ImGui::Button("Demo")) {
+			if (ImGui::Button("ImGui Demo")) {
 				showDemo = true;
 			}
 			if (ImGui::Button("Metrics")) {
@@ -1173,18 +1261,18 @@ void r_renderer_c::EndFrame()
 	}
 	qsort(layerSort, numLayer, sizeof(r_layer_c*), layerCompFunc);
 	if (r_layerDebug->intVal) {
-		int totalCmd = 0;
+		size_t totalCmd = 0;
 		for (int l = 0; l < numLayer; l++) {
 			totalCmd += layerSort[l]->numCmd;
 			char str[1024];
-			sprintf(str, "%d (%4d,%4d) [%2d]", layerSort[l]->numCmd, layerSort[l]->layer, layerSort[l]->subLayer, l);
+			sprintf(str, "%zu (%4d,%4d) [%2d]", layerSort[l]->numCmd, layerSort[l]->layer, layerSort[l]->subLayer, l);
 			float w = (float)DrawStringWidth(16, F_FIXED, str);
 			DrawColor(0x7F000000);
 			DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - (l + 2) * 16.0f, w, 16);
 			DrawStringFormat(0, VirtualScreenHeight() - (l + 2) * 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 		}
 		char str[1024];
-		sprintf(str, "%d", totalCmd);
+		sprintf(str, "%zu", totalCmd);
 		float w = (float)DrawStringWidth(16, F_FIXED, str);
 		DrawColor(0xAF000000);
 		DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f, w, 16);
@@ -1195,17 +1283,30 @@ void r_renderer_c::EndFrame()
 	if (debugLayers) {
 		if (ImGui::Begin("Layers", &debugLayers)) {
 			ImGui::Text("Layers: %d", numLayer);
-			ImGui::Text("%d out of %d frames drawn, %d saved.", drawnFrames, totalFrames, savedFrames);
+			ImGui::Text("%d out of %d frames drawn.", drawnFrames, totalFrames);
 			CVarSliderInt("Optimization", r_layerOptimize);
 			CVarCheckbox("Elide identical frames", r_elideFrames);
 			CVarCheckbox("Draw command culling", r_drawCull);
 
-			int totalCmd{};
-			if (ImGui::BeginTable("Layer stats", 5, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
+			size_t totalFootprint{}, totalDenseFootprint{};
+			for (int l = 0; l < numLayer; ++l) {
+				size_t byteAcc{};
+				auto layer = layerSort[l];
+				size_t const numCmd = layer->numCmd;
+				totalFootprint += numCmd * sizeof(r_layerCmdQuad_s); // legacy footprint
+				totalDenseFootprint += layer->cmdCursor;
+			}
+
+			ImGui::Text("Total payload footprint: %sB", BinaryUnitPrefix(totalFootprint).c_str());
+			ImGui::Text("Total dense footprint: %sB", BinaryUnitPrefix(totalDenseFootprint).c_str());
+
+			size_t totalCmd{};
+			if (ImGui::BeginTable("Layer stats", 7, ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit)) {
 				ImGui::TableSetupColumn("Index");
 				ImGui::TableSetupColumn("Layer");
 				ImGui::TableSetupColumn("Sublayer");
 				ImGui::TableSetupColumn("Command count");
+				ImGui::TableSetupColumn("Dense");
 				ImGui::TableSetupColumn("Debug");
 				ImGui::TableHeadersRow();
 				for (int l = 0; l < numLayer; ++l) {
@@ -1222,6 +1323,8 @@ void r_renderer_c::EndFrame()
 					ImGui::Text("%d", layer->subLayer);
 					ImGui::TableNextColumn();
 					ImGui::Text("%d", layer->numCmd);
+					ImGui::TableNextColumn();
+					ImGui::Text("%sB", BinaryUnitPrefix(layer->cmdCursor).c_str());
 					ImGui::TableNextColumn();
 					if (ImGui::Button("Debug")) {
 						layerBreak = { layer->layer, layer->subLayer };
@@ -1240,60 +1343,54 @@ void r_renderer_c::EndFrame()
 		lastFrameHash.clear();
 	}
 
-	std::vector<uint8_t> commandDigest(crypto_shorthash_bytes());
+	std::future<std::optional<std::vector<uint8_t>>> elidedFrameHashFut;
 	if (elideFrames) {
-		{
-			std::vector<char> commandBytes;
-			commandBytes.reserve(1ull << 24);
-			auto hash_primitive = [&](auto& x) {
-				auto p = (uint8_t const*)&x;
-				commandBytes.insert(commandBytes.end(), p, p + sizeof(x));
-				};
+		elidedFrameHashFut = std::async([&]() -> std::optional<std::vector<uint8_t>> {
+			std::vector<uint8_t> commandDigest;
+
 			for (auto lIdx = 0; lIdx < numLayer; ++lIdx) {
 				auto layer = layerSort[lIdx];
-				hash_primitive(layer->layer);
-				hash_primitive(layer->subLayer);
-				for (auto cIdx = 0; cIdx < layer->numCmd; ++cIdx) {
-					auto cmd = layer->cmdList[cIdx];
-					hash_primitive(cmd->cmd);
-					switch (cmd->cmd) {
-					case r_layerCmd_s::VIEWPORT: {
-						hash_primitive(cmd->viewport);
-					} break;
-					case r_layerCmd_s::BLEND: {
-						hash_primitive(cmd->blendMode);
-					} break;
-					case r_layerCmd_s::BIND: {
-						// not safe around handle/ID reuse but probably good enough
-						hash_primitive(cmd->tex);
-						hash_primitive(cmd->tex->texId);
-						auto status = cmd->tex->status.load();
-						hash_primitive(status);
-					} break;
-					case r_layerCmd_s::COLOR: {
-						for (auto comp : cmd->col) {
-							hash_primitive(comp);
-						}
-					} break;
-					case r_layerCmd_s::QUAD: {
-						hash_primitive(cmd->quad);
-					} break;
-					}
-				}
+				uint64_t subHash = MurmurHash64A(layer->cmdStorage.data(), (int)layer->cmdCursor, 0ull);
+				uint8_t const* p = (uint8_t const*)&subHash;
+				commandDigest.insert(commandDigest.end(), p, p + sizeof(subHash));
 			}
-			static std::vector<uint8_t> const commandKey(crypto_shorthash_keybytes());
-			crypto_shorthash((unsigned char*)commandDigest.data(), (unsigned char const*)commandBytes.data(), commandBytes.size(), (unsigned char const*)commandKey.data());
-		}
+
+			return commandDigest;
+		});
+	}
+	else {
+		std::promise<std::optional<std::vector<uint8_t>>> p;
+		elidedFrameHashFut = p.get_future();
+		p.set_value({});
 	}
 
-	++totalFrames;
-	if (!elideFrames || lastFrameHash != commandDigest) {
-		lastFrameHash = commandDigest;
-		++drawnFrames;
+	elidedFrameHashFut.wait();
 
-		glBindFramebuffer(GL_FRAMEBUFFER, rttMain.framebuffer);
+	++totalFrames;
+	bool decideDraw = false;
+	bool elideDraw = false;
+	{
+		int drawRtt = 1 - presentRtt;
+		glBindFramebuffer(GL_FRAMEBUFFER, rttMain[drawRtt].framebuffer);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
-		for (int l = 0; l < numLayer; l++) {
+		int l{};
+		for (l = 0; l < numLayer; l++) {
+			if (!decideDraw && elidedFrameHashFut.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+				decideDraw = true;
+				auto commandDigest = elidedFrameHashFut.get();
+				if (commandDigest) {
+					if (*commandDigest == lastFrameHash) {
+						elideDraw = true;
+						break;
+					}
+					else {
+						lastFrameHash = *commandDigest;
+					}
+				}
+				else {
+					lastFrameHash.clear();
+				}
+			}
 			auto& layer = layerSort[l];
 			if (layerBreak && layerBreak->first == layer->layer && layerBreak->second == layer->subLayer) {
 #ifdef _WIN32
@@ -1302,43 +1399,85 @@ void r_renderer_c::EndFrame()
 			}
 			layer->Render();
 		}
-	}
-	else {
-		++savedFrames;
-		for (int l = 0; l < numLayer; l++) {
-			layerSort[l]->Discard();
+		if (!elideDraw) {
+			presentRtt = drawRtt;
+			++drawnFrames;
 		}
+	}
+
+	if (!decideDraw) {
+		if (auto commandDigest = elidedFrameHashFut.get()) {
+			lastFrameHash = *commandDigest;
+		}
+		else {
+			lastFrameHash.clear();
+		}
+	}
+
+	for (int l = 0; l < numLayer; ++l) {
+		layerSort[l]->Discard();
 	}
 	delete[] layerSort;
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+	{
+		auto rtt = rttMain[presentRtt];
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
-	float blitTriPos[] = {
-		-1.0f, -1.0f, //
-		3.0f, -1.0f, //
-		-1.0f, 3.0f, //
-	};
-	float blitTriUV[] = {
-		0.0f, 0.0f, //
-		2.0f, 0.0f, //
-		0.0f, 2.0f, //
-	};
+		float blitTriPos[] = {
+			-1.0f, -1.0f, //
+			3.0f, -1.0f, //
+			-1.0f, 3.0f, //
+		};
+		float blitTriUV[] = {
+			0.0f, 0.0f, //
+			2.0f, 0.0f, //
+			0.0f, 2.0f, //
+		};
 
-	glViewport(0, 0, sys->video->vid.fbSize[0], sys->video->vid.fbSize[1]);
-	glUseProgram(rttMain.blitProg);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriPos));
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriUV));
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-	glBindTexture(GL_TEXTURE_2D, rttMain.colorTexture);
-	glUniform1i(rttMain.blitSampleLocColour, 0);
-	glDrawArrays(GL_TRIANGLES, 0, 3);
-	glBindTexture(GL_TEXTURE_2D, 0);
-	glUseProgram(0);
+		glViewport(0, 0, sys->video->vid.fbSize[0], sys->video->vid.fbSize[1]);
+		glUseProgram(rtt.blitProg);
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriPos));
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, std::data(blitTriUV));
+		glEnableVertexAttribArray(0);
+		glEnableVertexAttribArray(1);
+		glBindTexture(GL_TEXTURE_2D, rtt.colorTexture);
+		glUniform1i(rtt.blitSampleLocColour, 0);
+		glDrawArrays(GL_TRIANGLES, 0, 3);
+		glBindTexture(GL_TEXTURE_2D, 0);
+		glUseProgram(0);
+	}
 
-	glFlush();
+	if (showHash) {
+		if (ImGui::Begin("Hash")) {
+			std::vector<char> b64(sodium_base64_ENCODED_LEN(lastFrameHash.size(), sodium_base64_VARIANT_URLSAFE));
+			sodium_bin2base64(b64.data(), b64.size(), lastFrameHash.data(), lastFrameHash.size(), sodium_base64_VARIANT_URLSAFE);
+			ImGui::Text("%s", b64.data());
+		}
+		ImGui::End();
+	}
+
+	std::chrono::time_point endFrameToc = std::chrono::steady_clock::now();
+	frameStats.AppendDuration(&FrameStats::endFrameStepDurations, endFrameToc - endFrameTic);
+	
+	if (showTiming) {
+		if (ImGui::Begin("Timing")) {
+			auto stepStatsUi = [&](std::string label, auto& seq) {
+				auto [I, J] = std::minmax_element(seq.begin(), seq.end());
+				ImGui::LabelText(fmt::format("{} min", label).c_str(), "%2.2f ms", *I * 1'000.0f);
+				ImGui::LabelText(fmt::format("{} cur", label).c_str(), "%2.2f ms", seq.back() * 1'000.0f);
+				ImGui::LabelText(fmt::format("{} max", label).c_str(), "%2.2f ms", *J * 1'000.0f);
+				ImGui::PlotLines(label.c_str(),
+					[](void* data, int idx) -> float { auto& dq = *(std::deque<float>*)data; return dq[idx]; },
+					&seq, (int)seq.size(), 0, nullptr, 0.0f, 30.0f / 1000.0f);
+				};
+			stepStatsUi("MidFrame", frameStats.midFrameStepDurations);
+			ImGui::Separator();
+			stepStatsUi("EndFrame", frameStats.endFrameStepDurations);
+		}
+		ImGui::End();
+	}
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1723,4 +1862,74 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	else {
 		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
 	}
+}
+
+// ============================================
+// MurmurHash implementation from public domain
+// ============================================
+
+#if _WIN32
+#define BIG_CONSTANT(x) (x)
+#else
+#define BIG_CONSTANT(x) (x##LLU)
+#endif
+
+static inline uint64_t MurmurHashGetBlock(const uint64_t* p)
+{
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+	return *p;
+#else
+	const uint8_t* c = (const uint8_t*)p;
+	return (uint64_t)c[0] |
+		(uint64_t)c[1] << 8 |
+		(uint64_t)c[2] << 16 |
+		(uint64_t)c[3] << 24 |
+		(uint64_t)c[4] << 32 |
+		(uint64_t)c[5] << 40 |
+		(uint64_t)c[6] << 48 |
+		(uint64_t)c[7] << 56;
+#endif
+}
+
+uint64_t MurmurHash64A(const void* key, int len, uint64_t seed)
+{
+	const uint64_t m = BIG_CONSTANT(0xc6a4a7935bd1e995);
+	const int r = 47;
+
+	uint64_t h = seed ^ (len * m);
+
+	const uint64_t* data = (const uint64_t*)key;
+	const uint64_t* end = data + (len / 8);
+
+	while (data != end)
+	{
+		uint64_t k = MurmurHashGetBlock(data++);
+
+		k *= m;
+		k ^= k >> r;
+		k *= m;
+
+		h ^= k;
+		h *= m;
+	}
+
+	const unsigned char* data2 = (const unsigned char*)data;
+
+	switch (len & 7)
+	{
+	case 7: h ^= uint64_t(data2[6]) << 48;
+	case 6: h ^= uint64_t(data2[5]) << 40;
+	case 5: h ^= uint64_t(data2[4]) << 32;
+	case 4: h ^= uint64_t(data2[3]) << 24;
+	case 3: h ^= uint64_t(data2[2]) << 16;
+	case 2: h ^= uint64_t(data2[1]) << 8;
+	case 1: h ^= uint64_t(data2[0]);
+		h *= m;
+	};
+
+	h ^= h >> r;
+	h *= m;
+	h ^= h >> r;
+
+	return h;
 }

@@ -11,6 +11,8 @@
 #define R_MAXSHADERS 65536
 
 #include <array>
+#include <chrono>
+#include <deque>
 #include <imgui.h>
 #include <vector>
 
@@ -29,9 +31,9 @@ struct r_viewport_s {
 // Render layer
 class r_layer_c {
 public:
-	int		numCmd;
-	int		cmdSize;
-	struct r_layerCmd_s** cmdList;
+	std::vector<std::byte> cmdStorage;
+	size_t	cmdCursor{};
+	size_t	numCmd{};
 
 	int		layer;
 	int		subLayer;
@@ -43,14 +45,22 @@ public:
 	void	SetBlendMode(int mode);
 	void	Bind(r_tex_c* tex);
 	void	Color(col4_t col);
-	void	Quad(double s0, double t0, double x0, double y0, double s1, double t1, double x1, double y1, double s2, double t2, double x2, double y2, double s3, double t3, double x3, double y3);
+	void	Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3);
 	void	Render();
 	void    Discard();
+
+	struct CmdHandle {
+		uint32_t offset;
+		struct r_layerCmd_s* cmd;
+	};
+
+	CmdHandle GetFirstCommand();
+	bool GetNextCommand(CmdHandle& handle);
 
 private:
 	r_renderer_c* renderer;
 
-	struct r_layerCmd_s* NewCommand();
+	struct r_layerCmd_s* NewCommand(size_t size);
 };
 
 // Renderer Main Class
@@ -155,17 +165,36 @@ public:
 
 		GLuint	blitProg = 0;
 		GLuint	blitAttribLocPos = 0;
-		GLuint	blitAttibLocTC = 0;
+		GLuint	blitAttribLocTC = 0;
 		GLuint  blitSampleLocColour = 0;
 	};
 
-	RenderTarget rttMain;
+	RenderTarget rttMain[2];
+	int	presentRtt = 0;
 
 	std::vector<uint8_t> lastFrameHash{};
 
 	uint64_t totalFrames{};
 	uint64_t drawnFrames{};
-	uint64_t savedFrames{};
+
+	struct FrameStats {
+		std::deque<float> midFrameStepDurations;
+		std::deque<float> endFrameStepDurations;
+		std::deque<float> wholeFrameDurations;
+		size_t historyLength = 128;
+
+		void AppendDuration(std::deque<float> FrameStats::*series, std::chrono::duration<float> duration) {
+			auto& coll = this->*series;
+			if (coll.size() >= historyLength) {
+				size_t excess = coll.size() + 1 - historyLength;
+				coll.erase(coll.begin(), coll.begin() + excess);
+			}
+			coll.push_back(duration.count());
+		}
+	};
+
+	std::chrono::time_point<std::chrono::steady_clock> beginFrameToc;
+	FrameStats frameStats;
 
 	bool	elideFrames = false;
 	bool	debugImGui = false;
