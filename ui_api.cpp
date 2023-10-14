@@ -854,16 +854,26 @@ static int l_Deflate(lua_State* L)
 	deflateInit(&z, 9);
 	size_t inLen;
 	byte* in = (byte*)lua_tolstring(L, 1, &inLen);
-	int outSz = deflateBound(&z, inLen);
-	byte* out = new byte[outSz];
+	// Prevent deflation of input data larger than 128 MiB.
+	size_t const maxInLen = 128ull << 20;
+	if (inLen > maxInLen) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Input larger than 128 MiB");
+		return 2;
+	}
+	uLong outSz = deflateBound(&z, (uLong)inLen);
+	// Clamp deflate bound to a fairly reasonable 128 MiB.
+	size_t const maxOutLen = 128ull << 20;
+	outSz = std::min<uLong>(outSz, maxOutLen);
+	std::vector<byte> out(outSz);
 	z.next_in = in;
-	z.avail_in = inLen;
-	z.next_out = out;
+	z.avail_in = (uInt)inLen;
+	z.next_out = out.data();
 	z.avail_out = outSz;
 	int err = deflate(&z, Z_FINISH);
 	deflateEnd(&z);
 	if (err == Z_STREAM_END) {
-		lua_pushlstring(L, (const char*)out, z.total_out);
+		lua_pushlstring(L, (const char*)out.data(), z.total_out);
 		return 1;
 	}
 	else {
@@ -881,30 +891,40 @@ static int l_Inflate(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 1), "Inflate() argument 1: expected string, got %s", luaL_typename(L, 1));
 	size_t inLen;
 	byte* in = (byte*)lua_tolstring(L, 1, &inLen);
-	int outSz = inLen * 4;
-	byte* out = new byte[outSz];
+	size_t const maxInLen = 128ull << 20;
+	if (inLen > maxInLen) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Input larger than 128 MiB");
+	}
+	uInt outSz = (uInt)(inLen * 4);
+	std::vector<byte> out(outSz);
 	z_stream_s z;
 	z.next_in = in;
-	z.avail_in = inLen;
+	z.avail_in = (uInt)inLen;
 	z.zalloc = NULL;
 	z.zfree = NULL;
-	z.next_out = out;
+	z.next_out = out.data();
 	z.avail_out = outSz;
 	inflateInit(&z);
 	int err;
 	while ((err = inflate(&z, Z_NO_FLUSH)) == Z_OK) {
+		// Output buffer filled, try to embiggen it.
 		if (z.avail_out == 0) {
-			// Output buffer filled, embiggen it
-			int newSz = outSz << 1;
-			trealloc(out, newSz);
-			z.next_out = out + outSz;
+			// Avoid growing inflate output size after 128 MiB.
+			size_t const maxOutLen = 128ull << 20;
+			if (outSz > maxOutLen) {
+				break;
+			}
+			int newSz = outSz * 2;
+			out.resize(newSz);
+			z.next_out = out.data() + outSz;
 			z.avail_out = outSz;
 			outSz = newSz;
 		}
 	}
 	inflateEnd(&z);
 	if (err == Z_STREAM_END) {
-		lua_pushlstring(L, (const char*)out, z.total_out);
+		lua_pushlstring(L, (const char*)out.data(), z.total_out);
 		return 1;
 	}
 	else {
