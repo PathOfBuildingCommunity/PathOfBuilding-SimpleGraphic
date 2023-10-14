@@ -237,7 +237,7 @@ void ui_main_c::Init(int argc, char** argv)
 	}
 }
 
-void ui_main_c::RenderInit()
+void ui_main_c::RenderInit(r_featureFlag_e features)
 {
 	if (renderer) {
 		return;
@@ -252,7 +252,7 @@ void ui_main_c::RenderInit()
 
 	// Initialise renderer
 	renderer = r_IRenderer::GetHandle(sys);
-	renderer->Init();
+	renderer->Init(features);
 
 	// Create UI console handler
 	conUI = ui_IConsole::GetHandle(this);

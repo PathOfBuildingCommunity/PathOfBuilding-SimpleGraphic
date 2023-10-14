@@ -49,7 +49,7 @@ public:
 
 	static int InitAPI(lua_State* L);
 
-	void	RenderInit();
+	void	RenderInit(r_featureFlag_e features);
 	void	ScriptInit();
 	void	ScriptShutdown();
 

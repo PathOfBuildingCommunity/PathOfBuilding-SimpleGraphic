@@ -8,6 +8,11 @@
 // Classes
 // =======
 
+// Renderer feature flags
+enum r_featureFlag_e {
+	F_DPI_AWARE = 0x1, // App understands DPI, do not virtualize screen size/positions
+};
+
 // Font alignment
 enum r_fontAlign_e {
 	F_LEFT,
@@ -59,7 +64,7 @@ public:
 	static r_IRenderer* GetHandle(sys_IMain* sysHnd);
 	static void FreeHandle(r_IRenderer* hnd);
 
-	virtual void	Init() = 0;
+	virtual void	Init(r_featureFlag_e features) = 0;
 	virtual void	Shutdown() = 0;
 
 	virtual void	BeginFrame() = 0;

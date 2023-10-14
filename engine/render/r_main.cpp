@@ -870,9 +870,11 @@ void main(void) {
 // Init/Shutdown
 // =============
 
-void r_renderer_c::Init()
+void r_renderer_c::Init(r_featureFlag_e features)
 {
 	sys->con->PrintFunc("Render Init");
+
+	apiDpiAware = !!(features & F_DPI_AWARE);
 
 	timer_c timer;
 	timer.Start();
@@ -1776,15 +1778,24 @@ int r_renderer_c::VirtualScreenHeight() {
 }
 
 float r_renderer_c::VirtualScreenScaleFactor() {
-	return sys->video->vid.dpiScale;
+	if (apiDpiAware) {
+		return sys->video->vid.dpiScale;
+	}
+	return 1.0f;
 }
 
 int r_renderer_c::VirtualMap(int properValue) {
-	return (int)(properValue / VirtualScreenScaleFactor());
+	if (apiDpiAware) {
+		return properValue;
+	}
+	return (int)(properValue / sys->video->vid.dpiScale);
 }
 
 int r_renderer_c::VirtualUnmap(int mappedValue) {
-	return (int)(mappedValue * VirtualScreenScaleFactor());
+	if (apiDpiAware) {
+		return mappedValue;
+	}
+	return (int)(mappedValue * sys->video->vid.dpiScale);
 }
 
 // =====

@@ -67,7 +67,7 @@ private:
 class r_renderer_c: public r_IRenderer, public conCmdHandler_c {
 public:
 	// Interface
-	void	Init();
+	void	Init(r_featureFlag_e features);
 	void	Shutdown();
 
 	void	BeginFrame();
@@ -169,6 +169,7 @@ public:
 		GLuint  blitSampleLocColour = 0;
 	};
 
+	bool apiDpiAware{};
 	RenderTarget rttMain[2];
 	int	presentRtt = 0;
 
