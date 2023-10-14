@@ -1830,25 +1830,45 @@ void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c& args)
 
 void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 {
-	int xs = sys->video->vid.size[0];
-	int ys = sys->video->vid.size[1];
+	if (i->type != IMGTYPE_RGB) {
+		return;
+	}
+	auto& rt = rttMain[presentRtt];
+	int const xs = rt.width;
+	int const ys = rt.height;
 
-	int size = xs * ys * 3;
-	byte* sbuf = new byte[size];
+	// Pixel reading only supports RGBA and an implementation-specific format.
+	// Use RGBA for convenience as that's close enough to what we want to save in the end.
+	int const readSize = xs * ys * 4;
+	int const writeSize = xs * ys * 3;
+	std::vector<byte> sbuf(readSize);
 
 	// Read the front buffer
+	GLint oldFb{};
+	GLenum oglErr = glGetError();
+	GLenum implColorReadFormat{}, implColorReadType{};
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFb);
+	glBindFramebuffer(GL_FRAMEBUFFER, rttMain[presentRtt].framebuffer);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
-	glReadPixels(0, 0, xs, ys, r_tex_c::GLTypeForImgType(i->type), GL_UNSIGNED_BYTE, sbuf);
+	glReadPixels(0, 0, xs, ys, GL_RGBA, GL_UNSIGNED_BYTE, sbuf.data());
+	oglErr = glGetError();
+	glBindFramebuffer(GL_FRAMEBUFFER, oldFb);
 
-	// Flip the image
-	int	span = xs * 3;
-	byte* ss = new byte[size];
-	byte* p1 = sbuf;
-	byte* p2 = ss + size - span;
-	for (int y = 0; y < ys; y++, p1 += span, p2 -= span) {
-		memcpy(p2, p1, span);
+	// Flip and convert the image to RGB
+	int const readSpan = xs * 4;
+	int	const writeSpan = xs * 3;
+	byte* ss = new byte[writeSize]; // This is a raw pointer as ownership is taken by the image object.
+	byte* p1 = sbuf.data();
+	byte* p2 = ss + writeSize - writeSpan;
+	for (int y = 0; y < ys; ++y, p2 -= writeSpan * 2) {
+		for (int x = 0; x < xs; ++x) {
+			*p2++ = *p1++; // R
+			*p2++ = *p1++; // G
+			*p2++ = *p1++; // B
+			p1++; // A
+		}
 	}
-	delete[] sbuf;
+	sbuf.clear();
 
 	// Set image info
 	i->dat = ss;
