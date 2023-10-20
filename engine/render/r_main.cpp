@@ -1372,8 +1372,7 @@ void r_renderer_c::EndFrame()
 	bool decideDraw = false;
 	bool elideDraw = false;
 	{
-		int drawRtt = 1 - presentRtt;
-		glBindFramebuffer(GL_FRAMEBUFFER, rttMain[drawRtt].framebuffer);
+		glBindFramebuffer(GL_FRAMEBUFFER, GetDrawRenderTarget().framebuffer);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 		int l{};
 		for (l = 0; l < numLayer; l++) {
@@ -1402,7 +1401,7 @@ void r_renderer_c::EndFrame()
 			layer->Render();
 		}
 		if (!elideDraw) {
-			presentRtt = drawRtt;
+			presentRtt = 1 - presentRtt;
 			++drawnFrames;
 		}
 	}
@@ -1422,7 +1421,7 @@ void r_renderer_c::EndFrame()
 	delete[] layerSort;
 
 	{
-		auto rtt = rttMain[presentRtt];
+		auto& rtt = GetPresentRenderTarget();
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
@@ -1833,7 +1832,7 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	if (i->type != IMGTYPE_RGB) {
 		return;
 	}
-	auto& rt = rttMain[presentRtt];
+	auto& rt = GetPresentRenderTarget();
 	int const xs = rt.width;
 	int const ys = rt.height;
 
@@ -1848,7 +1847,7 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	GLenum oglErr = glGetError();
 	GLenum implColorReadFormat{}, implColorReadType{};
 	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &oldFb);
-	glBindFramebuffer(GL_FRAMEBUFFER, rttMain[presentRtt].framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, rt.framebuffer);
 	glPixelStorei(GL_PACK_ALIGNMENT, 1);
 	glReadPixels(0, 0, xs, ys, GL_RGBA, GL_UNSIGNED_BYTE, sbuf.data());
 	oglErr = glGetError();
@@ -1893,6 +1892,16 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	else {
 		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
 	}
+}
+
+r_renderer_c::RenderTarget& r_renderer_c::GetDrawRenderTarget()
+{
+	return rttMain[1 - presentRtt];
+}
+
+r_renderer_c::RenderTarget& r_renderer_c::GetPresentRenderTarget()
+{
+	return rttMain[presentRtt];
 }
 
 // ============================================

@@ -205,4 +205,7 @@ public:
 	void	DoScreenshot(image_c* i, const char* ext);
 
 	void	C_Screenshot(IConsole* conHnd, args_c &args);
+
+	RenderTarget& GetDrawRenderTarget();
+	RenderTarget& GetPresentRenderTarget();
 };
