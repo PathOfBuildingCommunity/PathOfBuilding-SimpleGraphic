@@ -95,6 +95,52 @@ static ui_main_c* GetUIPtr(lua_State* L)
 	return ui;
 }
 
+// ===============
+// C++ scaffolding
+// ===============
+
+/*
+* ui->LAssert transfers control immediately out of the function without destroying
+* any C++ objects. To support RAII this scaffolding serves as a landing pad for
+* ui->LExpect, to transfer control to Lua but only after the call stack has been
+* unwound with normal C++ exception semantics.
+* 
+* Example use site:
+* SG_LUA_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*	auto foo = std::make_shared<Foo>();
+*   ui->LExpect(L, lua_gettop(L) >= 1), "Usage: DoTheThing(x)");
+*   ui->LExpect(L, lua_isstring(L, 1), "DoTheThing() argument 1: expected string, got %s", luaL_typename(L, 1));
+*	return 0;
+* }
+* SG_LUA_FUN_END()
+*/
+
+#ifdef _WIN32
+#define SG_NOINLINE __declspec(noinline)
+#else
+#define SG_NOINLINE [[gnu::noinline]]
+#endif
+#define SG_NORETURN [[noreturn]]
+
+SG_NORETURN static void LuaErrorWrapper(lua_State* L)
+{
+	lua_error(L);
+}
+
+#define SG_LUA_CPP_FUN_BEGIN(Name)                                 \
+static int l_##Name(lua_State* L) {                                \
+	int (*fun)(lua_State*) = [](lua_State* L) SG_NOINLINE -> int { \
+		try
+
+#define SG_LUA_CPP_FUN_END()                          \
+		catch (ui_expectationFailed_s) { return -1; } \
+    };                                                \
+	int rc = fun(L);                                  \
+	if (rc < 0) { LuaErrorWrapper(L); }               \
+	return rc; }
+
 // =========
 // Callbacks
 // =========
@@ -271,6 +317,38 @@ static int l_imgHandleImageSize(lua_State* L)
 	lua_pushinteger(L, height);
 	return 2;
 }
+
+class ui_luaReader_c {
+public:
+	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
+
+	// Always zero terminated as all regular strings are terminated in Lua.
+	std::string_view ArgToString(int k) {
+		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+		return lua_tostring(L, k);
+	}
+
+	void ArgCheckTable(int k) {
+		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ArgCheckNumber(int k) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ValCheckNumber(int k, char const* ctx) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
+			funName.c_str(), ctx, k, luaL_typename(L, k));
+	}
+
+private:
+	ui_main_c* ui;
+	lua_State* L;
+	std::string funName;
+};
 
 // =========
 // Rendering

@@ -8,6 +8,8 @@
 // Classes
 // =======
 
+struct ui_expectationFailed_s {};
+
 // UI Manager
 class ui_main_c: public ui_IMain {
 public:
@@ -53,7 +55,8 @@ public:
 	void	ScriptInit();
 	void	ScriptShutdown();
 
-	void	LAssert(lua_State* L, int cond, const char* fmt, ...);
+	void	LAssert(lua_State* L, int cond, const char* fmt, ...); // Non-local return to Lua code on failure
+	void	LExpect(lua_State* L, int cond, const char* fmt, ...); // Throws ui_expectationFailed_s on failure, message on Lua stack
 	int		IsUserData(lua_State* L, int index, const char* metaName);
 	int		PushCallback(const char* name);
 	void	PCall(int narg, int nret);
