@@ -18,6 +18,7 @@ include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
 include(InstallRequiredSystemLibraries)
+add_subdirectory(dep/glm)
 
 set(SIMPLEGRAPHIC_SOURCES
     "config.h"
@@ -25,6 +26,7 @@ set(SIMPLEGRAPHIC_SOURCES
     "dep/stb/stb_image_resize.h"
     "dep/stb/stb_image_write.h"
     "engine/common/common.cpp"
+    "engine/common.h"
     "engine/common/console.cpp"
     "engine/common/console.h"
     "engine/common/keylist.h"
@@ -137,6 +139,7 @@ target_compile_definitions(imgui PUBLIC
 target_include_directories(imgui PUBLIC
     dep/imgui
     dep/imgui/backends
+    dep/imgui/misc/cpp
 )
 
 target_link_libraries(imgui PUBLIC
@@ -181,6 +184,7 @@ target_link_libraries(SimpleGraphic
     unofficial::angle::libGLESv2
     fmt::fmt
     glfw
+    glm::glm
     imgui
     LuaJIT::LuaJIT
     re2::re2
