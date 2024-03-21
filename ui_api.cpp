@@ -106,7 +106,7 @@ static ui_main_c* GetUIPtr(lua_State* L)
 * unwound with normal C++ exception semantics.
 * 
 * Example use site:
-* SG_LUA_FUN_BEGIN(DoTheThing)
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
 * {
 *   ui_main_c* ui = GetUIPtr(L);
 *	auto foo = std::make_shared<Foo>();
@@ -114,7 +114,7 @@ static ui_main_c* GetUIPtr(lua_State* L)
 *   ui->LExpect(L, lua_isstring(L, 1), "DoTheThing() argument 1: expected string, got %s", luaL_typename(L, 1));
 *	return 0;
 * }
-* SG_LUA_FUN_END()
+* SG_LUA_CPP_FUN_END()
 */
 
 #ifdef _WIN32
@@ -317,6 +317,35 @@ static int l_imgHandleImageSize(lua_State* L)
 	lua_pushinteger(L, height);
 	return 2;
 }
+
+// ===============
+// Data validation
+// ===============
+
+/*
+* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
+* that ensures a consistent assertion message and reduces the risk of mistakes in
+* parameter validation.
+*
+* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
+* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
+* when unwinding.
+*
+* Example use site:
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*   ui_luaReader_c reader(ui, L, "DoTheThing");
+*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
+*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
+*   reader.ArgCheckNumber(2); // -''-
+*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
+*   // Do the thing
+*   return 0;
+* }
+* SG_LUA_CPP_FUN_END()
+*/
+
 
 class ui_luaReader_c {
 public:
