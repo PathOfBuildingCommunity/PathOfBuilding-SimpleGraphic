@@ -1904,9 +1904,10 @@ r_renderer_c::RenderTarget& r_renderer_c::GetPresentRenderTarget()
 	return rttMain[presentRtt];
 }
 
-// ============================================
-// MurmurHash implementation from public domain
-// ============================================
+// ===========================================================
+// MurmurHash implementation from public domain, obtained from
+// https://github.com/explosion/murmurhash/blob/9281c4825c24e64476457db89fb1d39bf09b3d23/murmurhash/MurmurHash2.cpp
+// ===========================================================
 
 #if _WIN32
 #define BIG_CONSTANT(x) (x)
