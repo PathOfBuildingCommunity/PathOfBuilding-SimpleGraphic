@@ -17,10 +17,10 @@
 
 // Glyph parameters
 struct f_glyph_s {
-	double	tcLeft = 0.0;
-	double	tcRight = 0.0;
-	double	tcTop = 0.0;
-	double	tcBottom = 0.0;
+	float	tcLeft = 0.0;
+	float	tcRight = 0.0;
+	float	tcTop = 0.0;
+	float	tcBottom = 0.0;
 	int		width = 0;
 	int		spLeft = 0;
 	int		spRight = 0;
@@ -32,7 +32,7 @@ struct f_fontHeight_s {
 	int		height;
 	int		numGlyph;
 	f_glyph_s glyphs[128];
-	f_glyph_s defGlyph{0.0, 0.0, 0.0, 0.0, 0, 0, 0};
+	f_glyph_s defGlyph{0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0};
 
 	f_glyph_s const& Glyph(char ch) const {
 		if ((unsigned char)ch >= numGlyph) {
@@ -84,10 +84,10 @@ r_font_c::r_font_c(r_renderer_c* renderer, const char* fontName)
 			// Add glyph
 			if (fh->numGlyph >= 128) continue;
 			f_glyph_s* glyph = &fh->glyphs[fh->numGlyph++];
-			glyph->tcLeft = (double)x / fh->tex->fileWidth;
-			glyph->tcRight = (double)(x + w) / fh->tex->fileWidth;
-			glyph->tcTop = (double)y / fh->tex->fileHeight;
-			glyph->tcBottom = (double)(y + fh->height) / fh->tex->fileHeight;
+			glyph->tcLeft = (float)x / fh->tex->fileWidth;
+			glyph->tcRight = (float)(x + w) / fh->tex->fileWidth;
+			glyph->tcTop = (float)y / fh->tex->fileHeight;
+			glyph->tcBottom = (float)(y + fh->height) / fh->tex->fileHeight;
 			glyph->width = w;
 			glyph->spLeft = sl;
 			glyph->spRight = sr;
@@ -240,14 +240,14 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, const 
 
 	// Find best height to use
 	f_fontHeight_s *fh = fontHeights[height > maxHeight? (numFontHeight - 1) : fontHeightMap[height]];
-	double scale = (double)height / fh->height;
+	float scale = (float)height / fh->height;
 
 	// Calculate the string position
-	double x = pos[X];
-	double y = pos[Y];
+	float x = pos[X];
+	float y = pos[Y];
 	if (align != F_LEFT) {
 		// Calculate the real width of the string
-		double width = StringWidthInternal(fh, str) * scale;
+		float width = StringWidthInternal(fh, str) * scale;
 		switch (align) {
 		case F_CENTRE:
 			x = floor((renderer->VirtualScreenWidth() - width) / 2.0f + pos[X]);
@@ -297,7 +297,7 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, const 
 		auto& glyph = fh->Glyph(*str++);
 		x+= glyph.spLeft * scale;
 		if (glyph.width) {
-			double w = glyph.width * scale;
+			float w = glyph.width * scale;
 			if (x + w >= 0 && x < renderer->VirtualScreenWidth()) {
 				renderer->curLayer->Quad(
 					glyph.tcLeft, glyph.tcTop, x, y,

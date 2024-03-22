@@ -50,7 +50,7 @@ image_c::~image_c()
 
 void image_c::CopyRaw(int inType, dword inWidth, dword inHeight, const byte* inDat)
 {
-	if (dat) delete dat;
+	if (dat) delete[] dat;
 	comp = inType & 0xF;
 	type = inType;
 	width = inWidth;
@@ -61,7 +61,7 @@ void image_c::CopyRaw(int inType, dword inWidth, dword inHeight, const byte* inD
 
 void image_c::Free()
 {
-	delete dat;
+	delete[] dat;
 	dat = NULL;
 }
 
@@ -188,7 +188,7 @@ bool targa_c::Load(const char* fileName)
 				int rlen = ((rlehdr & 0x7F) + 1) * comp; 
 				if (x + rlen > rowSize) {
 					con->Warning("TGA '%s': invalid RLE coding (overlong row)", fileName);
-					delete dat;
+					delete[] dat;
 					return true;
 				}
 				if (rlehdr & 0x80) {
@@ -225,7 +225,22 @@ bool targa_c::Load(const char* fileName)
 
 bool targa_c::Save(const char* fileName)
 {
-	return true;
+	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
+		return true;
+	}
+
+	// Open file
+	fileOutputStream_c out;
+	if (out.FileOpen(fileName, true)) {
+		return true;
+	}
+
+	auto rc = stbi_write_tga_to_func([](void* ctx, void* data, int size) {
+		auto out = (fileOutputStream_c*)ctx;
+		out->Write(data, size);
+		}, &out, width, height, comp, dat);
+
+	return !rc;
 }
 
 bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
@@ -277,14 +292,14 @@ bool jpeg_c::Load(const char* fileName)
 		return true;
 	}
 	int x, y, in_comp;
-	if (!stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp)) {
+	if (!stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp)) {
 		return true;
 	}
 	if (in_comp != 1 && in_comp != 3) {
 		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
 		return true;
 	}
-	stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, in_comp);
+	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, in_comp);
 	if (!data) {
 		stbi_image_free(data);
 		return true;
@@ -335,7 +350,7 @@ bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 		return true;
 	}
 	int x, y, comp;
-	if (stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &comp)) {
+	if (stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &comp)) {
 		return true;
 	}
 
@@ -366,14 +381,14 @@ bool png_c::Load(const char* fileName)
 		return true;
 	}
 	int x, y, in_comp;
-	if (!stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp)) {
+	if (!stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp)) {
 		return true;
 	}
 	width = x;
 	height = y;
 	comp = (in_comp == 1 || in_comp == 3) ? 3 : 4;
 	type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
-	stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, comp);
+	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, comp);
 	if (!data) {
 		stbi_image_free(data);
 		return true;
@@ -420,7 +435,7 @@ bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 		return true;
 	}
 	int x, y, comp;
-	if (stbi_info_from_memory(fileData.data(), fileData.size(), &x, &y, &comp)) {
+	if (stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &comp)) {
 		return true;
 	}
 
@@ -449,7 +464,7 @@ bool gif_c::Load(const char* fileName)
 			return true;
 		}
 		int x, y, in_comp;
-		stbi_uc* data = stbi_load_from_memory(fileData.data(), fileData.size(), &x, &y, &in_comp, 4);
+		stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, 4);
 		if (!data || in_comp != 4) {
 			stbi_image_free(data);
 			return true;

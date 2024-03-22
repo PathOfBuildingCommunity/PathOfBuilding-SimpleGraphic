@@ -31,8 +31,9 @@
 ** imgHandle:SetLoadingPriority(pri)
 ** width, height = imgHandle:ImageSize()
 **
-** RenderInit()
+** RenderInit(["flag1"[, "flag2"...]])  flag:{"DPI_AWARE"}
 ** width, height = GetScreenSize()
+** scaleFactor = GetScreenScale()
 ** SetClearColor(red, green, blue[, alpha])
 ** SetDrawLayer({layer|nil}[, subLayer)
 ** GetDrawLayer()
@@ -93,6 +94,52 @@ static ui_main_c* GetUIPtr(lua_State* L)
 	lua_pop(L, 1);
 	return ui;
 }
+
+// ===============
+// C++ scaffolding
+// ===============
+
+/*
+* ui->LAssert transfers control immediately out of the function without destroying
+* any C++ objects. To support RAII this scaffolding serves as a landing pad for
+* ui->LExpect, to transfer control to Lua but only after the call stack has been
+* unwound with normal C++ exception semantics.
+* 
+* Example use site:
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*	auto foo = std::make_shared<Foo>();
+*   ui->LExpect(L, lua_gettop(L) >= 1), "Usage: DoTheThing(x)");
+*   ui->LExpect(L, lua_isstring(L, 1), "DoTheThing() argument 1: expected string, got %s", luaL_typename(L, 1));
+*	return 0;
+* }
+* SG_LUA_CPP_FUN_END()
+*/
+
+#ifdef _WIN32
+#define SG_NOINLINE __declspec(noinline)
+#else
+#define SG_NOINLINE [[gnu::noinline]]
+#endif
+#define SG_NORETURN [[noreturn]]
+
+SG_NORETURN static void LuaErrorWrapper(lua_State* L)
+{
+	lua_error(L);
+}
+
+#define SG_LUA_CPP_FUN_BEGIN(Name)                                 \
+static int l_##Name(lua_State* L) {                                \
+	int (*fun)(lua_State*) = [](lua_State* L) SG_NOINLINE -> int { \
+		try
+
+#define SG_LUA_CPP_FUN_END()                          \
+		catch (ui_expectationFailed_s) { return -1; } \
+    };                                                \
+	int rc = fun(L);                                  \
+	if (rc < 0) { LuaErrorWrapper(L); }               \
+	return rc; }
 
 // =========
 // Callbacks
@@ -271,6 +318,67 @@ static int l_imgHandleImageSize(lua_State* L)
 	return 2;
 }
 
+// ===============
+// Data validation
+// ===============
+
+/*
+* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
+* that ensures a consistent assertion message and reduces the risk of mistakes in
+* parameter validation.
+*
+* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
+* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
+* when unwinding.
+*
+* Example use site:
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*   ui_luaReader_c reader(ui, L, "DoTheThing");
+*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
+*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
+*   reader.ArgCheckNumber(2); // -''-
+*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
+*   // Do the thing
+*   return 0;
+* }
+* SG_LUA_CPP_FUN_END()
+*/
+
+
+class ui_luaReader_c {
+public:
+	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
+
+	// Always zero terminated as all regular strings are terminated in Lua.
+	std::string_view ArgToString(int k) {
+		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+		return lua_tostring(L, k);
+	}
+
+	void ArgCheckTable(int k) {
+		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ArgCheckNumber(int k) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ValCheckNumber(int k, char const* ctx) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
+			funName.c_str(), ctx, k, luaL_typename(L, k));
+	}
+
+private:
+	ui_main_c* ui;
+	lua_State* L;
+	std::string funName;
+};
+
 // =========
 // Rendering
 // =========
@@ -278,7 +386,20 @@ static int l_imgHandleImageSize(lua_State* L)
 static int l_RenderInit(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	ui->RenderInit();
+	int n = lua_gettop(L);
+	bool dpiAware = false;
+	for (int i = 1; i <= n; ++i) {
+		ui->LAssert(L, lua_isstring(L, i), "RenderInit() argument %d: expected string, got %s", i, luaL_typename(L, i));
+		char const* str = lua_tostring(L, i);
+		if (strcmp(str, "DPI_AWARE") == 0) {
+			dpiAware = true;
+		}
+	}
+	r_featureFlag_e features{};
+	if (dpiAware) {
+		features = (r_featureFlag_e)(features | F_DPI_AWARE);
+	}
+	ui->RenderInit(features);
 	return 0;
 }
 
@@ -288,6 +409,13 @@ static int l_GetScreenSize(lua_State* L)
 	lua_pushinteger(L, ui->renderer->VirtualScreenWidth());
 	lua_pushinteger(L, ui->renderer->VirtualScreenHeight());
 	return 2;
+}
+
+static int l_GetScreenScale(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	lua_pushnumber(L, ui->renderer->VirtualScreenScaleFactor());
+	return 1;
 }
 
 static int l_SetClearColor(lua_State* L)
@@ -833,16 +961,26 @@ static int l_Deflate(lua_State* L)
 	deflateInit(&z, 9);
 	size_t inLen;
 	byte* in = (byte*)lua_tolstring(L, 1, &inLen);
-	int outSz = deflateBound(&z, inLen);
-	byte* out = new byte[outSz];
+	// Prevent deflation of input data larger than 128 MiB.
+	size_t const maxInLen = 128ull << 20;
+	if (inLen > maxInLen) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Input larger than 128 MiB");
+		return 2;
+	}
+	uLong outSz = deflateBound(&z, (uLong)inLen);
+	// Clamp deflate bound to a fairly reasonable 128 MiB.
+	size_t const maxOutLen = 128ull << 20;
+	outSz = std::min<uLong>(outSz, maxOutLen);
+	std::vector<byte> out(outSz);
 	z.next_in = in;
-	z.avail_in = inLen;
-	z.next_out = out;
+	z.avail_in = (uInt)inLen;
+	z.next_out = out.data();
 	z.avail_out = outSz;
 	int err = deflate(&z, Z_FINISH);
 	deflateEnd(&z);
 	if (err == Z_STREAM_END) {
-		lua_pushlstring(L, (const char*)out, z.total_out);
+		lua_pushlstring(L, (const char*)out.data(), z.total_out);
 		return 1;
 	}
 	else {
@@ -860,30 +998,40 @@ static int l_Inflate(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 1), "Inflate() argument 1: expected string, got %s", luaL_typename(L, 1));
 	size_t inLen;
 	byte* in = (byte*)lua_tolstring(L, 1, &inLen);
-	int outSz = inLen * 4;
-	byte* out = new byte[outSz];
+	size_t const maxInLen = 128ull << 20;
+	if (inLen > maxInLen) {
+		lua_pushnil(L);
+		lua_pushstring(L, "Input larger than 128 MiB");
+	}
+	uInt outSz = (uInt)(inLen * 4);
+	std::vector<byte> out(outSz);
 	z_stream_s z;
 	z.next_in = in;
-	z.avail_in = inLen;
+	z.avail_in = (uInt)inLen;
 	z.zalloc = NULL;
 	z.zfree = NULL;
-	z.next_out = out;
+	z.next_out = out.data();
 	z.avail_out = outSz;
 	inflateInit(&z);
 	int err;
 	while ((err = inflate(&z, Z_NO_FLUSH)) == Z_OK) {
+		// Output buffer filled, try to embiggen it.
 		if (z.avail_out == 0) {
-			// Output buffer filled, embiggen it
-			int newSz = outSz << 1;
-			trealloc(out, newSz);
-			z.next_out = out + outSz;
+			// Avoid growing inflate output size after 128 MiB.
+			size_t const maxOutLen = 128ull << 20;
+			if (outSz > maxOutLen) {
+				break;
+			}
+			int newSz = outSz * 2;
+			out.resize(newSz);
+			z.next_out = out.data() + outSz;
 			z.avail_out = outSz;
 			outSz = newSz;
 		}
 	}
 	inflateEnd(&z);
 	if (err == Z_STREAM_END) {
-		lua_pushlstring(L, (const char*)out, z.total_out);
+		lua_pushlstring(L, (const char*)out.data(), z.total_out);
 		return 1;
 	}
 	else {
@@ -1345,6 +1493,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	// Rendering
 	ADDFUNC(RenderInit);
 	ADDFUNC(GetScreenSize);
+	ADDFUNC(GetScreenScale);
 	ADDFUNC(SetClearColor);
 	ADDFUNC(SetDrawLayer);
 	ADDFUNC(GetDrawLayer);

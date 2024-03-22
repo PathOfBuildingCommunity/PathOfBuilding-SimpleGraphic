@@ -10,7 +10,6 @@
 
 // Video settings flags
 enum vidFlags_e {
-	VID_TOPMOST = 0x02,
 	VID_RESIZABLE = 0x04,
 	VID_MAXIMIZE = 0x08,
 	VID_USESAVED = 0x10,
@@ -29,9 +28,7 @@ struct sys_vidSave_s {
 struct sys_vidSet_s {
 	bool	shown = false;		// Show window?
 	int		flags = 0;		// Flags
-	int		display = 0;	// Display number
-	int		mode[2] = {};	// Resolution or window size
-	int		depth = 0;		// Bit depth
+	int		mode[2] = {};	// Window size
 	int		minSize[2] = {};	// Minimum size for resizable windows
 	sys_vidSave_s save; // Saved state
 };

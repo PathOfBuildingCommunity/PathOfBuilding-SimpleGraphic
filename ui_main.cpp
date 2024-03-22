@@ -95,6 +95,17 @@ void ui_main_c::LAssert(lua_State* L, int cond, const char* fmt, ...)
 	}
 }
 
+void ui_main_c::LExpect(lua_State* L, int cond, const char* fmt, ...)
+{
+	if (!cond) {
+		va_list va;
+		va_start(va, fmt);
+		lua_pushvfstring(L, fmt, va);
+		va_end(va);
+		throw ui_expectationFailed_s{};
+	}
+}
+
 int ui_main_c::IsUserData(lua_State* L, int index, const char* metaName)
 {
 	if (lua_type(L, index) != LUA_TUSERDATA || lua_getmetatable(L, index) == 0) {
@@ -237,7 +248,7 @@ void ui_main_c::Init(int argc, char** argv)
 	}
 }
 
-void ui_main_c::RenderInit()
+void ui_main_c::RenderInit(r_featureFlag_e features)
 {
 	if (renderer) {
 		return;
@@ -252,7 +263,7 @@ void ui_main_c::RenderInit()
 
 	// Initialise renderer
 	renderer = r_IRenderer::GetHandle(sys);
-	renderer->Init();
+	renderer->Init(features);
 
 	// Create UI console handler
 	conUI = ui_IConsole::GetHandle(this);

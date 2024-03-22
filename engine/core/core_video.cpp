@@ -46,7 +46,6 @@ public:
 	sys_IMain* sys;
 
 	conVar_c* vid_mode;
-	conVar_c* vid_display;
 	conVar_c* vid_fullscreen;
 	conVar_c* vid_resizable;
 	conVar_c* vid_last;
@@ -69,7 +68,6 @@ core_video_c::core_video_c(sys_IMain* sysHnd)
 	: conCmdHandler_c(sysHnd->con), sys(sysHnd)
 {
 	vid_mode		= sys->con->Cvar_Add("vid_mode", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFMODE, -1, VID_NUMMODES-1);
-	vid_display		= sys->con->Cvar_Add("vid_display", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFDISPLAY, -1, 15);
 	vid_fullscreen	= sys->con->Cvar_Add("vid_fullscreen", CV_ARCHIVE, CFG_VID_DEFFULLSCREEN);
 	vid_resizable	= sys->con->Cvar_Add("vid_resizable", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFRESIZABLE, 0, 3);
 	vid_last		= sys->con->Cvar_Add("vid_last", CV_ARCHIVE, "");
@@ -100,7 +98,6 @@ void core_video_c::Apply(bool shown)
 			}
 		}
 	}
-	set.display = vid_display->intVal;
 	if (vid_mode->intVal >= 0) {
 		set.mode[0] = (std::max)(vid_modeList[vid_mode->intVal][0], CFG_VID_MINWIDTH);
 		set.mode[1] = (std::max)(vid_modeList[vid_mode->intVal][1], CFG_VID_MINHEIGHT);
@@ -108,7 +105,6 @@ void core_video_c::Apply(bool shown)
 		set.mode[0] = 0;
 		set.mode[1] = 0;
 	}
-	set.depth = 0;
 	set.minSize[0] = CFG_VID_MINWIDTH;
 	set.minSize[1] = CFG_VID_MINHEIGHT;
 	sys->video->Apply(&set);
