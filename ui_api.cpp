@@ -1571,6 +1571,8 @@ int ui_main_c::InitAPI(lua_State* L)
 		if (!lua_isnil(L, -1)) {
 			lua_getfield(L, -1, "open");
 			ui->ioOpenf = luaL_ref(L, LUA_REGISTRYINDEX);
+			lua_pushcfunction(L, l_OpenFile);
+			lua_setfield(L, -2, "open");
 		}
 
 		lua_pop(L, 1);
