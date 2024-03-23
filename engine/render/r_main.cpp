@@ -1134,6 +1134,7 @@ void r_renderer_c::BeginFrame()
 		auto& vid = sys->video->vid;
 		int wNew = VirtualScreenWidth();
 		int hNew = VirtualScreenHeight();
+		bool const wantIntegerScaling = fmodf(vid.dpiScale, 1.0f) < 0.0005f;
 		for (int i = 0; i < 2; ++i) {
 			auto& rtt = rttMain[i];
 			if (rtt.width != wNew || rtt.height != hNew) {
@@ -1144,8 +1145,9 @@ void r_renderer_c::BeginFrame()
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, wNew, hNew, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				GLint const filterMode = wantIntegerScaling ? GL_NEAREST : GL_LINEAR;
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filterMode);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filterMode);
 
 				rtt.width = wNew;
 				rtt.height = hNew;
