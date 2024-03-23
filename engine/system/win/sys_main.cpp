@@ -138,7 +138,7 @@ find_c::~find_c()
 bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file)
 {
 	using namespace std::literals::string_view_literals;
-	auto globStr = glob.generic_string();
+	auto globStr = glob.generic_u8string();
 
 	// Deal with traditional "everything" wildcards.
 	if (glob == "*" || glob == "*.*") {
@@ -158,7 +158,7 @@ bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& f
 	else {
 		// Otherwise build a regular expression from the glob and use that to match files.
 		auto it = fmt::appender(buf);
-		for (char ch : glob.generic_string()) {
+		for (char ch : globStr) {
 			if (ch == '*') {
 				it = fmt::format_to(it, ".*");
 			}
@@ -183,19 +183,26 @@ bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& f
 	reOpts.set_case_sensitive(false);
 	RE2 reGlob{to_string(buf), reOpts};
 
-	return RE2::FullMatch(file.generic_string(), reGlob);
+	auto fileStr = file.generic_u8string();
+	return RE2::FullMatch(fileStr, reGlob);
 }
 
 bool find_c::FindFirst(const char* fileSpec)
 {
+#ifdef _WIN32
+	wchar_t* wideSpec = WidenUTF8String(fileSpec);
+	std::filesystem::path p(wideSpec);
+	FreeWideString(wideSpec);
+#else
 	std::filesystem::path p(fileSpec);
+#endif
 	glob = p.filename();
 
 	std::error_code ec;
 	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
 		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.string();
+			fileName = candFilename.u8string();
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -215,7 +222,7 @@ bool find_c::FindNext()
 	for (++iter; iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
 		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.string();
+			fileName = candFilename.u8string();
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
