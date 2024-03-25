@@ -67,7 +67,7 @@
 ** msec = GetTime()
 ** path = GetScriptPath()
 ** path = GetRuntimePath()
-** path = GetUserPath()
+** path, missingPath = GetUserPath() -- may fail, then returns nil and and approximation of the bad path
 ** SetWorkDir("<path>")
 ** path = GetWorkDir()
 ** ssID = LaunchSubScript("<scriptText>", "<funcList>", "<subList>"[, ...])
@@ -1065,7 +1065,17 @@ static int l_GetRuntimePath(lua_State* L)
 static int l_GetUserPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->sys->userPath.c_str());
+	auto& userPath = ui->sys->userPath;
+	if (userPath) {
+		lua_pushstring(L, userPath->c_str());
+		return 1;
+	}
+	
+	lua_pushnil(L);
+	if (auto& invalidUserPath = ui->sys->invalidUserPath) {
+		lua_pushstring(L, invalidUserPath->c_str());
+		return 2;
+	}
 	return 1;
 }
 
