@@ -426,6 +426,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			glfwSetWindowShouldClose(wnd, sys->initialised && sys->core->CanExit());
 			});
+		glfwSetWindowIconifyCallback(wnd, [](GLFWwindow* wnd, int value) {
+			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
+			sys->minimized = value == 1 ? true : false;
+			});
 		glfwSetFramebufferSizeCallback(wnd, [](GLFWwindow* wnd, int width, int height) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->FramebufferSizeChanged(width, height);
