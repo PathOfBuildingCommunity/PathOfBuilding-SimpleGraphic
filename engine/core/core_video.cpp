@@ -92,6 +92,9 @@ void core_video_c::Apply(bool shown)
 			set.flags|= VID_MAXIMIZE;
 		} else if (vid_resizable->intVal == 3) {
 			if (sscanf(vid_last->strVal.c_str(), "%d,%d,%d,%d,%d", set.save.size + 0, set.save.size + 1, set.save.pos + 0, set.save.pos + 1, (int*)&set.save.maximised) == 5) {
+				// Clamp saved window size as it may be persisted as zero before.
+				set.save.size[0] = (std::max)(CFG_VID_MINWIDTH, set.save.size[0]);
+				set.save.size[1] = (std::max)(CFG_VID_MINHEIGHT, set.save.size[1]);
 				set.flags|= VID_USESAVED;
 			} else {
 				set.flags|= VID_MAXIMIZE;
