@@ -145,29 +145,43 @@ bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& f
 		return true;
 	}
 
-	// If no wildcards are present, test file path as-is.
-	if (globStr.find_first_of("?*") == std::string::npos) {
-		return glob == file;
-	}
-
-	// Otherwise build a regular expression from the glob and use that to match files.
 	fmt::memory_buffer buf;
-	auto it = fmt::appender(buf);
-	for (char ch : glob.generic_string()) {
-		if (ch == '*') {
-			it = fmt::format_to(it, ".*");
-		} else if (ch == '?') {
-			*it++ = '.';
-		} else if ("+[]{}+()|"sv.find(ch) != std::string_view::npos) {
-			// Escape metacharacters
-			it = fmt::format_to(it, "\\{}", ch);
-		} else if (std::isalnum((unsigned char)ch)) {
-			*it++ = ch;
-		} else {
-			it = fmt::format_to(it, "[{}]", ch);
+
+	// If no wildcards are present, test file path verbatim.
+	// We use a regex rather than string comparisons to make it case-insensitive.
+	if (globStr.find_first_of("?*") == std::string::npos) {
+		buf.resize(globStr.size());
+		for (char ch : globStr) {
+			fmt::format_to(fmt::appender(buf), "[{}]", ch);
 		}
 	}
-	RE2 reGlob{to_string(buf)};
+	else {
+		// Otherwise build a regular expression from the glob and use that to match files.
+		auto it = fmt::appender(buf);
+		for (char ch : glob.generic_string()) {
+			if (ch == '*') {
+				it = fmt::format_to(it, ".*");
+			}
+			else if (ch == '?') {
+				*it++ = '.';
+			}
+			else if ("+[]{}+()|"sv.find(ch) != std::string_view::npos) {
+				// Escape metacharacters
+				it = fmt::format_to(it, "\\{}", ch);
+			}
+			else if (std::isalnum((unsigned char)ch)) {
+				*it++ = ch;
+			}
+			else {
+				it = fmt::format_to(it, "[{}]", ch);
+			}
+		}
+	}
+
+	// Assume case-insensitive comparisons are desired.
+	RE2::Options reOpts;
+	reOpts.set_case_sensitive(false);
+	RE2 reGlob{to_string(buf), reOpts};
 
 	return RE2::FullMatch(file.generic_string(), reGlob);
 }
