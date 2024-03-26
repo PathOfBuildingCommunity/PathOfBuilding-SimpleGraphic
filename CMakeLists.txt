@@ -150,6 +150,7 @@ target_link_libraries(imgui PUBLIC
 target_include_directories(SimpleGraphic
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dep/stb
     ${JPEG_INCLUDE_DIR}
 )
 
