@@ -712,14 +712,44 @@ std::string FindBasePath()
 #endif
 }
 
-std::string FindUserPath()
+std::optional<std::string> FindUserPath(std::optional<std::string>& invalidPath)
 {
 #ifdef _WIN32
-    PWSTR os_path{};
-    SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &os_path);
-    std::filesystem::path path(os_path);
-    CoTaskMemFree(os_path);
-    return path.string();
+    PWSTR osPath{};
+    HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &osPath);
+	if (FAILED(hr)) {
+		// The path may be inaccessible due to malfunctioning cloud providers.
+		CoTaskMemFree(osPath);
+		invalidPath.reset();
+		return {};
+	}
+	std::wstring pathStr = osPath;
+	CoTaskMemFree(osPath);
+	std::filesystem::path path(pathStr);
+	try {
+    	return path.string();
+	}
+	catch (std::system_error) {
+		// The path could not be converted into the narrow representation, convert the path
+		// string lossily for use in an ASCII error message on the Lua side.
+		invalidPath.reset();
+		std::wstring pathStr = path.wstring();
+		char defGlyph = '?';
+		BOOL defGlyphUsed{};
+		DWORD convFlags = WC_COMPOSITECHECK | WC_NO_BEST_FIT_CHARS | WC_DEFAULTCHAR;
+		int cb = WideCharToMultiByte(CP_ACP, 0, pathStr.c_str(), -1, nullptr, 0, &defGlyph, &defGlyphUsed);
+		if (cb) {
+			std::vector<char> buf(cb);
+			WideCharToMultiByte(CP_ACP, 0, pathStr.c_str(), -1, buf.data(), cb, &defGlyph, &defGlyphUsed);
+			for (auto& ch : buf) {
+				if ((unsigned char)ch >= 0x80) {
+					ch = '?'; // Substitute characters that we can represent but can't draw.
+				}
+			}
+			invalidPath = buf.data();
+		}
+		return {};
+	}
 #else
     if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
         return data_home_path;
@@ -755,7 +785,7 @@ sys_main_c::sys_main_c()
 
 	// Set the local system information
 	basePath = FindBasePath();
-	userPath = FindUserPath();
+	userPath = FindUserPath(invalidUserPath);
 }
 
 bool sys_main_c::Run(int argc, char** argv)
