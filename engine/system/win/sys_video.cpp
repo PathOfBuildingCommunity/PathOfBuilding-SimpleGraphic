@@ -604,15 +604,21 @@ void sys_video_c::FramebufferSizeChanged(int width, int height) {
 
 void sys_video_c::SizeChanged(int width, int height, bool max)
 {
-	vid.size[0] = width;
-	vid.size[1] = height;
-	vid.maximised = max;
+	// Avoid persisting an invalid window size from being minimized.
+	if (!glfwGetWindowAttrib(wnd, GLFW_ICONIFIED)) {
+		vid.size[0] = width;
+		vid.size[1] = height;
+		vid.maximised = max;
+	}
 }
 
 void sys_video_c::PosChanged(int x, int y)
 {
-	vid.pos[0] = x;
-	vid.pos[1] = y;
+	// Avoid persisting an invalid window location from being minimized.
+	if (!glfwGetWindowAttrib(wnd, GLFW_ICONIFIED)) {
+		vid.pos[0] = x;
+		vid.pos[1] = y;
+	}
 }
 
 void sys_video_c::GetMinSize(int& width, int& height)
