@@ -60,6 +60,7 @@ public:
 	class core_IMain* core = nullptr;
 
 	bool	initialised = false;
+	bool	minimized = false;
 	volatile bool	exitFlag = false;
 	volatile bool	restartFlag = false;
 	char*	exitMsg = nullptr;

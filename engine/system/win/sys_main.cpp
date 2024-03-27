@@ -848,8 +848,8 @@ bool sys_main_c::Run(int argc, char** argv)
 				Exit();
 				break;
 			}
-
-			core->Frame();
+			if (minimized == false)
+				core->Frame();
 
 			if (threadError) {
 				Error(threadError);
