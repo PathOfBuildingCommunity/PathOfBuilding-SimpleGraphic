@@ -8,6 +8,8 @@
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "r_local.h"
 
+#include "common/base64.h"
+
 #include <algorithm>
 #include <array>
 #include <filesystem>
@@ -16,7 +18,6 @@
 #include <map>
 #include <numeric>
 #include <random>
-#include <sodium.h>
 #include <sstream>
 #include <vector>
 
@@ -1454,9 +1455,11 @@ void r_renderer_c::EndFrame()
 
 	if (showHash) {
 		if (ImGui::Begin("Hash")) {
-			std::vector<char> b64(sodium_base64_ENCODED_LEN(lastFrameHash.size(), sodium_base64_VARIANT_URLSAFE));
-			sodium_bin2base64(b64.data(), b64.size(), lastFrameHash.data(), lastFrameHash.size(), sodium_base64_VARIANT_URLSAFE);
-			ImGui::Text("%s", b64.data());
+			char* b64{};
+			size_t b64Len{};
+			Base64UrlEncode((char const*)lastFrameHash.data(), lastFrameHash.size(), &b64, &b64Len);
+			ImGui::Text("%s", b64);
+			free(b64);
 		}
 		ImGui::End();
 	}

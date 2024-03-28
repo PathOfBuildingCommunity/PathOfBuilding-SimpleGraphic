@@ -25,8 +25,10 @@ set(SIMPLEGRAPHIC_SOURCES
     "dep/stb/stb_image.h"
     "dep/stb/stb_image_resize.h"
     "dep/stb/stb_image_write.h"
-    "engine/common/common.cpp"
     "engine/common.h"
+    "engine/common/base64.c"
+    "engine/common/base64.h"
+    "engine/common/common.cpp"
     "engine/common/console.cpp"
     "engine/common/console.h"
     "engine/common/keylist.h"
@@ -107,7 +109,6 @@ find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
 find_package(re2 CONFIG REQUIRED)
-find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
@@ -151,7 +152,6 @@ target_include_directories(SimpleGraphic
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/glad/include
     ${CMAKE_CURRENT_SOURCE_DIR}/dep/stb
-    ${JPEG_INCLUDE_DIR}
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -188,7 +188,6 @@ target_link_libraries(SimpleGraphic
     imgui
     LuaJIT::LuaJIT
     re2::re2
-    unofficial-sodium::sodium
     Threads::Threads
     ZLIB::ZLIB
 )
