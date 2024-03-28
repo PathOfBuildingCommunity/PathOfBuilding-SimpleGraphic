@@ -51,6 +51,7 @@ public:
 	sys_main_c* sys = nullptr;
 
 	bool	initialised = false;
+	bool	ignoreDpiScale = false;
 	GLFWwindow* wnd = nullptr;
 
 	void	RefreshMonitorInfo();
@@ -278,6 +279,63 @@ public:
 	std::deque<std::vector<uint8_t>> imageDatas;
 };
 
+bool ShouldIgnoreDpiScale() {
+#ifdef _WIN32
+	std::wstring const appChoice = L"HIGHDPIAWARE", sysChoice = L"DPIUNAWARE", enhanceFlag = L"GDIDPISCALING";
+	std::wstring const subKey = LR"(Software\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\Layers)";
+
+	std::vector<wchar_t> progStr(1 << 16);
+	GetModuleFileNameW(NULL, progStr.data(), progStr.size());
+	std::filesystem::path progPath(progStr.data());
+	progPath = std::filesystem::canonical(progPath);
+
+	auto considerKey = [&](HKEY rootKey) -> std::optional<bool> {
+		std::vector<wchar_t> valData(1 << 16);
+		DWORD valType{}, valSize = valData.size() / 2;
+		LRESULT res = RegGetValueW(rootKey, subKey.c_str(), progPath.wstring().c_str(), RRF_RT_REG_SZ, &valType, valData.data(), &valSize);
+		if (res == ERROR_SUCCESS) {
+			std::wstring val = valData.data();
+			if (wcsstr(val.c_str(), appChoice.c_str())) {
+				return true;
+			}
+			else if (wcsstr(val.c_str(), sysChoice.c_str())) {
+				return false;
+			}
+		}
+		return {};
+		};
+
+	struct ScopedRegKey {
+		HKEY key{};
+
+		ScopedRegKey& operator = (ScopedRegKey const&) = delete;
+		ScopedRegKey(ScopedRegKey const&) = delete;
+		~ScopedRegKey() {
+			if (key) { RegCloseKey(key); }
+		}
+
+		HKEY* operator & () { return &key; }
+		operator HKEY () const { return key; }
+	};
+
+	// Prioritize the global setting over the user setting to follow Windows' semantics.
+	ScopedRegKey hklm{};
+	if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, nullptr, 0, KEY_READ, &hklm) == ERROR_SUCCESS) {
+		if (auto ignore = considerKey(hklm)) {
+			return *ignore;
+		}
+	}
+
+	ScopedRegKey hkcu{};
+	if (RegOpenCurrentUser(KEY_READ, &hkcu) == ERROR_SUCCESS) {
+		if (auto ignore = considerKey(hkcu)) {
+			return *ignore;
+		}
+	}
+#endif
+	return false;
+}
+
 // ==================
 // System Video Class
 // ==================
@@ -383,6 +441,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		}
 	}
 	else {
+		ignoreDpiScale = ShouldIgnoreDpiScale();
 		glfwWindowHint(GLFW_RESIZABLE, !!(cur.flags & VID_RESIZABLE));
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden to not flash the user with a stock window.
 		glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE); // Start restored in order to position the window before maximizing.
@@ -551,7 +610,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			});
 		glfwSetWindowContentScaleCallback(wnd, [](GLFWwindow* wnd, float xScale, float yScale) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
-			sys->video->vid.dpiScale = xScale;
+			auto video = (sys_video_c*)sys->video;
+			if (!video->ignoreDpiScale) {
+				video->vid.dpiScale = xScale;
+			}
 			});
 
 		// Adjust window look and position
@@ -576,7 +638,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 
 	glfwGetFramebufferSize(wnd, &vid.fbSize[0], &vid.fbSize[1]);
 	glfwGetWindowSize(wnd, &vid.size[0], &vid.size[1]);
-	glfwGetWindowContentScale(wnd, &sys->video->vid.dpiScale, nullptr);
+	if (!ignoreDpiScale) {
+		glfwGetWindowContentScale(wnd, &sys->video->vid.dpiScale, nullptr);
+	}
 
 	initialised = true;
 	return 0;
