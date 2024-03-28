@@ -842,14 +842,18 @@ bool sys_main_c::Run(int argc, char** argv)
 
 		// Run frame loop
 		while (exitFlag == false) {
-			glfwPollEvents();
+			if (minimized) {
+				glfwWaitEventsTimeout(0.1);
+			}
+			else {
+				glfwPollEvents();
+			}
 			auto wnd = (GLFWwindow*)video->GetWindowHandle();
 			if (glfwWindowShouldClose(wnd)) {
 				Exit();
 				break;
 			}
-			if (minimized == false)
-				core->Frame();
+			core->Frame();
 
 			if (threadError) {
 				Error(threadError);
