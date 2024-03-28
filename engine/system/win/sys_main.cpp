@@ -842,10 +842,12 @@ bool sys_main_c::Run(int argc, char** argv)
 
 		// Run frame loop
 		while (exitFlag == false) {
-			if (minimized)
-				glfwWaitEvents(); // while minimized, puts process to sleep until it receives an event
-			else
+			if (minimized) {
+				glfwWaitEventsTimeout(0.1);
+			}
+			else {
 				glfwPollEvents();
+			}
 			auto wnd = (GLFWwindow*)video->GetWindowHandle();
 			if (glfwWindowShouldClose(wnd)) {
 				Exit();
