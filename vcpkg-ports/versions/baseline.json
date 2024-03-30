@@ -3,6 +3,7 @@
         "luajit": { "baseline": "2022-08-11", "port-version": 1 }
     },
     "2024-03-26": {
+        "glfw3": { "baseline": "3.4", "port-version": 1 },
         "luajit": { "baseline": "2023-04-16", "port-version": 0 }
     }
 }
