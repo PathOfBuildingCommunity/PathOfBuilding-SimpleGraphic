@@ -520,7 +520,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			if (ImGui::GetIO().WantCaptureKeyboard) {
 				return;
 			}
-			if (byte k = sys->GlfwKeyToKey(key)) {
+			if (byte k = sys->GlfwKeyToKey(key, scancode)) {
 				bool is_down = action == GLFW_PRESS || action == GLFW_REPEAT;
 				sys->heldKeyState[k] = is_down;
 				sys->core->KeyEvent(k, is_down ? KE_KEYDOWN : KE_KEYUP);

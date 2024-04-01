@@ -46,6 +46,7 @@ static void SE_ErrorTrans(unsigned int code, EXCEPTION_POINTERS* exPtr)
 	throw exPtr;
 }
 #endif
+#define GLFW_HAS_GET_KEY_NAME 1
 
 // ===========
 // Timer class
@@ -471,7 +472,32 @@ byte sys_main_c::VirtualToKey(int virt)
 }
 #endif
 
-byte sys_main_c::GlfwKeyToKey(int key) {
+static int ImGui_ImplGlfw_TranslateUntranslatedKey(int key, int scancode)
+{
+#if GLFW_HAS_GET_KEY_NAME
+	// GLFW 3.1+ attempts to "untranslate" keys, which goes the opposite of what every other framework does, making using lettered shortcuts difficult.
+	// (It had reasons to do so: namely GLFW is/was more likely to be used for WASD-type game controls rather than lettered shortcuts, but IHMO the 3.1 change could have been done differently)
+	// See https://github.com/glfw/glfw/issues/1502 for details.
+	// Adding a workaround to undo this (so our keys are translated->untranslated->translated, likely a lossy process).
+	// This won't cover edge cases but this is at least going to cover common cases.
+	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_EQUAL)
+		return key;
+	const char* key_name = glfwGetKeyName(key, scancode);
+	if (key_name && key_name[0] != 0 && key_name[1] == 0)
+	{
+		const char char_names[] = "`-=[]\\,;\'./";
+		const int char_keys[] = { GLFW_KEY_GRAVE_ACCENT, GLFW_KEY_MINUS, GLFW_KEY_EQUAL, GLFW_KEY_LEFT_BRACKET, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_BACKSLASH, GLFW_KEY_COMMA, GLFW_KEY_SEMICOLON, GLFW_KEY_APOSTROPHE, GLFW_KEY_PERIOD, GLFW_KEY_SLASH, 0 };
+		if (key_name[0] >= '0' && key_name[0] <= '9') { key = GLFW_KEY_0 + (key_name[0] - '0'); }
+		else if (key_name[0] >= 'A' && key_name[0] <= 'Z') { key = GLFW_KEY_A + (key_name[0] - 'A'); }
+		else if (key_name[0] >= 'a' && key_name[0] <= 'z') { key = GLFW_KEY_A + (key_name[0] - 'a'); }
+		else if (const char* p = strchr(char_names, key_name[0])) { key = char_keys[p - char_names]; }
+	}
+	printf("key %d scancode %d name '%s'\n", key, scancode, key_name);
+#endif
+	return key;
+}
+
+byte sys_main_c::GlfwKeyToKey(int key, int scancode) {
 	static std::map<int, byte> s_lookup = {
 		{GLFW_KEY_BACKSPACE, KEY_BACK},
 		{GLFW_KEY_TAB, KEY_TAB},
@@ -510,7 +536,12 @@ byte sys_main_c::GlfwKeyToKey(int key) {
 		{GLFW_KEY_BACKSLASH, '\\'},
 		{GLFW_KEY_RIGHT_BRACKET, ']'},
 		{GLFW_KEY_APOSTROPHE, '\''},
+		{GLFW_KEY_KP_SUBTRACT, '-'},
+		{GLFW_KEY_KP_ADD, '+'},
+		{GLFW_KEY_KP_ENTER, KEY_RETURN},
 	};
+
+	key = ImGui_ImplGlfw_TranslateUntranslatedKey(key, scancode);
 
 	auto I = s_lookup.find(key);
 	if (I != s_lookup.end()) {
