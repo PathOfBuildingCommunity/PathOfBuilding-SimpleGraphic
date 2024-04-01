@@ -295,6 +295,7 @@ byte sys_main_c::GlfwKeyToKey(int key, int scancode) {
 		{GLFW_KEY_BACKSLASH, '\\'},
 		{GLFW_KEY_RIGHT_BRACKET, ']'},
 		{GLFW_KEY_APOSTROPHE, '\''},
+		{GLFW_KEY_KP_0, '0'},
 		{GLFW_KEY_KP_SUBTRACT, '-'},
 		{GLFW_KEY_KP_ADD, '+'},
 		{GLFW_KEY_KP_ENTER, KEY_RETURN},
