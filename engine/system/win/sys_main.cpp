@@ -231,12 +231,13 @@ bool find_c::FindNext()
 // Key Mapping
 // ===========
 
+
 static int ImGui_ImplGlfw_TranslateUntranslatedKey(int key, int scancode)
 {
 #if GLFW_HAS_GET_KEY_NAME
 	// GLFW 3.1+ attempts to "untranslate" keys, which goes the opposite of what every other framework does, making using lettered shortcuts difficult.
 	// (It had reasons to do so: namely GLFW is/was more likely to be used for WASD-type game controls rather than lettered shortcuts, but IHMO the 3.1 change could have been done differently)
-	// See https://github.com/glfw/glfw/issues/1502 for details.
+	// See https://github.com/glfw/glfw/issues/1502 for details.  
 	// Adding a workaround to undo this (so our keys are translated->untranslated->translated, likely a lossy process).
 	// This won't cover edge cases but this is at least going to cover common cases.
 	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_EQUAL)
@@ -251,7 +252,6 @@ static int ImGui_ImplGlfw_TranslateUntranslatedKey(int key, int scancode)
 		else if (key_name[0] >= 'a' && key_name[0] <= 'z') { key = GLFW_KEY_A + (key_name[0] - 'a'); }
 		else if (const char* p = strchr(char_names, key_name[0])) { key = char_keys[p - char_names]; }
 	}
-	printf("key %d scancode %d name '%s'\n", key, scancode, key_name);
 #endif
 	return key;
 }
