@@ -67,7 +67,7 @@
 ** msec = GetTime()
 ** path = GetScriptPath()
 ** path = GetRuntimePath()
-** path, missingPath = GetUserPath() -- may fail, then returns nil and and approximation of the bad path
+** path = GetUserPath() -- may return nil if the user path could not be determined
 ** SetWorkDir("<path>")
 ** path = GetWorkDir()
 ** ssID = LaunchSubScript("<scriptText>", "<funcList>", "<subList>"[, ...])
@@ -1168,7 +1168,7 @@ static int l_GetScriptPath(lua_State* L)
 static int l_GetRuntimePath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->sys->basePath.c_str());
+	lua_pushstring(L, ui->sys->basePath.u8string().c_str());
 	return 1;
 }
 
@@ -1177,16 +1177,10 @@ static int l_GetUserPath(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	auto& userPath = ui->sys->userPath;
 	if (userPath) {
-		lua_pushstring(L, userPath->c_str());
+		lua_pushstring(L, userPath->u8string().c_str());
 		return 1;
 	}
-	
-	lua_pushnil(L);
-	if (auto& invalidUserPath = ui->sys->invalidUserPath) {
-		lua_pushstring(L, invalidUserPath->c_str());
-		return 2;
-	}
-	return 1;
+	return 0;
 }
 
 static int l_MakeDir(lua_State* L)
@@ -1195,7 +1189,8 @@ static int l_MakeDir(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: MakeDir(path)");
 	ui->LAssert(L, lua_isstring(L, 1), "MakeDir() argument 1: expected string, got %s", luaL_typename(L, 1));
-	std::filesystem::path path(lua_tostring(L, 1));
+	char const* givenPath = lua_tostring(L, 1);
+	auto path = std::filesystem::u8path(givenPath);
 	std::error_code ec;
 	if (!create_directory(path, ec)) {
 		lua_pushnil(L);
@@ -1214,7 +1209,8 @@ static int l_RemoveDir(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: l_RemoveDir(path)");
 	ui->LAssert(L, lua_isstring(L, 1), "l_RemoveDir() argument 1: expected string, got %s", luaL_typename(L, 1));
-	std::filesystem::path path(lua_tostring(L, 1));
+	char const* givenPath = lua_tostring(L, 1);
+	auto path = std::filesystem::u8path(givenPath);
 	std::error_code ec;
 	if (!is_directory(path, ec) || ec || remove(path, ec) || ec) {
 		lua_pushnil(L);
