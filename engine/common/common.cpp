@@ -205,14 +205,45 @@ int IsColorEscape(const char* str)
 	}
 	if (isdigit(str[1])) {
 		return 2;
-	} else if (str[1] == 'x' || str[1] == 'X') {
+	}
+	else if (str[1] == 'x' || str[1] == 'X') {
 		for (int c = 0; c < 6; c++) {
-			if ( !isxdigit(str[c + 2]) ) {
+			if (!isxdigit(str[c + 2])) {
 				return 0;
 			}
 		}
 		return 8;
 	}
+	return 0;
+}
+
+int IsColorEscape(std::u32string_view str)
+{
+	if (str.size() < 2 || str[0] != '^') {
+		return 0;
+	}
+
+	auto discrim = str[1];
+
+	// Check for indexed colour escape like ^7.
+	// Avoid using isdigit as we only accept arabic numerals.
+	if (discrim >= U'0' && discrim <= U'9') {
+		return 2;
+	}
+
+	// Check for direct colour escape like ^x123ABC.
+	if (str.size() >= 8 && (discrim == 'x' || discrim == 'X')) {
+		for (int c = 0; c < 6; c++) {
+			auto ch = str[c + 2];
+			bool const isHexDigit = (ch >= U'0' && ch <= U'9') || (ch >= U'A' && ch <= U'F') || (ch >= U'a' && ch <= U'f');
+			if (!isHexDigit) {
+				return 0;
+			}
+		}
+		return 8;
+	}
+
+	// Fallthrough indicates no recognized colour code.
 	return 0;
 }
 
@@ -224,15 +255,39 @@ void ReadColorEscape(const char* str, col3_t out)
 		VectorCopy(colorEscape[str[1] - '0'], out);
 		break;
 	case 8:
+	{
+		int xr, xg, xb;
+		sscanf(str + 2, "%2x%2x%2x", &xr, &xg, &xb);
+		out[0] = xr / 255.0f;
+		out[1] = xg / 255.0f;
+		out[2] = xb / 255.0f;
+	}
+	break;
+	}
+}
+
+std::u32string_view ReadColorEscape(std::u32string_view str, col3_t out)
+{
+	int len = IsColorEscape(str);
+	switch (len) {
+	case 2:
+		VectorCopy(colorEscape[str[1] - U'0'], out);
+		break;
+	case 8:
 		{
 			int xr, xg, xb;
-			sscanf(str + 2, "%2x%2x%2x", &xr, &xg, &xb);
+			char buf[7]{};
+			for (size_t i = 0; i < 6; ++i) {
+				buf[i] = (char)str[i + 2];
+			}
+			sscanf(buf, "%2x%2x%2x", &xr, &xg, &xb);
 			out[0] = xr / 255.0f;
 			out[1] = xg / 255.0f;
 			out[2] = xb / 255.0f;
 		}
 		break;
 	}
+	return str.substr(len);
 }
 
 // ================
@@ -334,6 +389,70 @@ char* NarrowOEMString(const wchar_t* str)
 char* NarrowUTF8String(const wchar_t* str)
 {
 	return NarrowCodepageString(str, CP_UTF8);
+}
+
+IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
+{
+	IndexedUTF32String ret{};
+
+	size_t byteCount = input.size();
+	auto& offsets = ret.sourceCodeUnitOffsets;
+	offsets.reserve(byteCount); // conservative reservation
+	std::vector<char32_t> codepoints;
+
+	auto bytes = (uint8_t const*)input.data();
+	for (size_t byteIdx = 0; byteIdx < byteCount;) {
+		uint8_t const* b = bytes + byteIdx;
+		size_t left = byteCount - byteIdx;
+		offsets.push_back(byteIdx);
+
+		char32_t codepoint{};
+		if (*b >> 7 == 0b0) { // 0xxx'xxxx
+			codepoint = *b;
+			byteIdx += 1;
+		}
+		else if (left >= 2 &&
+			b[0] >> 5 == 0b110 &&
+			b[1] >> 6 == 0b10)
+		{
+			auto p0 = (uint32_t)b[0] & 0b1'1111;
+			auto p1 = (uint32_t)b[1] & 0b11'1111;
+			codepoint = p0 << 6 | p1;
+			byteIdx += 2;
+		}
+		else if (left >= 3 &&
+			b[0] >> 4 == 0b1110 &&
+			b[1] >> 6 == 0b10 &&
+			b[2] >> 6 == 0b10)
+		{
+			auto p0 = (uint32_t)b[0] & 0b1111;
+			auto p1 = (uint32_t)b[1] & 0b11'1111;
+			auto p2 = (uint32_t)b[2] & 0b11'1111;
+			codepoint = p0 << 12 | p1 << 6 | p2;
+			byteIdx += 3;
+		}
+		else if (left >= 4 &&
+			b[0] >> 3 == 0b11110 &&
+			b[1] >> 6 == 0b10 &&
+			b[2] >> 6 == 0b10 &&
+			b[3] >> 6 == 0b10)
+		{
+			auto p0 = (uint32_t)b[0] & 0b111;
+			auto p1 = (uint32_t)b[1] & 0b11'1111;
+			auto p2 = (uint32_t)b[2] & 0b11'1111;
+			auto p3 = (uint32_t)b[2] & 0b11'1111;
+			codepoint = p0 << 18 | p1 << 12 | p2 << 6 | p3;
+			byteIdx += 4;
+		}
+		else {
+			codepoints.push_back(0xFFFDu);
+			byteIdx += 1;
+		}
+		codepoints.push_back(codepoint);
+	}
+
+	ret.text = std::u32string(codepoints.begin(), codepoints.end());
+	return ret;
 }
 
 #endif

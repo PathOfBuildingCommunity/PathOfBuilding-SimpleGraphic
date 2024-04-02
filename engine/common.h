@@ -26,6 +26,10 @@
 #include "common/memtrak3.h"
 #endif
 
+#include <string>
+#include <string_view>
+#include <vector>
+
 // =======
 // Classes
 // =======
@@ -475,8 +479,10 @@ T clamp(T &v, T l, T u)
 // Common Functions
 // ================
 
-int		IsColorEscape(const char* str);
-void	ReadColorEscape(const char* str, col3_t out);
+int		IsColorEscape(char const* str);
+int		IsColorEscape(std::u32string_view str);
+void	ReadColorEscape(char const* str, col3_t out);
+std::u32string_view ReadColorEscape(std::u32string_view str, col3_t out);
 
 char*	_AllocString(const char* str, const char* file, int line);
 #define AllocString(s) _AllocString(s, __FILE__, __LINE__)
@@ -484,6 +490,13 @@ char*	_AllocStringLen(size_t len, const char* file, int line);
 #define AllocStringLen(s) _AllocStringLen(s, __FILE__, __LINE__)
 void	FreeString(const char* str);
 dword	StringHash(const char* str, int mask);
+
+struct IndexedUTF32String {
+	std::u32string text;
+	std::vector<size_t> sourceCodeUnitOffsets;
+};
+
+IndexedUTF32String IndexUTF8ToUTF32(std::string_view str);
 
 #ifdef _WIN32
 wchar_t* WidenANSIString(const char* str);
