@@ -1716,6 +1716,7 @@ void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, float x0, float y0, float x
 
 void r_renderer_c::DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str)
 {
+	auto idxStr = IndexUTF8ToUTF32(str);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
@@ -1724,10 +1725,10 @@ void r_renderer_c::DrawString(float x, float y, int align, int height, const col
 	if (col) {
 		col4_t tcol;
 		Vector4Copy(col, tcol);
-		fonts[font]->Draw(pos, align, height, tcol, str);
+		fonts[font]->Draw(pos, align, height, tcol, idxStr.text);
 	}
 	else {
-		fonts[font]->Draw(pos, align, height, drawColor, str);
+		fonts[font]->Draw(pos, align, height, drawColor, idxStr.text);
 	}
 }
 
@@ -1755,18 +1756,31 @@ void r_renderer_c::DrawStringFormat(float x, float y, int align, int height, con
 
 int	r_renderer_c::DrawStringWidth(int height, int font, const char* str)
 {
+	if (!*str) {
+		return 0;
+	}
+	auto idxStr = IndexUTF8ToUTF32(str);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
-	return fonts[font]->StringWidth(height, str);
+	return fonts[font]->StringWidth(height, idxStr.text);
 }
 
 int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY)
 {
+	if (!*str) {
+		return 0;
+	}
+	std::string_view narrowView(str);
+	auto idxStr = IndexUTF8ToUTF32(narrowView);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
-	return fonts[font]->StringCursorIndex(height, str, curX, curY);
+	size_t index = fonts[font]->StringCursorIndex(height, idxStr.text, curX, curY);
+	if (index < idxStr.sourceCodeUnitOffsets.size()) {
+		return (int)idxStr.sourceCodeUnitOffsets[index];
+	}
+	return (int)narrowView.size();
 }
 
 // ==============
