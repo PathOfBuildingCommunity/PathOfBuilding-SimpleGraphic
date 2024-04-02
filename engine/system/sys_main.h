@@ -64,9 +64,8 @@ public:
 	bool		debug = false;
 	bool		debuggerRunning = false;
 	int			processorCount = 0;
-	std::string basePath;
-	std::optional<std::string> userPath;
-	std::optional<std::string> invalidUserPath;
+	std::filesystem::path basePath;
+	std::optional<std::filesystem::path> userPath;
 
 	virtual int		GetTime() = 0;
 	virtual void	Sleep(int msec) = 0;
