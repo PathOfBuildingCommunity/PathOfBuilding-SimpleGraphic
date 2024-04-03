@@ -1223,6 +1223,36 @@ static int l_RemoveDir(lua_State* L)
 	}
 }
 
+static int l_RemoveFile(lua_State* L)
+{
+	char const* pathStr = luaL_checkstring(L, 1);
+#ifdef _WIN32
+	wchar_t* widePath = WidenUTF8String(pathStr);
+	int rc = _wremove(widePath);
+	FreeWideString(widePath);
+#else
+	int rc = remove(pathStr);
+#endif
+	return luaL_fileresult(L, rc == 0, pathStr);
+}
+
+static int l_RenameFile(lua_State* L)
+{
+	char const* srcStr = luaL_checkstring(L, 1);
+	char const* dstStr = luaL_checkstring(L, 2);
+#ifdef _WIN32
+	wchar_t* wideSrc = WidenUTF8String(srcStr);
+	wchar_t* wideDst = WidenUTF8String(dstStr);
+	int rc = _wrename(wideSrc, wideDst);
+	FreeWideString(wideSrc);
+	FreeWideString(wideDst);
+#else
+	int rc = rename(srcStr, dstStr);
+#endif
+
+	return luaL_fileresult(L, rc == 0, srcStr);
+}
+
 static int l_SetWorkDir(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -1570,7 +1600,16 @@ int ui_main_c::InitAPI(lua_State* L)
 			lua_pushcfunction(L, l_OpenFile);
 			lua_setfield(L, -2, "open");
 		}
+		lua_pop(L, 1);
 
+		lua_getglobal(L, "os");
+		if (!lua_isnil(L, -1)) {
+			lua_pushcfunction(L, l_RemoveFile);
+			lua_setfield(L, -2, "remove");
+
+			lua_pushcfunction(L, l_RenameFile);
+			lua_setfield(L, -2, "rename");
+		}
 		lua_pop(L, 1);
 	}
 
