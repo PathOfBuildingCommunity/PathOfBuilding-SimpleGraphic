@@ -80,21 +80,3 @@ public:
 	bool	Save(const char* fileName) override;
 	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
-
-// GIF Image
-class gif_c: public image_c {
-public:
-	gif_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
-};
-
-// BLP Image
-class blp_c: public image_c {
-public:
-	blp_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
-};
