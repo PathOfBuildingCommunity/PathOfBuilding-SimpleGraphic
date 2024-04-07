@@ -152,7 +152,7 @@ void ui_main_c::PCall(int narg, int nret)
 	inLua = true;
 	int err = lua_pcall(L, narg, nret, 1);
 	inLua = false;
-	sys->SetWorkDir(NULL);
+	sys->SetWorkDir();
 	if (err && !didExit) {
 		DoError("Runtime error in", lua_tostring(L, -1));
 	}
@@ -160,8 +160,9 @@ void ui_main_c::PCall(int narg, int nret)
 
 void ui_main_c::DoError(const char* msg, const char* error)
 {
-	char* errText = AllocStringLen(strlen(msg) + strlen(scriptName) + strlen(error) + 30);
-	sprintf(errText, "--- SCRIPT ERROR ---\n%s '%s':\n%s\n", msg, scriptName, error);
+	auto scriptStr = scriptName.u8string();
+	char* errText = AllocStringLen(strlen(msg) + scriptStr.size() + strlen(error) + 30);
+	sprintf(errText, "--- SCRIPT ERROR ---\n%s '%s':\n%s\n", msg, scriptStr.c_str(), error);
 	sys->Exit(errText);
 	FreeString(errText);
 	didExit = true;
@@ -203,29 +204,19 @@ static int l_panicFunc(lua_State* L)
 void ui_main_c::Init(int argc, char** argv)
 {
 	// Find paths
-	scriptName = AllocString(argv[0]);
-	scriptCfg = AllocStringLen(strlen(scriptName) + 4);
-	strcpy(scriptCfg, scriptName);
-	char* ext = strrchr(scriptCfg, '.');
-	if (ext) {
-		strcpy(ext, ".cfg");
-	} else {
-		strcat(scriptCfg, ".cfg");
+	scriptName = std::filesystem::u8path(argv[0]);
+	if (scriptName.is_relative()) {
+		scriptName = sys->basePath / scriptName;
 	}
-	char tmpDir[512];
-	strcpy(tmpDir, scriptName);
-	char* ls = strrchr(tmpDir, '\\');
-	if ( !ls ) {
-		ls = strrchr(tmpDir, '/');
-	}
-	if (ls) {
-		*ls = 0;
-		scriptPath = AllocString(tmpDir);
-		scriptWorkDir = AllocString(tmpDir);
-	} else {
-		scriptPath = AllocString(sys->basePath.u8string().c_str());
-		scriptWorkDir = AllocString(sys->basePath.u8string().c_str());
-	}
+	scriptName = canonical(scriptName);
+
+	scriptCfg = scriptName;
+	scriptCfg.replace_extension(".cfg");
+
+	auto scriptParent = scriptName.parent_path();
+	scriptPath = scriptParent;
+	scriptWorkDir = scriptParent;
+
 	scriptArgc = argc;
 	scriptArgv = new char*[argc];
 	for (int a = 0; a < argc; a++) {
@@ -236,8 +227,7 @@ void ui_main_c::Init(int argc, char** argv)
 	core->config->LoadConfig("SimpleGraphic/SimpleGraphic.cfg");
 	core->config->LoadConfig("SimpleGraphic/SimpleGraphicAuto.cfg");
 	if (core->config->LoadConfig(scriptCfg)) {
-		FreeString(scriptCfg);
-		scriptCfg = NULL;
+		scriptCfg.clear();
 	}
 
 	// Initialise script
@@ -254,7 +244,7 @@ void ui_main_c::RenderInit(r_featureFlag_e features)
 		return;
 	}
 
-	sys->SetWorkDir(NULL);
+	sys->SetWorkDir();
 
 	sys->con->ExecCommands(true);
 
@@ -276,11 +266,11 @@ void ui_main_c::ScriptInit()
 {
 	sys->con->PrintFunc("UI Init");
 
-	sys->con->Printf("Script: %s\n", scriptName);
-	if (scriptPath) {
-		sys->con->Printf("Script working directory: %s\n", scriptWorkDir);
+	sys->con->Printf("Script: %s\n", scriptName.u8string().c_str());
+	if (!scriptPath.empty()) {
+		sys->con->Printf("Script working directory: %s\n", scriptWorkDir.u8string().c_str());
 	}
-	sys->video->SetTitle(scriptName);
+	sys->video->SetTitle(scriptName.u8string().c_str());
 
 	restartFlag = false;
 	didExit = false;
@@ -321,11 +311,13 @@ void ui_main_c::ScriptInit()
 	}
 	
 	// Load the script file
- 	err = luaL_loadfile(L, scriptName);
+	sys->SetWorkDir(scriptWorkDir);
+ 	err = luaL_loadfile(L, scriptName.filename().u8string().c_str());
 	if (err) {
 		DoError("Error loading", lua_tostring(L, -1));
 		return;
 	}
+	sys->SetWorkDir();
 
 	// Run the script
 	sys->con->Printf("Running script...\n");
@@ -466,16 +458,12 @@ void ui_main_c::Shutdown()
 	}
 
 	// Save config
-	if (scriptCfg) {
+	if (!scriptCfg.empty()) {
 		core->config->SaveConfig(scriptCfg);
 	} else {
 		core->config->SaveConfig("SimpleGraphic/SimpleGraphic.cfg");
 	}
 
-	FreeString(scriptName);
-	FreeString(scriptCfg);
-	FreeString(scriptPath);
-	FreeString(scriptWorkDir);
 	for (int a = 0; a < scriptArgc; a++) {
 		FreeString(scriptArgv[a]);
 	}

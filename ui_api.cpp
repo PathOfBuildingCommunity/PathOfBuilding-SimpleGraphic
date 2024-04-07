@@ -1161,7 +1161,7 @@ static int l_GetTime(lua_State* L)
 static int l_GetScriptPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->scriptPath);
+	lua_pushstring(L, ui->scriptPath.u8string().c_str());
 	return 1;
 }
 
@@ -1252,27 +1252,25 @@ static int l_RenameFile(lua_State* L)
 
 	return luaL_fileresult(L, rc == 0, srcStr);
 }
-
-static int l_SetWorkDir(lua_State* L)
+SG_LUA_CPP_FUN_BEGIN(SetWorkDir)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 1, "Usage: SetWorkDir(path)");
-	ui->LAssert(L, lua_isstring(L, 1), "SetWorkDir() argument 1: expected string, got %s", luaL_typename(L, 1));
-	const char* newWorkDir = lua_tostring(L, 1);
+	ui->LExpect(L, n >= 1, "Usage: SetWorkDir(path)");
+	ui->LExpect(L, lua_isstring(L, 1), "SetWorkDir() argument 1: expected string, got %s", luaL_typename(L, 1));
+	auto newWorkDir = std::filesystem::u8path(lua_tostring(L, 1));
+
 	if (!ui->sys->SetWorkDir(newWorkDir)) {
-		if (ui->scriptWorkDir) {
-			FreeString(ui->scriptWorkDir);
-		}
-		ui->scriptWorkDir = AllocString(newWorkDir);
+		ui->scriptWorkDir = newWorkDir;
 	}
 	return 0;
 }
+SG_LUA_CPP_FUN_END()
 
 static int l_GetWorkDir(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->scriptWorkDir);
+	lua_pushstring(L, ui->scriptWorkDir.u8string().c_str());
 	return 1;
 }
 

@@ -72,8 +72,8 @@ public:
 	virtual bool	IsKeyDown(byte key) = 0;
 	virtual void	ClipboardCopy(const char* str) = 0;
 	virtual char*	ClipboardPaste() = 0;
-	virtual bool	SetWorkDir(const char* newCwd = NULL) = 0;
 	virtual void	SpawnProcess(const char* cmdName, const char* argList) = 0;
+	virtual bool	SetWorkDir(std::filesystem::path const& newCwd = {}) = 0;
 	virtual void	OpenURL(const char* url) = 0;
 	virtual void	Error(const char* fmt, ...) = 0;
 	virtual void	Exit(const char* msg = NULL) = 0;

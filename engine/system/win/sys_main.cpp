@@ -588,7 +588,7 @@ char* sys_main_c::ClipboardPaste()
 	return AllocString(glfwGetClipboardString(nullptr));
 }
 
-bool sys_main_c::SetWorkDir(const char* newCwd)
+bool sys_main_c::SetWorkDir(std::filesystem::path const& newCwd)
 {
 #ifdef _WIN32
 	auto changeDir = [](std::filesystem::path const& p) {
@@ -599,10 +599,10 @@ bool sys_main_c::SetWorkDir(const char* newCwd)
 		return _chdir(p.c_str());
 	};
 #endif
-	if (newCwd) {
-		return changeDir(newCwd) != 0;
+	if (newCwd.empty()) {
+		return changeDir(basePath) != 0;
 	} else {
-		return changeDir(basePath.c_str()) != 0;
+		return changeDir(newCwd) != 0;
 	}
 }
 
