@@ -490,6 +490,7 @@ char*	_AllocStringLen(size_t len, const char* file, int line);
 #define AllocStringLen(s) _AllocStringLen(s, __FILE__, __LINE__)
 void	FreeString(const char* str);
 dword	StringHash(const char* str, int mask);
+dword	StringHash(std::string_view str, int mask);
 
 struct IndexedUTF32String {
 	std::u32string text;
