@@ -225,22 +225,17 @@ static int l_imgHandleGC(lua_State* L)
 	delete imgHandle->hnd;
 	return 0;
 }
-
-static int l_imgHandleLoad(lua_State* L)
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoad)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LExpect(L, ui->renderer != NULL, "Renderer is not initialised");
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "Load", false);
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
-	ui->LAssert(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
-	const char* fileName = lua_tostring(L, 1);
-	char fullFileName[512];
-	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
-		strcpy(fullFileName, fileName);
-	}
-	else {
-		sprintf(fullFileName, "%s/%s", ui->scriptWorkDir, fileName);
+	ui->LExpect(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
+	ui->LExpect(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
+	auto fileName = std::filesystem::u8path(lua_tostring(L, 1));
+	if (!fileName.is_absolute() && !ui->scriptWorkDir.empty()) {
+		fileName = ui->scriptWorkDir / fileName;
 	}
 	delete imgHandle->hnd;
 	int flags = TF_NOMIPMAP;
@@ -248,26 +243,28 @@ static int l_imgHandleLoad(lua_State* L)
 		if (!lua_isstring(L, f)) {
 			continue;
 		}
-		const char* flag = lua_tostring(L, f);
-		if (!strcmp(flag, "ASYNC")) {
+		std::string flag = lua_tostring(L, f);
+		if (flag == "ASYNC") {
 			// Async texture loading removed
 		}
-		else if (!strcmp(flag, "CLAMP")) {
+		else if (flag == "CLAMP") {
 			flags |= TF_CLAMP;
 		}
-		else if (!strcmp(flag, "MIPMAP")) {
+		else if (flag == "MIPMAP") {
 			flags &= ~TF_NOMIPMAP;
 		}
-		else if (!strcmp(flag, "NEAREST")) {
+		else if (flag == "NEAREST") {
 			flags |= TF_NEAREST;
 		}
 		else {
-			ui->LAssert(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
+			ui->LExpect(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag.c_str());
 		}
 	}
-	imgHandle->hnd = ui->renderer->RegisterShader(fullFileName, flags);
+	// TODO(LV): should we use u8path throughout here, to support any callers that use paths outside of working directory?
+	imgHandle->hnd = ui->renderer->RegisterShader(fileName.u8string(), flags);
 	return 0;
 }
+SG_LUA_CPP_FUN_END()
 
 static int l_imgHandleUnload(lua_State* L)
 {

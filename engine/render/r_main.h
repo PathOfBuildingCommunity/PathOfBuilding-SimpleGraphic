@@ -73,7 +73,7 @@ public:
 	void	BeginFrame();
 	void	EndFrame();
 	
-	r_shaderHnd_c* RegisterShader(const char* shname, int flags);
+	r_shaderHnd_c* RegisterShader(std::string_view shname, int flags);
 	r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags);
 	void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height);
 	void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri);

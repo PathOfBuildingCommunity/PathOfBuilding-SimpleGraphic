@@ -43,7 +43,7 @@ class t_manager_c: public r_ITexManager, public thread_c {
 public:
 	// Interface
 	int		GetAsyncCount() override;
-	bool	GetImageInfo(const char* fileName, imageInfo_s* info) override;
+	bool	GetImageInfo(std::string_view fileName, imageInfo_s* info) override;
 
 	// Encapsulated
 	t_manager_c(r_renderer_c* renderer);
@@ -112,11 +112,12 @@ int t_manager_c::GetAsyncCount()
 	return (int)textureQueue.size();
 }
 
-bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
+bool t_manager_c::GetImageInfo(std::string_view fileName, imageInfo_s* info)
 {
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName);
+	auto path = std::filesystem::u8path(fileName);
+	image_c* img = image_c::LoaderForFile(renderer->sys->con, path);
 	if (img) {
-		bool error = img->ImageInfo(fileName, info);
+		bool error = img->ImageInfo(path, info);
 		delete img;
 		return error;
 	}
@@ -256,7 +257,7 @@ static void T_ResampleImage(byte* in, dword in_w, dword in_h, int in_comp, byte*
 // OpenGL Texture Class
 // ====================
 
-r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
+r_tex_c::r_tex_c(r_ITexManager* manager, std::string_view fileName, int flags)
 {
 	Init(manager, fileName, flags);
 
@@ -269,7 +270,7 @@ r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
 
 r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
 {
-	Init(manager, NULL, flags);
+	Init(manager, {}, flags);
 
 	// Direct upload
 	Upload(img, flags);
@@ -300,7 +301,7 @@ int r_tex_c::GLTypeForImgType(int type)
 	return gt[type >> 4];
 }
 
-void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags)
+void r_tex_c::Init(r_ITexManager* i_manager, std::string_view i_fileName, int i_flags)
 {
 	manager = (t_manager_c*)i_manager;
 	renderer = manager->renderer;
@@ -370,9 +371,10 @@ void r_tex_c::LoadFile()
 	}
 
 	// Try to load image file using appropriate loader
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName.c_str() );
+	auto path = std::filesystem::u8path(fileName);
+	image_c* img = image_c::LoaderForFile(renderer->sys->con, path);
 	if (img) {
-		error = img->Load(fileName.c_str());
+		error = img->Load(path);
 		if ( !error ) {
 			Upload(img, flags);
 			delete img;
