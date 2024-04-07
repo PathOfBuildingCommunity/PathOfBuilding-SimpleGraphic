@@ -255,10 +255,14 @@ bool fileInputStream_c::Read(void* out, size_t len)
 	return fread(out, len, 1, file) < 1;
 }
 
-bool fileInputStream_c::FileOpen(const char* fileName, bool binary)
+bool fileInputStream_c::FileOpen(std::filesystem::path const& fileName, bool binary)
 {
 	FileClose();
-	file = fopen(fileName, binary? "rb" : "r");
+#ifdef _WIN32
+	file = _wfopen(fileName.c_str(), binary ? L"rb" : L"r");
+#else
+	file = fopen(fileName.c_str(), binary ? "rb" : "r");
+#endif
 	if ( !file ) {
 		return true;
 	}
@@ -277,10 +281,14 @@ bool fileOutputStream_c::Write(const void* in, size_t len)
 	return fwrite(in, len, 1, file) < 1;
 }
 
-bool fileOutputStream_c::FileOpen(const char* fileName, bool binary)
+bool fileOutputStream_c::FileOpen(std::filesystem::path const& fileName, bool binary)
 {
 	FileClose();
-	file = fopen(fileName, binary? "wb" : "w");
+#ifdef _WIN32
+	file = _wfopen(fileName.c_str(), binary ? L"wb" : L"w");
+#else
+	file = fopen(fileName.c_str(), binary ? "wb" : "w");
+#endif
 	if ( !file ) {
 		return true;
 	}

@@ -4,6 +4,10 @@
 // Streams Header
 //
 
+#include <filesystem>
+#include <string>
+#include <string_view>
+
 // ==========
 // Base Class
 // ==========
@@ -94,13 +98,29 @@ protected:
 class fileInputStream_c: public fileStreamBase_c {
 public:
 	bool Read(void* out, size_t len);
-	bool FileOpen(const char* fileName, bool binary);
+
+	// Force compile error on narrow strings to favour `std::filesystem::path`.
+	// These are unfortunately necessary as the path constructor is eager to
+	// interpret narrow strings as the ACP codepage. Prefer using
+	// `std::filesystem::u8path` (C++17) or `std::u8string` (since C++20) in
+	// the calls to these functions.
+	bool FileOpen(char const*, bool) = delete;
+	bool FileOpen(std::string const&, bool) = delete;
+	bool FileOpen(std::string_view*, bool) = delete;
+
+	bool FileOpen(std::filesystem::path const& fileName, bool binary);
 };
 
 class fileOutputStream_c: public fileStreamBase_c {
 public:
 	bool Write(const void* in, size_t len);
-	bool FileOpen(const char* fileName, bool binary);
+
+	// Force compile error like in `fileInputStream_c` on non-path types.
+	bool FileOpen(char const*, bool) = delete;
+	bool FileOpen(std::string const&, bool) = delete;
+	bool FileOpen(std::string_view*, bool) = delete;
+
+	bool FileOpen(std::filesystem::path const& fileName, bool binary);
 	void FilePrintf(const char* fmt, ...);
 	void FileFlush();
 };

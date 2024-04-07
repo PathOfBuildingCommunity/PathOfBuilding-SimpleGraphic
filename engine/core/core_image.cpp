@@ -56,32 +56,33 @@ void image_c::Free()
 	dat = NULL;
 }
 
-bool image_c::Load(const char* fileName) 
+bool image_c::Load(std::filesystem::path const& fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::Save(const char* fileName) 
+bool image_c::Save(std::filesystem::path const& fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool image_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	return true; // o_O
 }
 
-image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
+image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& fileName)
 {
+	auto nameU8 = fileName.u8string();
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
-		conHnd->Warning("'%s' doesn't exist or cannot be opened", fileName);
+		conHnd->Warning("'%s' doesn't exist or cannot be opened", nameU8.c_str());
 		return NULL;
 	}
 	// Attempt to detect image file type from first 4 bytes of file
 	byte dat[4];
 	if (in.Read(dat, 4)) {
-		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", fileName);
+		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", nameU8.c_str());
 		return NULL;
 	}
 	if (dat[0] == 0xFF && dat[1] == 0xD8) {
@@ -94,7 +95,7 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
 	}
-	conHnd->Warning("'%s': unsupported image file format", fileName);
+	conHnd->Warning("'%s': unsupported image file format", nameU8.c_str());
 	return NULL;
 }
 
@@ -117,7 +118,7 @@ struct tgaHeader_s {
 };
 #pragma pack(pop)
 
-bool targa_c::Load(const char* fileName)
+bool targa_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -127,14 +128,16 @@ bool targa_c::Load(const char* fileName)
 		return true;
 	}
 
+	auto nameU8 = fileName.u8string();
+
 	// Read header
 	tgaHeader_s hdr;
 	if (in.TRead(hdr)) {
-		con->Warning("TGA '%s': couldn't read header", fileName);
+		con->Warning("TGA '%s': couldn't read header", nameU8.c_str());
 		return true;
 	}
 	if (hdr.colorMapType) {
-		con->Warning("TGA '%s': color mapped images not supported", fileName);
+		con->Warning("TGA '%s': color mapped images not supported", nameU8.c_str());
 		return true;
 	}
 	in.Seek(hdr.idLen, SEEK_CUR);	
@@ -150,7 +153,7 @@ bool targa_c::Load(const char* fileName)
 		if (ittable[it_m][0] == (hdr.imgType & 7) && ittable[it_m][1] == hdr.depth) break;
 	}
 	if (it_m == 3) {
-		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", fileName, hdr.imgType, hdr.depth);
+		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", nameU8.c_str(), hdr.imgType, hdr.depth);
 		return true;
 	}
 
@@ -172,7 +175,7 @@ bool targa_c::Load(const char* fileName)
 				in.TRead(rlehdr);
 				int rlen = ((rlehdr & 0x7F) + 1) * comp; 
 				if (x + rlen > rowSize) {
-					con->Warning("TGA '%s': invalid RLE coding (overlong row)", fileName);
+					con->Warning("TGA '%s': invalid RLE coding (overlong row)", nameU8.c_str());
 					delete[] dat;
 					return true;
 				}
@@ -208,7 +211,7 @@ bool targa_c::Load(const char* fileName)
 	return false;
 }
 
-bool targa_c::Save(const char* fileName)
+bool targa_c::Save(std::filesystem::path const& fileName)
 {
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
 		return true;
@@ -228,7 +231,7 @@ bool targa_c::Save(const char* fileName)
 	return !rc;
 }
 
-bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool targa_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -262,7 +265,7 @@ bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
 // JPEG Image
 // ==========
 
-bool jpeg_c::Load(const char* fileName)
+bool jpeg_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -271,6 +274,8 @@ bool jpeg_c::Load(const char* fileName)
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
+
+	auto nameU8 = fileName.u8string();
 
 	std::vector<byte> fileData(in.GetLen());
 	if (in.Read(fileData.data(), fileData.size())) {
@@ -281,7 +286,7 @@ bool jpeg_c::Load(const char* fileName)
 		return true;
 	}
 	if (in_comp != 1 && in_comp != 3) {
-		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
+		con->Warning("JPEG '%s': unsupported component count '%d'", nameU8.c_str(), comp);
 		return true;
 	}
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, in_comp);
@@ -300,7 +305,7 @@ bool jpeg_c::Load(const char* fileName)
 	return false;
 }
 
-bool jpeg_c::Save(const char* fileName)
+bool jpeg_c::Save(std::filesystem::path const& fileName)
 {
 	// JPEG only supports RGB and grayscale images
 	if (type != IMGTYPE_RGB && type != IMGTYPE_GRAY) {
@@ -322,7 +327,7 @@ bool jpeg_c::Save(const char* fileName)
 
 // JPEG Image Info
 
-bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool jpeg_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -351,7 +356,7 @@ bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 // PNG Image
 // =========
 
-bool png_c::Load(const char* fileName)
+bool png_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -385,7 +390,7 @@ bool png_c::Load(const char* fileName)
 	return false;
 }
 
-bool png_c::Save(const char* fileName)
+bool png_c::Save(std::filesystem::path const& fileName)
 {
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
 		return true;
@@ -407,7 +412,7 @@ bool png_c::Save(const char* fileName)
 
 // PNG Image Info
 
-bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool png_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open file and check signature
 	fileInputStream_c in;
