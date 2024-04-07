@@ -35,8 +35,8 @@ public:
 	bool	IsKeyDown(byte key);
 	void	ClipboardCopy(const char* str);
 	char*	ClipboardPaste();
-	bool	SetWorkDir(const char* newCwd = NULL);
 	void	SpawnProcess(const char* cmdName, const char* argList);
+	bool	SetWorkDir(std::filesystem::path const& newCwd = {});
 	void	OpenURL(const char* url);
 	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);

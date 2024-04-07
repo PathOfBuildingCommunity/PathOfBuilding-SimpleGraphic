@@ -36,10 +36,10 @@ public:
 
 	std::optional<sol::state> solState;
 	lua_State* L = nullptr;
-	char*	scriptName = nullptr;
-	char*	scriptCfg = nullptr;
-	char*	scriptPath = nullptr;
-	char*	scriptWorkDir = nullptr;
+	std::filesystem::path scriptName;
+	std::filesystem::path scriptCfg;
+	std::filesystem::path scriptPath;
+	std::filesystem::path scriptWorkDir;
 	int		scriptArgc = 0;
 	char**	scriptArgv = nullptr;
 	bool	restartFlag = false;
