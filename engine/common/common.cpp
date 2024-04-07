@@ -335,14 +335,39 @@ dword StringHash(const char* str, int mask)
 	return hash & mask;
 }
 
+dword StringHash(std::string_view str, int mask)
+{
+	size_t len = str.length();
+	dword hash = 0;
+	for (size_t i = 0; i < len; i++) {
+		hash += (str[i] * 4999) ^ (((dword)i + 17) * 2003);
+	}
+	return hash & mask;
+}
+
 #ifdef _WIN32
 #include <Windows.h>
 
 static wchar_t* WidenCodepageString(const char* str, UINT codepage)
 {
-	int cch = MultiByteToWideChar(codepage, 0, str, -1, nullptr, 0);
-	wchar_t* wstr = new wchar_t[cch];
-	MultiByteToWideChar(codepage, 0, str, -1, wstr, cch);
+	if (!str) {
+		return nullptr;
+	}
+	// Early-out if empty, avoids ambigious error return from MBTWC.
+	if (!*str) {
+		wchar_t* wstr = new wchar_t[1];
+		*wstr = L'\0';
+		return wstr;
+	}
+	DWORD cb = (DWORD)strlen(str);
+	int cch = MultiByteToWideChar(codepage, MB_ERR_INVALID_CHARS, str, cb, nullptr, 0);
+	if (cch == 0) {
+		// Invalid string or other error.
+		return nullptr;
+	}
+	wchar_t* wstr = new wchar_t[cch + 1]; // sized MBTWC doesn't include terminator.
+	MultiByteToWideChar(codepage, 0, str, cb, wstr, cch);
+	wstr[cch] = '\0';
 	return wstr;
 }
 
@@ -363,9 +388,23 @@ wchar_t* WidenUTF8String(const char* str)
 
 char* NarrowCodepageString(const wchar_t* str, UINT codepage)
 {
-	int cb = WideCharToMultiByte(codepage, 0, str, -1, nullptr, 0, nullptr, nullptr);
-	char* nstr = new char[cb];
-	WideCharToMultiByte(codepage, 0, str, -1, nstr, cb, nullptr, nullptr);
+	if (!str) {
+		return nullptr;
+	}
+	if (!*str) {
+		char* nstr = new char[1];
+		*nstr = '\0';
+		return nstr;
+	}
+	DWORD cch = (DWORD)wcslen(str);
+	int cb = WideCharToMultiByte(codepage, 0, str, cch, nullptr, 0, nullptr, nullptr);
+	if (cb == 0) {
+		// Invalid string or other error.
+		return nullptr;
+	}
+	char* nstr = new char[cb + 1];
+	WideCharToMultiByte(codepage, 0, str, cch, nstr, cb, nullptr, nullptr);
+	nstr[cb] = '\0';
 	return nstr;
 }
 
