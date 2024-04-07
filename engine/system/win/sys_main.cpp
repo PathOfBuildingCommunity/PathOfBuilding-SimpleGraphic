@@ -136,14 +136,14 @@ find_c::find_c()
 find_c::~find_c()
 {}
 
-bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file)
+std::optional<std::string> BuildGlobPattern(std::filesystem::path const& glob)
 {
 	using namespace std::literals::string_view_literals;
-	auto globStr = glob.generic_u8string();
+	auto globStr = glob.u8string();
 
 	// Deal with traditional "everything" wildcards.
 	if (glob == "*" || glob == "*.*") {
-		return true;
+		return {};
 	}
 
 	fmt::memory_buffer buf;
@@ -179,32 +179,34 @@ bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& f
 			}
 		}
 	}
+	return to_string(buf);
+}
 
+bool GlobMatch(std::optional<std::string> const& globPattern, std::filesystem::path const& file)
+{
+	if (!globPattern.has_value()) {
+		// Empty pattern is like "*" and "*.*".
+		return true;
+	}
 	// Assume case-insensitive comparisons are desired.
 	RE2::Options reOpts;
 	reOpts.set_case_sensitive(false);
-	RE2 reGlob{to_string(buf), reOpts};
+	RE2 reGlob{globPattern.value(), reOpts};
 
-	auto fileStr = file.generic_u8string();
+	auto fileStr = file.u8string();
 	return RE2::FullMatch(fileStr, reGlob);
 }
 
-bool find_c::FindFirst(const char* fileSpec)
+bool find_c::FindFirst(std::filesystem::path const&& fileSpec)
 {
-#ifdef _WIN32
-	wchar_t* wideSpec = WidenUTF8String(fileSpec);
-	std::filesystem::path p(wideSpec);
-	FreeWideString(wideSpec);
-#else
-	std::filesystem::path p(fileSpec);
-#endif
-	glob = p.filename();
+	auto parent = fileSpec.parent_path();
+	globPattern = BuildGlobPattern(fileSpec.filename());
 
 	std::error_code ec;
-	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
+	for (iter = std::filesystem::directory_iterator(parent, ec); iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
-		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.u8string();
+		if (GlobMatch(globPattern, candFilename)) {
+			fileName = candFilename;
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -223,8 +225,8 @@ bool find_c::FindNext()
 
 	for (++iter; iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
-		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.u8string();
+		if (GlobMatch(globPattern, candFilename)) {
+			fileName = candFilename;
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -398,26 +400,27 @@ bool sys_main_c::SetWorkDir(std::filesystem::path const& newCwd)
 	}
 }
 
-void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
+void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList)
 {
 #ifdef _WIN32
-	char cmd[512];
-	strcpy(cmd, cmdName);
-	if ( !strchr(cmd, '.') ) {
-		strcat(cmd, ".exe");
+	if (!cmdName.has_extension()) {
+		cmdName.replace_extension(".exe");
 	}
-	SHELLEXECUTEINFOA sinfo;
-	memset(&sinfo, 0, sizeof(SHELLEXECUTEINFOA));
-	sinfo.cbSize       = sizeof(SHELLEXECUTEINFOA);
+	auto fileStr = cmdName.wstring();
+	auto wideArgs = WidenUTF8String(argList);
+	SHELLEXECUTEINFOW sinfo;
+	memset(&sinfo, 0, sizeof(sinfo));
+	sinfo.cbSize       = sizeof(sinfo);
 	sinfo.fMask        = SEE_MASK_NOCLOSEPROCESS;
-	sinfo.lpFile       = cmd;
-	sinfo.lpParameters = argList;
-	sinfo.lpVerb       = "open";
+	sinfo.lpFile       = fileStr.c_str();
+	sinfo.lpParameters = wideArgs;
+	sinfo.lpVerb       = L"open";
 	sinfo.nShow        = SW_SHOWMAXIMIZED;
-	if ( !ShellExecuteExA(&sinfo) ) {
-		sinfo.lpVerb = "runas";
-		ShellExecuteExA(&sinfo);
+	if ( !ShellExecuteExW(&sinfo) ) {
+		sinfo.lpVerb = L"runas";
+		ShellExecuteExW(&sinfo);
 	}
+	FreeWideString(wideArgs);
 #else
 #warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.

@@ -18,8 +18,8 @@
 class core_config_c: public core_IConfig, public conPrintHook_c, public conCmdHandler_c {
 public:
 	// Interface
-	bool	LoadConfig(const char* cfgName);
-	bool	SaveConfig(const char* cfgName);
+	bool	LoadConfig(std::filesystem::path const& cfgName);
+	bool	SaveConfig(std::filesystem::path const& cfgName);
 
 	// Encapsulated
 	core_config_c(sys_IMain* sysHnd);
@@ -152,19 +152,17 @@ void core_config_c::C_MemReport(IConsole* conHnd, args_c &args)
 // Config Files
 // ============
 
-bool core_config_c::LoadConfig(const char* cfgName)
+bool core_config_c::LoadConfig(std::filesystem::path const& cfgName)
 {
 	// Make sure it has .cfg extension
-	std::string fileName = cfgName;
-	if (fileName.find('.') == fileName.npos) {
-		fileName += ".cfg";
-	}
+	auto fileName = cfgName;
+	fileName.replace_extension(".cfg");
 
-	sys->con->Print(fmt::format("Executing {}\n", fileName).c_str());
+	sys->con->Print(fmt::format("Executing {}\n", fileName.u8string()).c_str());
 
 	// Read the config file
 	fileInputStream_c f;
-	if (f.FileOpen(fileName.c_str(), true)) {
+	if (f.FileOpen(fileName, true)) {
 		sys->con->Warning("config file not found");
 		return true;
 	}
@@ -198,19 +196,17 @@ bool core_config_c::LoadConfig(const char* cfgName)
 	return false;
 }
 
-bool core_config_c::SaveConfig(const char* cfgName)
+bool core_config_c::SaveConfig(std::filesystem::path const& cfgName)
 {
 	// Make sure it has .cfg extension
-	std::string fileName = cfgName;
-	if (fileName.find('.') == fileName.npos) {
-		fileName += ".cfg";
-	}
+	auto fileName = cfgName;
+	fileName.replace_extension(".cfg");
 
-	sys->con->Print(fmt::format("Saving {}\n", fileName).c_str());
+	sys->con->Print(fmt::format("Saving {}\n", fileName.u8string()).c_str());
 
 	// Open the config file
 	fileOutputStream_c f;
-	if (f.FileOpen(fileName.c_str(), false)) {
+	if (f.FileOpen(fileName, false)) {
 		sys->con->Warning("couldnt write config file");
 		return true;
 	}
@@ -235,7 +231,7 @@ void core_config_c::ConPrintHook(const char* text)
 {
 	if (con_log->intVal) {
 		if (logOpen == false) {
-			logFile.FileOpen(CFG_LOGFILE, false);
+			logFile.FileOpen(std::filesystem::u8path(CFG_LOGFILE), false);
 			logOpen = true;
 			logFile.FilePrintf("Log opened.\n");
 		}
