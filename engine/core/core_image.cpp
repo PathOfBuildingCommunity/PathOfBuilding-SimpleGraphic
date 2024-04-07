@@ -79,39 +79,39 @@ void image_c::Free()
 	tex = {};
 }
 
-bool image_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool image_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
 	return true; // o_O
 }
 
-bool image_c::Save(const char* fileName) 
+bool image_c::Save(std::filesystem::path const& fileName) 
 {
 	return true; // o_O
 }
 
-image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
+image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& fileName)
 {
+	auto nameU8 = fileName.u8string();
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
-		conHnd->Warning("'%s' doesn't exist or cannot be opened", fileName);
+		conHnd->Warning("'%s' doesn't exist or cannot be opened", nameU8.c_str());
 		return NULL;
 	}
 
 	// Detect first by extension, as decompressing could be expensive.
-	auto p = std::filesystem::path(fileName); // NOTE(LV): This should be u8path later.
-	if (p.extension() == ".zst") {
-		auto inner = p.filename();
+	if (fileName.extension() == ".zst") {
+		auto inner = fileName.filename();
 		inner.replace_extension();
 		if (inner.extension() == ".dds")
 			return new dds_c(conHnd);
 	}
-	if (p.extension() == ".dds")
+	if (fileName.extension() == ".dds")
 		return new dds_c(conHnd);
 
-	// Attempt to detect image file type from first 12 bytes of file
+	// Attempt to detect image file type from first 4 bytes of file
 	byte dat[4];
 	if (in.Read(dat, 4)) {
-		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", fileName);
+		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", nameU8.c_str());
 		return NULL;
 	}
 	if (dat[0] == 0xFF && dat[1] == 0xD8) {
@@ -130,7 +130,7 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
 	}
-	conHnd->Warning("'%s': unsupported image file format", fileName);
+	conHnd->Warning("'%s': unsupported image file format", nameU8.c_str());
 	return NULL;
 }
 
@@ -153,24 +153,24 @@ struct tgaHeader_s {
 };
 #pragma pack(pop)
 
-bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool targa_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
-	Free();
-
 	// Open the file
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
 
+	auto nameU8 = fileName.u8string();
+
 	// Read header
 	tgaHeader_s hdr;
 	if (in.TRead(hdr)) {
-		con->Warning("TGA '%s': couldn't read header", fileName);
+		con->Warning("TGA '%s': couldn't read header", nameU8.c_str());
 		return true;
 	}
 	if (hdr.colorMapType) {
-		con->Warning("TGA '%s': color mapped images not supported", fileName);
+		con->Warning("TGA '%s': color mapped images not supported", nameU8.c_str());
 		return true;
 	}
 	in.Seek(hdr.idLen, SEEK_CUR);
@@ -188,7 +188,7 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 		if (ittable[it_m][0] == (hdr.imgType & 7) && ittable[it_m][1] == hdr.depth) break;
 	}
 	if (it_m == 3) {
-		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", fileName, hdr.imgType, hdr.depth);
+		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", nameU8.c_str(), hdr.imgType, hdr.depth);
 		return true;
 	}
 
@@ -211,7 +211,7 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 				in.TRead(rlehdr);
 				int rlen = ((rlehdr & 0x7F) + 1) * comp; 
 				if (x + rlen > rowSize) {
-					con->Warning("TGA '%s': invalid RLE coding (overlong row)", fileName);
+					con->Warning("TGA '%s': invalid RLE coding (overlong row)", nameU8.c_str());
 					delete[] dat;
 					return true;
 				}
@@ -247,7 +247,7 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 	return !CopyRaw(type, width, height, dat);
 }
 
-bool targa_c::Save(const char* fileName)
+bool targa_c::Save(std::filesystem::path const& fileName)
 {
 	auto format = tex.format();
 	if (is_compressed(format) || !is_unsigned_integer(format))
@@ -276,7 +276,7 @@ bool targa_c::Save(const char* fileName)
 // JPEG Image
 // ==========
 
-bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool jpeg_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
 	Free();
 
@@ -285,6 +285,8 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
+
+	auto nameU8 = fileName.u8string();
 
 	std::vector<byte> fileData(in.GetLen());
 	if (in.Read(fileData.data(), fileData.size())) {
@@ -295,7 +297,7 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 		return true;
 	}
 	if (in_comp != 1 && in_comp != 3) {
-		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, in_comp);
+		con->Warning("JPEG '%s': unsupported component count '%d'", nameU8.c_str(), in_comp);
 		return true;
 	}
 	if (sizeCallback)
@@ -313,7 +315,7 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 	return !success;
 }
 
-bool jpeg_c::Save(const char* fileName)
+bool jpeg_c::Save(std::filesystem::path const& fileName)
 {
 	// JPEG only supports RGB and grayscale images
 	auto format = tex.format();
@@ -342,7 +344,7 @@ bool jpeg_c::Save(const char* fileName)
 // PNG Image
 // =========
 
-bool png_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool png_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
 	Free();
 
@@ -380,7 +382,7 @@ bool png_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 	return !success;
 }
 
-bool png_c::Save(const char* fileName)
+bool png_c::Save(std::filesystem::path const& fileName)
 {
 	auto format = tex.format();
 	if (is_compressed(format) || !is_unsigned_integer(format))
@@ -409,7 +411,7 @@ bool png_c::Save(const char* fileName)
 // GIF Image
 // =========
 
-bool gif_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool gif_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
 	// Open file
 	fileInputStream_c in;
@@ -440,7 +442,7 @@ bool gif_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 	}
 }
 
-bool gif_c::Save(const char* fileName)
+bool gif_c::Save(std::filesystem::path const& fileName)
 {
 	// HELL no.
 	return true;
@@ -450,9 +452,8 @@ bool gif_c::Save(const char* fileName)
 // DDS Image
 // =========
 
-bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+bool dds_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
 {
-	auto p = std::filesystem::path(fileName); // NOTE(LV): This should be u8path later.
 	// Open file
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true))
@@ -462,7 +463,7 @@ bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 	if (in.Read(fileData.data(), fileData.size()))
 		return true;
 
-	if (p.extension() == ".zst" || fileData.size() >= 4 && *(uint32_t*)fileData.data() == 0xFD2FB528) {
+	if (fileName.extension() == ".zst" || fileData.size() >= 4 && *(uint32_t*)fileData.data() == 0xFD2FB528) {
 		auto ret = DecompressZstandard(as_bytes(gsl::span(fileData)));
 		if (!ret.has_value())
 			return true;
@@ -476,7 +477,7 @@ bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 	return false;
 }
 
-bool dds_c::Save(const char* fileName)
+bool dds_c::Save(std::filesystem::path const& fileName)
 {
 	// Nope.
 	return true;
