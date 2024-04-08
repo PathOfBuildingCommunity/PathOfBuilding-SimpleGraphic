@@ -721,82 +721,6 @@ static void stackDump(lua_State* L)
 }
 #endif
 
-/* io:open replacement that opens a file with UTF-8 paths instead of the user codepage.
-*  In order to reduce implementation effort this function opens a well-known readable file
-*  with regular io:open and swaps out the internal FILE* pointer to a file opened via the
-*  Unicode-aware _wfopen on Windows.
-* 
-*  The resulting file object has all the functionality of the standard library file
-*  object due to actually being such an object.
-*/
-static int l_OpenFile(lua_State* L)
-{
-	ui_main_c* ui = GetUIPtr(L);
-	
-	int n = lua_gettop(L);
-	ui->LAssert(L, n == 2, "Usage: OpenFile(path, mode)");
-	ui->LAssert(L, lua_isstring(L, 1), "OpenFile() argument 1: expected string, got %s", luaL_typename(L, 1));
-	ui->LAssert(L, lua_isstring(L, 2), "OpenFile() argument 2: expected string, got %s", luaL_typename(L, 2));
-
-#ifndef _WIN32
-	lua_rawgeti(L, LUA_REGISTRYINDEX, ui->ioOpenf);
-	lua_pushstring(L, lua_tostring(L, 1));
-	lua_pushstring(L, lua_tostring(L, 2));
-	lua_call(L, 2, 2);
-	return lua_gettop(L) - 2;
-#else
-	wchar_t* widePath = WidenUTF8String(lua_tostring(L, 1));
-	if (!widePath) {
-		return 0;
-	}
-	wchar_t* wideMode = WidenUTF8String(lua_tostring(L, 2));
-	if (!wideMode) {
-		FreeWideString(widePath);
-		return 0;
-	}
-	FILE* fp = _wfopen(widePath, wideMode);
-	FreeWideString(widePath);
-	FreeWideString(wideMode);
-	if (!fp) {
-		return 0;
-	}
-
-	static const std::string placeholder = [] {
-		char buf[MAX_PATH]{};
-		HMODULE mod = LoadLibraryA("ntdll.dll");
-		GetModuleFileNameA(mod, buf, sizeof(buf));
-		FreeLibrary(mod);
-		return std::string(buf);
-	}();
-
-	{
-		lua_rawgeti(L, LUA_REGISTRYINDEX, ui->ioOpenf);
-		lua_pushstring(L, placeholder.c_str());
-		lua_pushstring(L, "r");
-		lua_call(L, 2, 2);
-
-
-		if (lua_isnil(L, -2)) {
-			fclose(fp);
-			ui->LAssert(L, !lua_isnil(L, -2), "OpenFile(): failed to open placeholder path %s: %s", placeholder.c_str(), luaL_checkstring(L, -1));
-		}
-	}
-
-	lua_pop(L, 1);
-
-	struct luajitInternalFileHandlePart {
-		FILE* f;
-	};
-
-	luajitInternalFileHandlePart* ljData = (luajitInternalFileHandlePart*)luaL_checkudata(L, -1, "FILE*");
-
-	fclose(ljData->f);
-	ljData->f = fp;
-
-	return 1;
-#endif
-}
-
 // ==============
 // Search Handles
 // ==============
@@ -1231,31 +1155,6 @@ static int l_RemoveDir(lua_State* L)
 	}
 }
 
-static int l_RemoveFile(lua_State* L)
-{
-	char const* pathStr = luaL_checkstring(L, 1);
-#ifdef _WIN32
-	auto path = std::filesystem::u8path(pathStr);
-	int rc = _wremove(path.c_str());
-#else
-	int rc = remove(pathStr);
-#endif
-	return luaL_fileresult(L, rc == 0, pathStr);
-}
-
-static int l_RenameFile(lua_State* L)
-{
-	char const* srcStr = luaL_checkstring(L, 1);
-	char const* dstStr = luaL_checkstring(L, 2);
-#ifdef _WIN32
-	auto srcPath = std::filesystem::u8path(srcStr);
-	auto dstPath = std::filesystem::u8path(dstStr);
-	int rc = _wrename(srcPath.c_str(), dstPath.c_str());
-#else
-	int rc = rename(srcStr, dstStr);
-#endif
-	return luaL_fileresult(L, rc == 0, srcStr);
-}
 SG_LUA_CPP_FUN_BEGIN(SetWorkDir)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -1596,28 +1495,6 @@ int ui_main_c::InitAPI(lua_State* L)
 {
 	luaL_openlibs(L);
 
-	{
-		ui_main_c* ui = GetUIPtr(L);
-		lua_getglobal(L, "io");
-		if (!lua_isnil(L, -1)) {
-			lua_getfield(L, -1, "open");
-			ui->ioOpenf = luaL_ref(L, LUA_REGISTRYINDEX);
-			lua_pushcfunction(L, l_OpenFile);
-			lua_setfield(L, -2, "open");
-		}
-		lua_pop(L, 1);
-
-		lua_getglobal(L, "os");
-		if (!lua_isnil(L, -1)) {
-			lua_pushcfunction(L, l_RemoveFile);
-			lua_setfield(L, -2, "remove");
-
-			lua_pushcfunction(L, l_RenameFile);
-			lua_setfield(L, -2, "rename");
-		}
-		lua_pop(L, 1);
-	}
-
 	// Add "lua/" subdir for non-JIT Lua
 	{
 		lua_getglobal(L, "package");
@@ -1681,9 +1558,6 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(StripEscapes);
 	ADDFUNC(GetAsyncCount);
 	ADDFUNC(RenderInit);
-
-	// Wide file I/O
-	ADDFUNC(OpenFile);
 
 	// Search handles
 	lua_newtable(L);	// Search handle metatable
