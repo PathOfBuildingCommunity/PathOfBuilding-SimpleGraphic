@@ -1907,7 +1907,7 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 		sys->con->Print("Couldn't write screenshot!\n");
 	}
 	else {
-		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.u8string()).c_str());
+		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.generic_u8string()).c_str());
 	}
 }
 

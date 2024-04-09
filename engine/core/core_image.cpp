@@ -73,7 +73,7 @@ bool image_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info
 
 image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& fileName)
 {
-	auto nameU8 = fileName.u8string();
+	auto nameU8 = fileName.generic_u8string();
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
 		conHnd->Warning("'%s' doesn't exist or cannot be opened", nameU8.c_str());
@@ -128,7 +128,7 @@ bool targa_c::Load(std::filesystem::path const& fileName)
 		return true;
 	}
 
-	auto nameU8 = fileName.u8string();
+	auto nameU8 = fileName.generic_u8string();
 
 	// Read header
 	tgaHeader_s hdr;
@@ -275,7 +275,7 @@ bool jpeg_c::Load(std::filesystem::path const& fileName)
 		return true;
 	}
 
-	auto nameU8 = fileName.u8string();
+	auto nameU8 = fileName.generic_u8string();
 
 	std::vector<byte> fileData(in.GetLen());
 	if (in.Read(fileData.data(), fileData.size())) {

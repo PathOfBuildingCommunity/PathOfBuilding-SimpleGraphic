@@ -160,7 +160,7 @@ void ui_main_c::PCall(int narg, int nret)
 
 void ui_main_c::DoError(const char* msg, const char* error)
 {
-	auto scriptStr = scriptName.u8string();
+	auto scriptStr = scriptName.generic_u8string();
 	char* errText = AllocStringLen(strlen(msg) + scriptStr.size() + strlen(error) + 30);
 	sprintf(errText, "--- SCRIPT ERROR ---\n%s '%s':\n%s\n", msg, scriptStr.c_str(), error);
 	sys->Exit(errText);
@@ -266,11 +266,11 @@ void ui_main_c::ScriptInit()
 {
 	sys->con->PrintFunc("UI Init");
 
-	sys->con->Printf("Script: %s\n", scriptName.u8string().c_str());
+	sys->con->Printf("Script: %s\n", scriptName.generic_u8string().c_str());
 	if (!scriptPath.empty()) {
-		sys->con->Printf("Script working directory: %s\n", scriptWorkDir.u8string().c_str());
+		sys->con->Printf("Script working directory: %s\n", scriptWorkDir.generic_u8string().c_str());
 	}
-	sys->video->SetTitle(scriptName.u8string().c_str());
+	sys->video->SetTitle(scriptName.generic_u8string().c_str());
 
 	restartFlag = false;
 	didExit = false;
@@ -312,7 +312,7 @@ void ui_main_c::ScriptInit()
 	
 	// Load the script file
 	sys->SetWorkDir(scriptWorkDir);
- 	err = luaL_loadfile(L, scriptName.filename().u8string().c_str());
+ 	err = luaL_loadfile(L, scriptName.filename().generic_u8string().c_str());
 	if (err) {
 		DoError("Error loading", lua_tostring(L, -1));
 		return;
