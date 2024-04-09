@@ -425,7 +425,7 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoad)
 		}
 	}
 	// TODO(LV): should we use u8path throughout here, to support any callers that use paths outside of working directory?
-	imgHandle->hnd = ui->renderer->RegisterShader(fileName.u8string(), flags);
+	imgHandle->hnd = ui->renderer->RegisterShader(fileName.generic_u8string(), flags);
 	return 0;
 }
 SG_LUA_CPP_FUN_END()
@@ -1246,7 +1246,7 @@ static int l_searchHandleGetFileName(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	searchHandle_s* searchHandle = GetSearchHandle(L, ui, "GetFileName", true);
-	lua_pushstring(L, searchHandle->find->fileName.u8string().c_str());
+	lua_pushstring(L, searchHandle->find->fileName.generic_u8string().c_str());
 	return 1;
 }
 
@@ -1542,14 +1542,14 @@ static int l_GetTime(lua_State* L)
 static int l_GetScriptPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->scriptPath.u8string().c_str());
+	lua_pushstring(L, ui->scriptPath.generic_u8string().c_str());
 	return 1;
 }
 
 static int l_GetRuntimePath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->sys->basePath.u8string().c_str());
+	lua_pushstring(L, ui->sys->basePath.generic_u8string().c_str());
 	return 1;
 }
 
@@ -1558,7 +1558,7 @@ static int l_GetUserPath(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	auto& userPath = ui->sys->userPath;
 	if (userPath) {
-		lua_pushstring(L, userPath->u8string().c_str());
+		lua_pushstring(L, userPath->generic_u8string().c_str());
 		return 1;
 	}
 	return 0;
@@ -1622,7 +1622,7 @@ SG_LUA_CPP_FUN_END()
 static int l_GetWorkDir(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushstring(L, ui->scriptWorkDir.u8string().c_str());
+	lua_pushstring(L, ui->scriptWorkDir.generic_u8string().c_str());
 	return 1;
 }
 
@@ -1702,9 +1702,10 @@ SG_LUA_CPP_FUN_BEGIN(LoadModule)
 	}
 
 	ui->sys->SetWorkDir(ui->scriptPath);
-	int err = luaL_loadfile(L, fileName.u8string().c_str());
+	auto fileStr = fileName.generic_u8string();
+	int err = luaL_loadfile(L, fileStr.c_str());
 	ui->sys->SetWorkDir(ui->scriptWorkDir);
-	ui->LExpect(L, err == 0, "LoadModule() error loading '%s' (%d):\n%s", fileName, err, lua_tostring(L, -1));
+	ui->LExpect(L, err == 0, "LoadModule() error loading '%s' (%d):\n%s", fileStr.c_str(), err, lua_tostring(L, -1));
 	lua_replace(L, 1);	// Replace module name with module main chunk
 	lua_call(L, n - 1, LUA_MULTRET);
 	return lua_gettop(L);
@@ -1724,7 +1725,7 @@ SG_LUA_CPP_FUN_BEGIN(PLoadModule)
 	}
 
 	ui->sys->SetWorkDir(ui->scriptPath);
-	int err = luaL_loadfile(L, fileName.u8string().c_str());
+	int err = luaL_loadfile(L, fileName.generic_u8string().c_str());
 	ui->sys->SetWorkDir(ui->scriptWorkDir);
 	if (err) {
 		return 1;

@@ -139,7 +139,7 @@ find_c::~find_c()
 std::optional<std::string> BuildGlobPattern(std::filesystem::path const& glob)
 {
 	using namespace std::literals::string_view_literals;
-	auto globStr = glob.u8string();
+	auto globStr = glob.generic_u8string();
 
 	// Deal with traditional "everything" wildcards.
 	if (glob == "*" || glob == "*.*") {
@@ -193,7 +193,7 @@ bool GlobMatch(std::optional<std::string> const& globPattern, std::filesystem::p
 	reOpts.set_case_sensitive(false);
 	RE2 reGlob{globPattern.value(), reOpts};
 
-	auto fileStr = file.u8string();
+	auto fileStr = file.generic_u8string();
 	return RE2::FullMatch(fileStr, reGlob);
 }
 

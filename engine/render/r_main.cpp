@@ -1952,7 +1952,6 @@ void r_renderer_c::DoScreenshot(image_c* i, int type, const char* ext)
 	auto ssPath = std::filesystem::u8path(fmt::format(CFG_DATAPATH "Screenshots/{:%m%d%y_%H%M%S}.{}",
 		fmt::localtime(curTime), ext));
 
-
 	// Make folder if it doesn't exist
 	std::error_code ec;
 	std::filesystem::create_directories(ssPath.parent_path(), ec);
@@ -1965,7 +1964,7 @@ void r_renderer_c::DoScreenshot(image_c* i, int type, const char* ext)
 		sys->con->Print("Couldn't write screenshot!\n");
 		return;
 	}
-	sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.u8string()).c_str());
+	sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.generic_u8string()).c_str());
 }
 
 r_renderer_c::RenderTarget& r_renderer_c::GetDrawRenderTarget()

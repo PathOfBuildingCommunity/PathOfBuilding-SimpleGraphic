@@ -158,7 +158,7 @@ bool core_config_c::LoadConfig(std::filesystem::path const& cfgName)
 	auto fileName = cfgName;
 	fileName.replace_extension(".cfg");
 
-	sys->con->Print(fmt::format("Executing {}\n", fileName.u8string()).c_str());
+	sys->con->Print(fmt::format("Executing {}\n", fileName.generic_u8string()).c_str());
 
 	// Read the config file
 	fileInputStream_c f;
@@ -202,7 +202,7 @@ bool core_config_c::SaveConfig(std::filesystem::path const& cfgName)
 	auto fileName = cfgName;
 	fileName.replace_extension(".cfg");
 
-	sys->con->Print(fmt::format("Saving {}\n", fileName.u8string()).c_str());
+	sys->con->Print(fmt::format("Saving {}\n", fileName.generic_u8string()).c_str());
 
 	// Open the config file
 	fileOutputStream_c f;
