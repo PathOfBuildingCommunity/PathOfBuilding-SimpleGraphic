@@ -1106,7 +1106,7 @@ static int l_RemoveDir(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 1), "l_RemoveDir() argument 1: expected string, got %s", luaL_typename(L, 1));
 	std::filesystem::path path(lua_tostring(L, 1));
 	std::error_code ec;
-	if (!is_directory(path, ec) || ec || remove(path, ec) || ec) {
+	if (!is_directory(path, ec) || ec || !remove(path, ec) || ec) {
 		lua_pushnil(L);
 		lua_pushstring(L, strerror(ec.value()));
 		return 2;
