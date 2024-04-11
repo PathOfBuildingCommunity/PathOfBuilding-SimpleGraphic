@@ -140,42 +140,49 @@ std::optional<std::string> BuildGlobPattern(std::filesystem::path const& glob)
 {
 	using namespace std::literals::string_view_literals;
 	auto globStr = glob.generic_u8string();
+	auto globView = std::string_view(globStr);
 
 	// Deal with traditional "everything" wildcards.
-	if (glob == "*" || glob == "*.*") {
+	if (globView == "*" || globView == "*.*") {
 		return {};
 	}
 
+	auto u32Str = IndexUTF8ToUTF32(globStr);
+	auto& offsets = u32Str.sourceCodeUnitOffsets;
+
 	fmt::memory_buffer buf;
+	buf.reserve(globStr.size() * 3); // Decent estimate of final pattern size.
 
 	// If no wildcards are present, test file path verbatim.
 	// We use a regex rather than string comparisons to make it case-insensitive.
-	if (globStr.find_first_of("?*") == std::string::npos) {
-		buf.reserve(globStr.size() * 3); // Decent estimate of final pattern size.
-
-		for (char ch : globStr) {
-			fmt::format_to(fmt::appender(buf), "[{}]", ch);
+	if (u32Str.text.find_first_of(U"?*") == std::u32string::npos) {
+		for (size_t offIdx = 0; offIdx < offsets.size(); ++offIdx) {
+			int byteOffset = offsets[offIdx];
+			int nextOffset = (offIdx + 1 < offsets.size()) ? offsets[offIdx + 1] : globStr.size();
+			fmt::format_to(fmt::appender(buf), "[{}]", globView.substr(byteOffset, nextOffset - byteOffset));
 		}
 	}
 	else {
 		// Otherwise build a regular expression from the glob and use that to match files.
 		auto it = fmt::appender(buf);
-		for (char ch : globStr) {
-			if (ch == '*') {
+		for (size_t offIdx = 0; offIdx < offsets.size(); ++offIdx) {
+			char32_t ch = u32Str.text[offIdx];
+			if (ch == U'*') {
 				it = fmt::format_to(it, ".*");
 			}
-			else if (ch == '?') {
+			else if (ch == U'?') {
 				*it++ = '.';
 			}
-			else if ("+[]{}+()|"sv.find(ch) != std::string_view::npos) {
+			else if (U".+[]{}+()|"sv.find(ch) != std::u32string::npos) {
 				// Escape metacharacters
-				it = fmt::format_to(it, "\\{}", ch);
+				it = fmt::format_to(it, "\\{}", (char)ch);
 			}
-			else if (std::isalnum((unsigned char)ch)) {
-				*it++ = ch;
+			else if (ch < 0x80 && std::isalnum((unsigned char)ch)) {
+				*it++ = (char)ch;
 			}
 			else {
-				it = fmt::format_to(it, "[{}]", ch);
+				// Emit as \x{10FFFF}.
+				it = fmt::format_to(it, "\\x{{{:X}}}", (uint32_t)ch);
 			}
 		}
 	}
