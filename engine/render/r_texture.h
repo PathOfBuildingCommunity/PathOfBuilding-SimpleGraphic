@@ -30,7 +30,7 @@ public:
 	dword	fileWidth;
 	dword	fileHeight;
 
-	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
+	r_tex_c(class r_ITexManager* manager, std::string_view fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, image_c* img, int flags);
 	~r_tex_c();
 
@@ -47,7 +47,7 @@ public:
 private:
 	class t_manager_c* manager;
 	class r_renderer_c* renderer;
-	void	Init(class r_ITexManager* manager, const char* fileName, int flags);
+	void	Init(class r_ITexManager* manager, std::string_view fileName, int flags);
 	void	Upload(image_c *image, int flags);
 };
 
@@ -62,5 +62,5 @@ public:
 	static void FreeHandle(r_ITexManager* hnd);
 
 	virtual int		GetAsyncCount() = 0;
-	virtual bool	GetImageInfo(const char* fileName, imageInfo_s* info) = 0;
+	virtual bool	GetImageInfo(std::string_view fileName, imageInfo_s* info) = 0;
 };

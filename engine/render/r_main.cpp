@@ -45,33 +45,33 @@ enum r_takeScreenshot_e {
 class r_shader_c {
 public:
 	r_renderer_c* renderer;
-	char* name;
+	std::string name;
 	dword		nameHash;
 	int			refCount;
 	r_tex_c* tex;
 
-	r_shader_c(r_renderer_c* renderer, const char* shname, int flags);
-	r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat);
+	r_shader_c(r_renderer_c* renderer, std::string_view shname, int flags);
+	r_shader_c(r_renderer_c* renderer, std::string_view shname, int flags, int width, int height, int type, byte* dat);
 	~r_shader_c();
 };
 
-r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags)
+r_shader_c::r_shader_c(r_renderer_c* renderer, std::string_view shname, int flags)
 	: renderer(renderer)
 {
-	name = AllocString(shname);
-	nameHash = StringHash(shname, 0xFFFF);
+	name = shname;
+	nameHash = StringHash(name.c_str(), 0xFFFF);
 	refCount = 0;
 	tex = new r_tex_c(renderer->texMan, name, flags);
 	if (tex->error) {
-		renderer->sys->con->Warning("couldn't load texture '%s'", name);
+		renderer->sys->con->Warning("couldn't load texture '%s'", name.c_str());
 	}
 }
 
-r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat)
+r_shader_c::r_shader_c(r_renderer_c* renderer, std::string_view shname, int flags, int width, int height, int type, byte* dat)
 	: renderer(renderer)
 {
-	name = AllocString(shname);
-	nameHash = StringHash(shname, 0xFFFF);
+	name = shname;
+	nameHash = StringHash(name.c_str(), 0xFFFF);
 	refCount = 0;
 	image_c img;
 	img.width = width;
@@ -85,7 +85,6 @@ r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags, in
 
 r_shader_c::~r_shader_c()
 {
-	FreeString(name);
 	delete tex;
 }
 
@@ -1535,19 +1534,20 @@ void r_renderer_c::PurgeShaders()
 	}
 }
 
-r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
+r_shaderHnd_c* r_renderer_c::RegisterShader(std::string_view shname, int flags)
 {
-	if (*shname == 0) {
+	if (shname.empty()) {
 		return NULL;
 	}
 
-	dword nameHash = StringHash(shname, 0xFFFF);
+	std::string name(shname);
+	dword nameHash = StringHash(name, 0xFFFF);
 	int newId = -1;
 	for (int s = 0; s < numShader; s++) {
 		if (!shaderList[s]) {
 			newId = s;
 		}
-		else if (shaderList[s]->nameHash == nameHash && _stricmp(shname, shaderList[s]->name) == 0 && shaderList[s]->tex->flags == flags) {
+		else if (shaderList[s]->nameHash == nameHash && _stricmp(name.c_str(), shaderList[s]->name.c_str()) == 0 && shaderList[s]->tex->flags == flags) {
 			// Shader already exists, return a new handle for it
 			// Ensure texture is loaded as soon as possible
 			shaderList[s]->tex->ForceLoad();
@@ -1716,6 +1716,7 @@ void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, float x0, float y0, float x
 
 void r_renderer_c::DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str)
 {
+	auto idxStr = IndexUTF8ToUTF32(str);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
@@ -1724,10 +1725,10 @@ void r_renderer_c::DrawString(float x, float y, int align, int height, const col
 	if (col) {
 		col4_t tcol;
 		Vector4Copy(col, tcol);
-		fonts[font]->Draw(pos, align, height, tcol, str);
+		fonts[font]->Draw(pos, align, height, tcol, idxStr.text);
 	}
 	else {
-		fonts[font]->Draw(pos, align, height, drawColor, str);
+		fonts[font]->Draw(pos, align, height, drawColor, idxStr.text);
 	}
 }
 
@@ -1755,18 +1756,31 @@ void r_renderer_c::DrawStringFormat(float x, float y, int align, int height, con
 
 int	r_renderer_c::DrawStringWidth(int height, int font, const char* str)
 {
+	if (!*str) {
+		return 0;
+	}
+	auto idxStr = IndexUTF8ToUTF32(str);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
-	return fonts[font]->StringWidth(height, str);
+	return fonts[font]->StringWidth(height, idxStr.text);
 }
 
 int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, int curX, int curY)
 {
+	if (!*str) {
+		return 0;
+	}
+	std::string_view narrowView(str);
+	auto idxStr = IndexUTF8ToUTF32(narrowView);
 	if (font < 0 || font >= F_NUMFONTS) {
 		font = F_FIXED;
 	}
-	return fonts[font]->StringCursorIndex(height, str, curX, curY);
+	size_t index = fonts[font]->StringCursorIndex(height, idxStr.text, curX, curY);
+	if (index < idxStr.sourceCodeUnitOffsets.size()) {
+		return (int)idxStr.sourceCodeUnitOffsets[index];
+	}
+	return (int)narrowView.size();
 }
 
 // ==============
@@ -1882,20 +1896,18 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 
 	time_t curTime;
 	time(&curTime);
-	std::string ssname = fmt::format(CFG_DATAPATH "Screenshots/{:%m%d%y_%H%M%S}.{}",
-		fmt::localtime(curTime), ext);
-	// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
-	// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
+	auto ssPath = std::filesystem::u8path(fmt::format(CFG_DATAPATH "Screenshots/{:%m%d%y_%H%M%S}.{}",
+		fmt::localtime(curTime), ext));
 
 	// Make folder if it doesn't exist
-	std::filesystem::create_directory(CFG_DATAPATH "Screenshots");
+	std::filesystem::create_directories(ssPath.parent_path());
 	
 	// Save image
-	if (i->Save(ssname.c_str())) {
+	if (i->Save(ssPath)) {
 		sys->con->Print("Couldn't write screenshot!\n");
 	}
 	else {
-		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
+		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.generic_u8string()).c_str());
 	}
 }
 

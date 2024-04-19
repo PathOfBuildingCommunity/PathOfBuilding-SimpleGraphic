@@ -256,6 +256,26 @@ target_link_libraries(lcurl
 install(TARGETS lcurl RUNTIME DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
+# luautf8 module
+
+add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
+
+target_compile_definitions(lua-utf8
+    PRIVATE
+    LUA_BUILD_AS_DLL
+)
+
+target_include_directories(lua-utf8
+    PRIVATE
+)
+
+target_link_libraries(lua-utf8
+    PRIVATE
+    LuaJIT::LuaJIT
+)
+
+install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # lzip module
 

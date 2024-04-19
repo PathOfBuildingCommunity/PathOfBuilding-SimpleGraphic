@@ -24,15 +24,6 @@
 // Classes
 // =======
 
-#define BLP2_MAGIC	0x32504C42	// "BLP2"
-
-// Generic client data structure, used by JPEG and PNG
-struct clientData_s {
-	IConsole* con;
-	const char* fileName;
-	ioStream_c* io;
-};
-
 // =========
 // Raw Image
 // =========
@@ -65,32 +56,33 @@ void image_c::Free()
 	dat = NULL;
 }
 
-bool image_c::Load(const char* fileName) 
+bool image_c::Load(std::filesystem::path const& fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::Save(const char* fileName) 
+bool image_c::Save(std::filesystem::path const& fileName) 
 {
 	return true; // o_O
 }
 
-bool image_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool image_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	return true; // o_O
 }
 
-image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
+image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& fileName)
 {
+	auto nameU8 = fileName.generic_u8string();
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true)) {
-		conHnd->Warning("'%s' doesn't exist or cannot be opened", fileName);
+		conHnd->Warning("'%s' doesn't exist or cannot be opened", nameU8.c_str());
 		return NULL;
 	}
 	// Attempt to detect image file type from first 4 bytes of file
 	byte dat[4];
 	if (in.Read(dat, 4)) {
-		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", fileName);
+		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", nameU8.c_str());
 		return NULL;
 	}
 	if (dat[0] == 0xFF && dat[1] == 0xD8) {
@@ -99,17 +91,11 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x474E5089) {
 		// 0x89 P N G
 		return new png_c(conHnd);
-	} else if (*(dword*)dat == 0x38464947) {
-		// G I F 8
-		return new gif_c(conHnd);
-	} else if (*(dword*)dat == BLP2_MAGIC) {
-		// B L P 2
-		return new blp_c(conHnd);
 	} else if ((dat[1] == 0 && (dat[2] == 2 || dat[2] == 3 || dat[2] == 10 || dat[2] == 11)) || (dat[1] == 1 && (dat[2] == 1 || dat[2] == 9))) {
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
 	}
-	conHnd->Warning("'%s': unsupported image file format", fileName);
+	conHnd->Warning("'%s': unsupported image file format", nameU8.c_str());
 	return NULL;
 }
 
@@ -132,7 +118,7 @@ struct tgaHeader_s {
 };
 #pragma pack(pop)
 
-bool targa_c::Load(const char* fileName)
+bool targa_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -142,14 +128,16 @@ bool targa_c::Load(const char* fileName)
 		return true;
 	}
 
+	auto nameU8 = fileName.generic_u8string();
+
 	// Read header
 	tgaHeader_s hdr;
 	if (in.TRead(hdr)) {
-		con->Warning("TGA '%s': couldn't read header", fileName);
+		con->Warning("TGA '%s': couldn't read header", nameU8.c_str());
 		return true;
 	}
 	if (hdr.colorMapType) {
-		con->Warning("TGA '%s': color mapped images not supported", fileName);
+		con->Warning("TGA '%s': color mapped images not supported", nameU8.c_str());
 		return true;
 	}
 	in.Seek(hdr.idLen, SEEK_CUR);	
@@ -165,7 +153,7 @@ bool targa_c::Load(const char* fileName)
 		if (ittable[it_m][0] == (hdr.imgType & 7) && ittable[it_m][1] == hdr.depth) break;
 	}
 	if (it_m == 3) {
-		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", fileName, hdr.imgType, hdr.depth);
+		con->Warning("TGA '%s': unsupported image type (it: %d pd: %d)", nameU8.c_str(), hdr.imgType, hdr.depth);
 		return true;
 	}
 
@@ -187,7 +175,7 @@ bool targa_c::Load(const char* fileName)
 				in.TRead(rlehdr);
 				int rlen = ((rlehdr & 0x7F) + 1) * comp; 
 				if (x + rlen > rowSize) {
-					con->Warning("TGA '%s': invalid RLE coding (overlong row)", fileName);
+					con->Warning("TGA '%s': invalid RLE coding (overlong row)", nameU8.c_str());
 					delete[] dat;
 					return true;
 				}
@@ -223,7 +211,7 @@ bool targa_c::Load(const char* fileName)
 	return false;
 }
 
-bool targa_c::Save(const char* fileName)
+bool targa_c::Save(std::filesystem::path const& fileName)
 {
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
 		return true;
@@ -243,7 +231,7 @@ bool targa_c::Save(const char* fileName)
 	return !rc;
 }
 
-bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool targa_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -277,7 +265,7 @@ bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
 // JPEG Image
 // ==========
 
-bool jpeg_c::Load(const char* fileName)
+bool jpeg_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -286,6 +274,8 @@ bool jpeg_c::Load(const char* fileName)
 	if (in.FileOpen(fileName, true)) {
 		return true;
 	}
+
+	auto nameU8 = fileName.generic_u8string();
 
 	std::vector<byte> fileData(in.GetLen());
 	if (in.Read(fileData.data(), fileData.size())) {
@@ -296,7 +286,7 @@ bool jpeg_c::Load(const char* fileName)
 		return true;
 	}
 	if (in_comp != 1 && in_comp != 3) {
-		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
+		con->Warning("JPEG '%s': unsupported component count '%d'", nameU8.c_str(), comp);
 		return true;
 	}
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, in_comp);
@@ -315,7 +305,7 @@ bool jpeg_c::Load(const char* fileName)
 	return false;
 }
 
-bool jpeg_c::Save(const char* fileName)
+bool jpeg_c::Save(std::filesystem::path const& fileName)
 {
 	// JPEG only supports RGB and grayscale images
 	if (type != IMGTYPE_RGB && type != IMGTYPE_GRAY) {
@@ -337,7 +327,7 @@ bool jpeg_c::Save(const char* fileName)
 
 // JPEG Image Info
 
-bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool jpeg_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open the file
 	fileInputStream_c in;
@@ -366,7 +356,7 @@ bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
 // PNG Image
 // =========
 
-bool png_c::Load(const char* fileName)
+bool png_c::Load(std::filesystem::path const& fileName)
 {
 	Free();
 
@@ -400,7 +390,7 @@ bool png_c::Load(const char* fileName)
 	return false;
 }
 
-bool png_c::Save(const char* fileName)
+bool png_c::Save(std::filesystem::path const& fileName)
 {
 	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
 		return true;
@@ -422,7 +412,7 @@ bool png_c::Save(const char* fileName)
 
 // PNG Image Info
 
-bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
+bool png_c::ImageInfo(std::filesystem::path const& fileName, imageInfo_s* info)
 {
 	// Open file and check signature
 	fileInputStream_c in;
@@ -443,189 +433,5 @@ bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
 	info->height = y;
 	info->comp = comp <= 3 ? 3 : comp;
 	info->alpha = comp == 4;
-	return false;
-}
-
-// =========
-// GIF Image
-// =========
-
-bool gif_c::Load(const char* fileName)
-{
-	// Open file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	{
-		std::vector<byte> fileData(in.GetLen());
-		if (in.Read(fileData.data(), fileData.size())) {
-			return true;
-		}
-		int x, y, in_comp;
-		stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, 4);
-		if (!data || in_comp != 4) {
-			stbi_image_free(data);
-			return true;
-		}
-		width = x;
-		height = y;
-		comp = in_comp;
-		type = IMGTYPE_RGBA;
-		const size_t byteSize = width * height * comp;
-		dat = new byte[byteSize];
-		std::copy_n(data, byteSize, dat);
-		stbi_image_free(data);
-		return false;
-	}
-}
-
-bool gif_c::Save(const char* fileName)
-{
-	// HELL no.
-	return true;
-}
-
-bool gif_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	return true;
-}
-
-// =========
-// BLP Image
-// =========
-
-enum blpType_e {
-	BLP_JPEG,
-	BLP_PALETTE,
-	BLP_DXTC
-};	
-
-#pragma pack(push,1)
-struct blpHeader_s {
-	dword	id;
-	dword	unknown1;
-	byte	type;
-	byte	alphaDepth;
-	byte	alphaType;
-	byte	hasMipmaps;
-	dword	width;
-	dword	height;
-};
-struct blpMipmapHeader_s {
-	dword	offset[16];
-	dword	size[16];
-};
-#pragma pack(pop)
-
-bool blp_c::Load(const char* fileName)
-{
-	Free();
-
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Read header
-	blpHeader_s hdr;
-	if (in.TRead(hdr)) {
-		return true;
-	}
-	if (hdr.id != BLP2_MAGIC) {
-		con->Warning("'%s' is not a BLP2 file", fileName);
-		return true;
-	}
-	if (hdr.type != BLP_DXTC || !hdr.hasMipmaps) {
-		// To hell with compatability
-		con->Warning("'%s': unsupported image type (type: %d hasMipmaps: %d)", fileName, hdr.type, hdr.hasMipmaps);
-		return true;
-	}
-	if (hdr.alphaDepth == 0) {
-		comp = 3;
-		type = IMGTYPE_RGB_DXT1;
-	} else if (hdr.alphaDepth == 1) {
-		comp = 4;
-		type = IMGTYPE_RGBA_DXT1;
-	} else if (hdr.alphaDepth == 8) {
-		comp = 4;
-		if (hdr.alphaType == 7) {
-			type = IMGTYPE_RGBA_DXT5;
-		} else {
-			type = IMGTYPE_RGBA_DXT3;
-		}
-	} else {
-		con->Warning("'%s': unsupported alpha type (alpha depth: %d alpha type %d)", fileName, hdr.alphaDepth, hdr.alphaType);
-		return true;
-	}
-	width = hdr.width;
-	height = hdr.height;
-
-	// Read the mipmap header
-	blpMipmapHeader_s mip;
-	in.TRead(mip);
-
-	// Read image
-	int isize = 0;
-	int numMip = 0;
-	for (int c = 0; c < 16; c++) {
-		if (mip.size[c] == 0) {
-			numMip = c;
-			break;
-		}
-		isize+= mip.size[c];
-	}
-	dat = new byte[isize + numMip*sizeof(dword)];
-	byte* datPtr = dat;
-	for (int c = 0; c < numMip; c++) {
-		memcpy(datPtr, mip.size + c, sizeof(dword));
-		datPtr+= sizeof(dword);
-		in.Seek(mip.offset[c], SEEK_SET);
-		in.Read(datPtr, mip.size[c]);
-		datPtr+= mip.size[c];
-	}
-
-	return false;
-}
-
-bool blp_c::Save(const char* fileName)
-{
-	// No.
-	return true;
-}
-
-bool blp_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Read header
-	blpHeader_s hdr;
-	if (in.TRead(hdr)) {
-		return true;
-	}
-	if (hdr.id != BLP2_MAGIC) {
-		return true;
-	}
-	if (hdr.type != BLP_DXTC) {
-		// To hell with compatability
-		return true;
-	}
-	if (hdr.alphaDepth == 0) {
-		info->alpha = false;
-		info->comp = 3;
-	} else if (hdr.alphaDepth == 1 || hdr.alphaDepth == 8) {
-		info->alpha = true;
-		info->comp = 4;
-	} else {
-		return true;
-	}
-	info->width = hdr.width;
-	info->height = hdr.height;
 	return false;
 }
