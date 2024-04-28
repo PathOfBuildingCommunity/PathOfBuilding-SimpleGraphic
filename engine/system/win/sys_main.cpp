@@ -150,7 +150,8 @@ bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& f
 	// If no wildcards are present, test file path verbatim.
 	// We use a regex rather than string comparisons to make it case-insensitive.
 	if (globStr.find_first_of("?*") == std::string::npos) {
-		buf.resize(globStr.size());
+		buf.reserve(globStr.size() * 3); // Decent estimate of final pattern size.
+
 		for (char ch : globStr) {
 			fmt::format_to(fmt::appender(buf), "[{}]", ch);
 		}
