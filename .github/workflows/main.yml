@@ -10,24 +10,25 @@ jobs:
             triplet: x64-windows
     runs-on: ${{ matrix.os }}
     env:
-      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}-release
+      VCPKG_TARGET_TRIPLET: ${{ matrix.triplet }}-release
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/
       DEPS_DIR: ${{ github.workspace }}/vcpkg_installed/${{ matrix.triplet }}
       INST_DIR: ${{ github.workspace }}/install-prefix
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
           submodules: "recursive"
 
       - name: run-vcpkg
-        uses: lukka/run-vcpkg@v10
+        uses: lukka/run-vcpkg@v11
         with:
           vcpkgJsonGlob: "./vcpkg.json"
           runVcpkgInstall: true
 
       - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1
+        uses: microsoft/setup-msbuild@v2
 
       - name: Obtain and run CMake
         uses: threeal/cmake-action@v1.3.0
@@ -35,25 +36,25 @@ jobs:
           source-dir: "."
           build-dir: "build"
           generator: "Visual Studio 17 2022"
-          options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}"
+          options: CMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake CMAKE_INSTALL_PREFIX="${{ env.INST_DIR }}" VCPKG_TARGET_TRIPLET="${{ env.VCPKG_TARGET_TRIPLET }}"
 
       - name: Build DLL
         run: "cmake --build build --config Release -t INSTALL"
         
       - name: Archive DLL
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SimpleGraphic-${{ matrix.triplet }}.dll
           path: "${{ env.INST_DIR }}/SimpleGraphic.dll"
 
       - name: Archive DLL symbols
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SimpleGraphic-${{ matrix.triplet }}.pdb
           path: "${{ github.workspace }}/build/Release/SimpleGraphic.pdb"
 
       - name: Archive dependency DLLs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SimpleGraphic-${{ matrix.triplet }}-deps.dll
           path: |
@@ -61,7 +62,7 @@ jobs:
             !${{ env.INST_DIR }}/SimpleGraphic.dll
 
       - name: Archive dependency DLL symbols
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: SimpleGraphic-${{ matrix.triplet }}-deps.pdb
           path: |

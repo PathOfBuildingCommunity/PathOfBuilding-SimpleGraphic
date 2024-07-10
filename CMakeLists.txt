@@ -162,6 +162,17 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
 endif ()
 
 if (WIN32)
+    target_compile_options(SimpleGraphic
+        PRIVATE
+        "/EHa"
+    )
+    target_compile_definitions(SimpleGraphic
+        PRIVATE
+        "_CRT_SECURE_NO_DEPRECATE=1"
+        "_CRT_SECURE_NO_WARNINGS=1"
+        "_SCL_SECURE_NO_DEPRECATE=1"
+        "_SCL_SECURE_NO_WARNINGS=1"
+    )
     target_link_libraries(SimpleGraphic
         PRIVATE
         "winmm.lib"
@@ -198,39 +209,30 @@ install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
 
-    find_file(LuaJIT_DLL_DEBUG
-        NAMES "lua51.dll"
-        PATHS "${DEPS_DIR}"
-        PATH_SUFFIXES "debug/bin"
-        REQUIRED
-        NO_DEFAULT_PATH
-    )
-    find_file(LuaJIT_DLL_RELEASE
-        NAMES "lua51.dll"
-        PATHS "${DEPS_DIR}"
-        PATH_SUFFIXES "bin"
-        REQUIRED
-        NO_DEFAULT_PATH
-    )
-    find_file(ZLIB_DLL_DEBUG
-        NAMES "zlibd1.dll"
-        PATHS "${DEPS_DIR}"
-        PATH_SUFFIXES "debug/bin"
-        REQUIRED
-        NO_DEFAULT_PATH
-    )
-    find_file(ZLIB_DLL_RELEASE
-        NAMES "zlib1.dll"
-        PATHS "${DEPS_DIR}"
-        PATH_SUFFIXES "bin"
-        REQUIRED
-        NO_DEFAULT_PATH
+    if (NOT VCPKG_TARGET_TRIPLET MATCHES "-release")
+        find_file(LuaJIT_DLL_DEBUG NAMES "lua51.dll"
+            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
+        find_file(ZLIB_DLL_DEBUG NAMES "zlibd1.dll"
+            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
+             
+        install(FILES
+            ${LuaJIT_DLL_DEBUG}
+            ${ZLIB_DLL_DEBUG}
+            DESTINATION "."
+            CONFIGURATIONS Debug
+        )
+    endif ()
+
+    find_file(LuaJIT_DLL_RELEASE NAMES "lua51.dll"
+        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
+    find_file(ZLIB_DLL_RELEASE NAMES "zlib1.dll"
+        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH
     )
 
-    install(FILES ${LuaJIT_DLL_DEBUG} ${ZLIB_DLL_DEBUG} DESTINATION "."
-        CONFIGURATIONS Debug
-    )
-    install(FILES ${LuaJIT_DLL_RELEASE} ${ZLIB_DLL_RELEASE} DESTINATION "."
+    install(FILES
+        ${LuaJIT_DLL_RELEASE}
+        ${ZLIB_DLL_RELEASE}
+        DESTINATION "."
         CONFIGURATIONS Release MinSizeRel RelWithDebInfo
     )
 endif ()
