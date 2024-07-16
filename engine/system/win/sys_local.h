@@ -47,9 +47,7 @@ public:
 
 	bool	Run(int argc, char** argv);
 
-	int		KeyToVirtual(byte key);
-	byte	VirtualToKey(int virt);
-	byte	GlfwKeyToKey(int key);
+	byte	GlfwKeyToKey(int key, int scancode);
 	char	GlfwKeyExtraChar(int key);
 
 #ifdef _WIN32

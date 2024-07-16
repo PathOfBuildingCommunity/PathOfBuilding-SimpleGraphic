@@ -46,6 +46,7 @@ static void SE_ErrorTrans(unsigned int code, EXCEPTION_POINTERS* exPtr)
 	throw exPtr;
 }
 #endif
+#define GLFW_HAS_GET_KEY_NAME 1
 
 // ===========
 // Timer class
@@ -231,248 +232,32 @@ bool find_c::FindNext()
 // Key Mapping
 // ===========
 
-byte KeyRemapGLFW(int key) {
-	if (key >= GLFW_KEY_0 && key <= GLFW_KEY_9) {
-		return '0' + (key - GLFW_KEY_0);
-	}
-	if (key >= GLFW_KEY_A && key <= GLFW_KEY_Z) {
-		return 'a' + (key - GLFW_KEY_A);
-	}
-	if (key >= GLFW_KEY_F1 && key <= GLFW_KEY_F15) {
-		return KEY_F1 + (key - GLFW_KEY_F1);
-	}
-	switch (key) {
-	case GLFW_KEY_BACKSPACE: return KEY_BACK;
-	case GLFW_KEY_TAB: return KEY_TAB;
-	case GLFW_KEY_ENTER: return KEY_RETURN;
-	case GLFW_KEY_LEFT_SHIFT:
-	case GLFW_KEY_RIGHT_SHIFT: return KEY_SHIFT;
-	case GLFW_KEY_LEFT_CONTROL:
-	case GLFW_KEY_RIGHT_CONTROL: return KEY_CTRL;
-	case GLFW_KEY_LEFT_ALT:
-	case GLFW_KEY_RIGHT_ALT: return KEY_ALT;
-	case GLFW_KEY_PAUSE: return KEY_PAUSE;
-	case GLFW_KEY_ESCAPE: return KEY_ESCAPE;
-	case GLFW_KEY_SPACE: return ' ';
-	case GLFW_KEY_PAGE_UP: return KEY_PGUP;
-	case GLFW_KEY_PAGE_DOWN: return KEY_PGDN;
-	case GLFW_KEY_END: return KEY_END;
-	case GLFW_KEY_HOME: return KEY_HOME;
-	case GLFW_KEY_LEFT: return KEY_LEFT;
-	case GLFW_KEY_UP: return KEY_UP;
-	case GLFW_KEY_RIGHT: return KEY_RIGHT;
-	case GLFW_KEY_DOWN: return KEY_DOWN;
-	case GLFW_KEY_PRINT_SCREEN: return KEY_PRINTSCRN;
-	case GLFW_KEY_INSERT: return KEY_INSERT;
-	case GLFW_KEY_DELETE: return KEY_DELETE;
-	case GLFW_KEY_NUM_LOCK: return KEY_NUMLOCK;
-	case GLFW_KEY_SCROLL_LOCK: return KEY_SCROLL;
-	case GLFW_KEY_SEMICOLON: return ';';
-	case GLFW_KEY_COMMA: return ',';
-	case GLFW_KEY_MINUS: return '-';
-	case GLFW_KEY_PERIOD: return '.';
-	case GLFW_KEY_SLASH: return '/';
-	case GLFW_KEY_GRAVE_ACCENT: return '`';
-	case GLFW_KEY_LEFT_BRACKET: return '[';
-	case GLFW_KEY_BACKSLASH: return '\\';
-	case GLFW_KEY_RIGHT_BRACKET: return ']';
-	case GLFW_KEY_APOSTROPHE: return '\'';
-	}
-	return 0;
-}
 
-static const byte sys_keyRemap[] = {
-	0,				// 00		Null
-	KEY_LMOUSE,		// 01		VK_LBUTTON
-	KEY_RMOUSE,		// 02		VK_RBUTTON
-	0,				// 03		VK_CANCEL
-	KEY_MMOUSE,		// 04		VK_MBUTTON
-	KEY_MOUSE4,		// 05		VK_XBUTTON1
-	KEY_MOUSE5,		// 06		VK_XBUTTON2
-	0,				// 07		-
-	KEY_BACK,		// 08		VK_BACK
-	KEY_TAB,		// 09		VK_TAB
-	0,0,			// 0A 0B	-
-	0,				// 0C		VK_CLEAR
-	KEY_RETURN,		// 0D		VK_RETUN
-	0,0,			// 0E 0F	-
-	KEY_SHIFT,		// 10		VK_SHIFT
-	KEY_CTRL,		// 11		VK_CONTROL
-	KEY_ALT,		// 12		VK_MENU
-	KEY_PAUSE,		// 13		VK_PAUSE
-	0,				// 14		VK_CAPITAL
-	0,0,0,0,0,		// 15-19	IME
-	0,				// 1A		-
-	KEY_ESCAPE,		// 1B		VK_ESCAPE
-	0,0,0,0,		// 1C-1F	IME
-	' ',			// 20		VK_SPACE
-	KEY_PGUP,		// 21		VK_PRIOR
-	KEY_PGDN,		// 22		VK_NEXT
-	KEY_END,		// 23		VK_END
-	KEY_HOME,		// 24		VK_HOME
-	KEY_LEFT,		// 25		VK_LEFT
-	KEY_UP,			// 26		VK_UP
-	KEY_RIGHT,		// 27		VK_RIGHT
-	KEY_DOWN,		// 28		VK_DOWN
-	0,				// 29		VK_SELECT
-	0,				// 2A		VK_PRINT
-	0,				// 2B		VK_EXECUTE
-	KEY_PRINTSCRN,	// 2C		VK_SNAPSHOT
-	KEY_INSERT,		// 2D		VK_INSERT
-	KEY_DELETE,		// 2E		VK_DELETE
-	0,				// 2F		VK_HELP
-	'0',			// 30		VK_0
-	'1',			// 31		VK_1
-	'2',			// 32		VK_2
-	'3',			// 33		VK_3
-	'4',			// 34		VK_4
-	'5',			// 35		VK_5
-	'6',			// 36		VK_6
-	'7',			// 37		VK_7
-	'8',			// 38		VK_8
-	'9',			// 39		VK_9
-	0,0,0,0,0,0,0,	// 3A-40	-
-	'a',			// 41		VK_A
-	'b',			// 42		VK_B
-	'c',			// 43		VK_C
-	'd',			// 44		VK_D
-	'e',			// 45		VK_E
-	'f',			// 46		VK_F
-	'g',			// 47		VK_G
-	'h',			// 48		VK_H
-	'i',			// 49		VK_I
-	'j',			// 4A		VK_J
-	'k',			// 4B		VK_K
-	'l',			// 4C		VK_L
-	'm',			// 4D		VK_M
-	'n',			// 4E		VK_N
-	'o',			// 4F		VK_O
-	'p',			// 50		VK_P
-	'q',			// 51		VK_Q
-	'r',			// 52		VK_R
-	's',			// 53		VK_S
-	't',			// 54		VK_T
-	'u',			// 55		VK_U
-	'v',			// 56		VK_V
-	'w',			// 57		VK_W
-	'x',			// 58		VK_X
-	'y',			// 59		VK_Y
-	'z',			// 5A		VK_Z
-	0,				// 5B		VK_LWIN
-	0,				// 5C		VK_RWIN
-	0,				// 5D		VK_APPS
-	0,				// 5E		-
-	0,				// 5F		VK_SLEEP
-	'0',			// 60		VK_NUMPAD0
-	0,				// 61		VK_NUMPAD1
-	0,				// 62		VK_NUMPAD2
-	0,				// 63		VK_NUMPAD3
-	0,				// 64		VK_NUMPAD4
-	0,				// 65		VK_NUMPAD5
-	0,				// 66		VK_NUMPAD6
-	0,				// 67		VK_NUMPAD7
-	0,				// 68		VK_NUMPAD8
-	0,				// 69		VK_NUMPAD9
-	0,				// 6A		VK_MULTIPLY
-	'+',			// 6B		VK_ADD
-	0,				// 6C		VK_SEPARATOR
-	'-',			// 6D		VK_SUBTRACT
-	0,				// 6E		VK_DECIMAL
-	0,				// 6F		VK_DIVIDE
-	KEY_F1,			// 70		VK_F1
-	KEY_F2,			// 71		VK_F2
-	KEY_F3,			// 72		VK_F3
-	KEY_F4,			// 73		VK_F4
-	KEY_F5,			// 74		VK_F5
-	KEY_F6,			// 75		VK_F6
-	KEY_F7,			// 76		VK_F7
-	KEY_F8,			// 77		VK_F8
-	KEY_F9,			// 78		VK_F9
-	KEY_F10,		// 79		VK_F10
-	KEY_F11,		// 7A		VK_F11
-	KEY_F12,		// 7B		VK_F12
-	KEY_F13,		// 7C		VK_F13
-	KEY_F14,		// 7D		VK_F14
-	KEY_F15,		// 7E		VK_F15
-	0,				// 7F		VK_F16
-	0,				// 80		VK_F17
-	0,				// 81		VK_F18
-	0,				// 82		VK_F19
-	0,				// 83		VK_F20
-	0,				// 84		VK_F21
-	0,				// 85		VK_F22
-	0,				// 86		VK_F23
-	0,				// 87		VK_F24
-	0,0,0,0,0,0,0,0,// 88-8F	-
-	KEY_NUMLOCK,	// 90		VK_NUMLOCK
-	KEY_SCROLL,		// 91		VK_SCROLL
-	0,0,0,0,0,		// 92-96	OEM
-	0,0,0,0,0,0,0,0,0, // 97-9F	-
-	0,				// A0		VK_LSHIFT
-	0,				// A1		VK_RSHIFT
-	0,				// A2		VK_LCONTROL
-	0,				// A3		VK_RCONTROL
-	0,				// A4		VK_LMENU
-	0,				// A5		VK_RMENU
-	0,				// A6		VK_BROWSER_BACK
-	0,				// A7		VK_BROWSER_FORWARD
-	0,				// A8		VK_BROWSER_REFRESH
-	0,				// A9		VK_BROWSER_STOP
-	0,				// AA		VK_BROWSER_SEARCH
-	0,				// AB		VK_BROWSER_FAVORITES
-	0,				// AC		VK_BROWSER_HOME
-	0,				// AD		VK_VOLUME_MUTE
-	0,				// AE		VK_VOLUME_DOWN
-	0,				// AF		VK_VOLUME_UP
-	0,				// B0		VK_MEDIA_NEXT_TRACK
-	0,				// B1		VK_MEDIA_PREV_TRACK
-	0,				// B2		VK_MEDIA_STOP
-	0,				// B3		VK_MEDIA_PLAY_PAUSE
-	0,				// B4		VK_LAUNCH_MAIL
-	0,				// B5		VK_LAUNCH_MEDIA_SELECT
-	0,				// B6		VK_LAUNCH_APP1
-	0,				// B7		VK_LAUNCH_APP2
-	0,0,			// B8,B9	-
-	';',			// BA		VK_OEM_1
-	'+',			// BB		VK_OEM_PLUS
-	',',			// BC		VK_OEM_COMMA
-	'-',			// BD		VK_OEM_MINUS
-	'.',			// BE		VK_OEM_PERIOD
-	'/',			// BF		VK_OEM_2
-	'`',			// C0		VK_OEM_3
-	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0, // C1-D7 -
-	0,0,0,			// D8-DA	-
-	'[',			// DB		VK_OEM_4
-	'\\',			// DC		VK_OEM_5
-	']',			// DD		VK_OEM_6
-	'\'',			// DE		VK_OEM_7
-};
-
-#ifdef _WIN32
-int sys_main_c::KeyToVirtual(byte key)
+static int ImGui_ImplGlfw_TranslateUntranslatedKey(int key, int scancode)
 {
-	if (key >= 32 && key <= 127) {
-		return toupper(key);
+#if GLFW_HAS_GET_KEY_NAME
+	// GLFW 3.1+ attempts to "untranslate" keys, which goes the opposite of what every other framework does, making using lettered shortcuts difficult.
+	// (It had reasons to do so: namely GLFW is/was more likely to be used for WASD-type game controls rather than lettered shortcuts, but IHMO the 3.1 change could have been done differently)
+	// See https://github.com/glfw/glfw/issues/1502 for details.  
+	// Adding a workaround to undo this (so our keys are translated->untranslated->translated, likely a lossy process).
+	// This won't cover edge cases but this is at least going to cover common cases.
+	if (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_EQUAL)
+		return key;
+	const char* key_name = glfwGetKeyName(key, scancode);
+	if (key_name && key_name[0] != 0 && key_name[1] == 0)
+	{
+		const char char_names[] = "`-=[]\\,;\'./";
+		const int char_keys[] = { GLFW_KEY_GRAVE_ACCENT, GLFW_KEY_MINUS, GLFW_KEY_EQUAL, GLFW_KEY_LEFT_BRACKET, GLFW_KEY_RIGHT_BRACKET, GLFW_KEY_BACKSLASH, GLFW_KEY_COMMA, GLFW_KEY_SEMICOLON, GLFW_KEY_APOSTROPHE, GLFW_KEY_PERIOD, GLFW_KEY_SLASH, 0 };
+		if (key_name[0] >= '0' && key_name[0] <= '9') { key = GLFW_KEY_0 + (key_name[0] - '0'); }
+		else if (key_name[0] >= 'A' && key_name[0] <= 'Z') { key = GLFW_KEY_A + (key_name[0] - 'A'); }
+		else if (key_name[0] >= 'a' && key_name[0] <= 'z') { key = GLFW_KEY_A + (key_name[0] - 'a'); }
+		else if (const char* p = strchr(char_names, key_name[0])) { key = char_keys[p - char_names]; }
 	}
-	for (int v = 0; v <= VK_OEM_7; v++) {
-		if (sys_keyRemap[v] == key) {
-			return v;
-		}
-	}
-	return 0;
-}
-
-byte sys_main_c::VirtualToKey(int virt)
-{
-	if (virt >= 0 && virt <= VK_OEM_7) {
-		return sys_keyRemap[virt];
-	} else {
-		return 0;
-	}
-}
 #endif
+	return key;
+}
 
-byte sys_main_c::GlfwKeyToKey(int key) {
+byte sys_main_c::GlfwKeyToKey(int key, int scancode) {
 	static std::map<int, byte> s_lookup = {
 		{GLFW_KEY_BACKSPACE, KEY_BACK},
 		{GLFW_KEY_TAB, KEY_TAB},
@@ -511,7 +296,13 @@ byte sys_main_c::GlfwKeyToKey(int key) {
 		{GLFW_KEY_BACKSLASH, '\\'},
 		{GLFW_KEY_RIGHT_BRACKET, ']'},
 		{GLFW_KEY_APOSTROPHE, '\''},
+		{GLFW_KEY_KP_0, '0'},
+		{GLFW_KEY_KP_SUBTRACT, '-'},
+		{GLFW_KEY_KP_ADD, '+'},
+		{GLFW_KEY_KP_ENTER, KEY_RETURN},
 	};
+
+	key = ImGui_ImplGlfw_TranslateUntranslatedKey(key, scancode);
 
 	auto I = s_lookup.find(key);
 	if (I != s_lookup.end()) {
