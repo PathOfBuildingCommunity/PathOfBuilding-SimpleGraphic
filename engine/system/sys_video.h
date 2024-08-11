@@ -30,6 +30,7 @@ struct sys_vidSet_s {
 	int		flags = 0;		// Flags
 	int		mode[2] = {};	// Window size
 	int		minSize[2] = {};	// Minimum size for resizable windows
+	float	dpiScale = 0.0f; // Override DPI scale
 	sys_vidSave_s save; // Saved state
 };
 

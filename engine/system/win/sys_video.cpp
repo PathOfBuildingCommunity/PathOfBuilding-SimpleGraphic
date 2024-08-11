@@ -442,6 +442,10 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 	}
 	else {
 		ignoreDpiScale = ShouldIgnoreDpiScale();
+		if (cur.dpiScale > 0.0f) {
+			ignoreDpiScale = true;
+			sys->video->vid.dpiScale = cur.dpiScale;
+		}
 		glfwWindowHint(GLFW_RESIZABLE, !!(cur.flags & VID_RESIZABLE));
 		glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE); // Start hidden to not flash the user with a stock window.
 		glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE); // Start restored in order to position the window before maximizing.
