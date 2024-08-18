@@ -1887,16 +1887,21 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	// curTimeSt.tm_mon+1, curTimeSt.tm_mday, curTimeSt.tm_year%100,
 	// curTimeSt.tm_hour, curTimeSt.tm_min, curTimeSt.tm_sec, ext);
 
+
 	// Make folder if it doesn't exist
-	std::filesystem::create_directory(CFG_DATAPATH "Screenshots");
-	
-	// Save image
+	std::error_code ec;
+	std::filesystem::create_directory(CFG_DATAPATH "Screenshots", ec);
+	if (ec) {
+		sys->con->Print("Couldn't create screenshot folder!\n");
+		return;
+	}
+
 	if (i->Save(ssname.c_str())) {
 		sys->con->Print("Couldn't write screenshot!\n");
+		return;
 	}
-	else {
-		sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
-	}
+
+	sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssname).c_str());
 }
 
 r_renderer_c::RenderTarget& r_renderer_c::GetDrawRenderTarget()
