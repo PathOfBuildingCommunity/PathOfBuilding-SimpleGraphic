@@ -514,9 +514,6 @@ void ui_main_c::KeyEvent(int key, int type)
 		break;
 	case KE_KEYUP:
 		switch (key) {
-		case KEY_PRINTSCRN:
-			sys->con->Execute("screenshot");
-			break;
 		case KEY_F10:
 			renderer->ToggleDebugImGui();
 			break;
