@@ -76,11 +76,3 @@ public:
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
 };
-
-// BLP Image
-class blp_c: public image_c {
-public:
-	blp_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-};

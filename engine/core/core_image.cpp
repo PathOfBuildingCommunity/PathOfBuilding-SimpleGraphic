@@ -24,8 +24,6 @@
 // Classes
 // =======
 
-#define BLP2_MAGIC	0x32504C42	// "BLP2"
-
 // Generic client data structure, used by JPEG and PNG
 struct clientData_s {
 	IConsole* con;
@@ -97,9 +95,6 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x38464947) {
 		// G I F 8
 		return new gif_c(conHnd);
-	} else if (*(dword*)dat == BLP2_MAGIC) {
-		// B L P 2
-		return new blp_c(conHnd);
 	} else if ((dat[1] == 0 && (dat[2] == 2 || dat[2] == 3 || dat[2] == 10 || dat[2] == 11)) || (dat[1] == 1 && (dat[2] == 1 || dat[2] == 9))) {
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
@@ -399,106 +394,3 @@ bool gif_c::Save(const char* fileName)
 	return true;
 }
 
-// =========
-// BLP Image
-// =========
-
-enum blpType_e {
-	BLP_JPEG,
-	BLP_PALETTE,
-	BLP_DXTC
-};	
-
-#pragma pack(push,1)
-struct blpHeader_s {
-	dword	id;
-	dword	unknown1;
-	byte	type;
-	byte	alphaDepth;
-	byte	alphaType;
-	byte	hasMipmaps;
-	dword	width;
-	dword	height;
-};
-struct blpMipmapHeader_s {
-	dword	offset[16];
-	dword	size[16];
-};
-#pragma pack(pop)
-
-bool blp_c::Load(const char* fileName)
-{
-	Free();
-
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Read header
-	blpHeader_s hdr;
-	if (in.TRead(hdr)) {
-		return true;
-	}
-	if (hdr.id != BLP2_MAGIC) {
-		con->Warning("'%s' is not a BLP2 file", fileName);
-		return true;
-	}
-	if (hdr.type != BLP_DXTC || !hdr.hasMipmaps) {
-		// To hell with compatability
-		con->Warning("'%s': unsupported image type (type: %d hasMipmaps: %d)", fileName, hdr.type, hdr.hasMipmaps);
-		return true;
-	}
-	if (hdr.alphaDepth == 0) {
-		comp = 3;
-		type = IMGTYPE_RGB_DXT1;
-	} else if (hdr.alphaDepth == 1) {
-		comp = 4;
-		type = IMGTYPE_RGBA_DXT1;
-	} else if (hdr.alphaDepth == 8) {
-		comp = 4;
-		if (hdr.alphaType == 7) {
-			type = IMGTYPE_RGBA_DXT5;
-		} else {
-			type = IMGTYPE_RGBA_DXT3;
-		}
-	} else {
-		con->Warning("'%s': unsupported alpha type (alpha depth: %d alpha type %d)", fileName, hdr.alphaDepth, hdr.alphaType);
-		return true;
-	}
-	width = hdr.width;
-	height = hdr.height;
-
-	// Read the mipmap header
-	blpMipmapHeader_s mip;
-	in.TRead(mip);
-
-	// Read image
-	int isize = 0;
-	int numMip = 0;
-	for (int c = 0; c < 16; c++) {
-		if (mip.size[c] == 0) {
-			numMip = c;
-			break;
-		}
-		isize+= mip.size[c];
-	}
-	dat = new byte[isize + numMip*sizeof(dword)];
-	byte* datPtr = dat;
-	for (int c = 0; c < numMip; c++) {
-		memcpy(datPtr, mip.size + c, sizeof(dword));
-		datPtr+= sizeof(dword);
-		in.Seek(mip.offset[c], SEEK_SET);
-		in.Read(datPtr, mip.size[c]);
-		datPtr+= mip.size[c];
-	}
-
-	return false;
-}
-
-bool blp_c::Save(const char* fileName)
-{
-	// No.
-	return true;
-}
