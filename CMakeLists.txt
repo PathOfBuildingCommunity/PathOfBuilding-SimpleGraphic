@@ -108,9 +108,12 @@ find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_package(re2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
+
+pkg_check_modules(libjxl REQUIRED IMPORTED_TARGET libjxl)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -198,6 +201,7 @@ target_link_libraries(SimpleGraphic
     glm::glm
     imgui
     LuaJIT::LuaJIT
+    PkgConfig::libjxl
     re2::re2
     Threads::Threads
     ZLIB::ZLIB

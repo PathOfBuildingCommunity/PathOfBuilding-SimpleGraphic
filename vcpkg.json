@@ -6,6 +6,7 @@
     "curl",
     "fmt",
     "glfw3",
+    "libjxl",
     "luajit",
     "pkgconf",
     "re2",

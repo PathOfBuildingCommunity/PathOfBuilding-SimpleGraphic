@@ -69,6 +69,14 @@ public:
 	bool	Save(const char* fileName) override;
 };
 
+// JPEG XL Image
+class jpeg_xl_c : public image_c {
+public:
+	jpeg_xl_c(IConsole* conHnd) : image_c(conHnd) {}
+	bool Load(const char* fileName) override;
+	bool Save(const char* fileName) override;
+};
+
 // GIF Image
 class gif_c: public image_c {
 public:

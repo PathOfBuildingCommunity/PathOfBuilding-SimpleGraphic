@@ -20,6 +20,9 @@
 #include <algorithm>
 #include <vector>
 
+#include <jxl/decode.h>
+#include <jxl/decode_cxx.h>
+
 // =======
 // Classes
 // =======
@@ -80,9 +83,9 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 		conHnd->Warning("'%s' doesn't exist or cannot be opened", fileName);
 		return NULL;
 	}
-	// Attempt to detect image file type from first 4 bytes of file
-	byte dat[4];
-	if (in.Read(dat, 4)) {
+	// Attempt to detect image file type from first 12 bytes of file
+	byte dat[12];
+	if (in.Read(dat, 12)) {
 		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", fileName);
 		return NULL;
 	}
@@ -95,6 +98,9 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x38464947) {
 		// G I F 8
 		return new gif_c(conHnd);
+	} else if (auto sig = JxlSignatureCheck(dat, 12); sig == JXL_SIG_CODESTREAM || sig == JXL_SIG_CONTAINER) {
+		// JPEG XL
+		return new jpeg_xl_c(conHnd);
 	} else if ((dat[1] == 0 && (dat[2] == 2 || dat[2] == 3 || dat[2] == 10 || dat[2] == 11)) || (dat[1] == 1 && (dat[2] == 1 || dat[2] == 9))) {
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
@@ -394,3 +400,83 @@ bool gif_c::Save(const char* fileName)
 	return true;
 }
 
+// =========
+// JPEG XL Image
+// =========
+
+bool jpeg_xl_c::Load(const char* fileName)
+{
+	// Open file
+	fileInputStream_c in;
+	if (in.FileOpen(fileName, true))
+		return true;
+
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size()))
+		return true;
+
+	auto dec = JxlDecoderMake(nullptr);
+	if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE))
+		return true;
+
+	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), nullptr, nullptr))
+		return true;
+
+	JxlBasicInfo info{};
+	JxlPixelFormat format = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+
+	JxlDecoderSetInput(dec.get(), fileData.data(), fileData.size());
+	JxlDecoderCloseInput(dec.get());
+
+	while (true) {
+		JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
+
+		switch (status) {
+		case JXL_DEC_ERROR:
+		case JXL_DEC_NEED_MORE_INPUT:
+			return true;
+
+		case JXL_DEC_BASIC_INFO: {
+			if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), &info))
+				return true;
+			width = info.xsize;
+			height = info.ysize;
+			comp = info.num_color_channels + !!info.alpha_bits;
+			if (comp == 1)
+				type = IMGTYPE_GRAY;
+			else if (comp == 3)
+				type = IMGTYPE_RGB;
+			else if (comp == 4)
+				type = IMGTYPE_RGBA;
+			else
+				return true;
+
+			format.num_channels = comp;
+		} break;
+		
+		case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
+			size_t bufferSize{};
+			if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(dec.get(), &format, &bufferSize))
+				return true;
+			dat = new byte[width * height * comp];
+			if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format, dat, bufferSize))
+				return true;
+		} break;
+
+		case JXL_DEC_FULL_IMAGE: {
+			// We don't care about animations, consider loading completed when a full image has obtained.
+			return false;
+		} break;
+
+		case JXL_DEC_SUCCESS:
+			return false;
+		default:
+			continue;
+		}
+	}
+}
+bool jpeg_xl_c::Save(const char* fileName)
+{
+	// Yeah, nah.
+	return false;
+}
