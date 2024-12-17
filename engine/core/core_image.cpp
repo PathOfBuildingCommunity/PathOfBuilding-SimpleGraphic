@@ -75,11 +75,6 @@ bool image_c::Save(const char* fileName)
 	return true; // o_O
 }
 
-bool image_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	return true; // o_O
-}
-
 image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 {
 	fileInputStream_c in;
@@ -243,36 +238,6 @@ bool targa_c::Save(const char* fileName)
 	return !rc;
 }
 
-bool targa_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Read header
-	tgaHeader_s hdr;
-	if (in.TRead(hdr) || hdr.colorMapType) {
-		return true;
-	}
-	info->width = hdr.width;
-	info->height = hdr.height;
-	if ((hdr.imgType & 7) == 3 && hdr.depth == 8) {
-		info->alpha = false;
-		info->comp = 1;
-	} else if ((hdr.imgType & 7) == 2 && hdr.depth == 24) {
-		info->alpha = false;
-		info->comp = 3;
-	} else if ((hdr.imgType & 7) == 2 && hdr.depth == 32) {
-		info->alpha = true;
-		info->comp = 4;
-	} else {
-		return true;
-	}
-	return false;
-}
-
 // ==========
 // JPEG Image
 // ==========
@@ -335,33 +300,6 @@ bool jpeg_c::Save(const char* fileName)
 	return !rc;
 }
 
-// JPEG Image Info
-
-bool jpeg_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-	
-	std::vector<byte> fileData(in.GetLen());
-	if (in.Read(fileData.data(), fileData.size())) {
-		return true;
-	}
-	int x, y, comp;
-	if (stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &comp)) {
-		return true;
-	}
-
-	info->width = x;
-	info->height = y;
-	info->comp = comp;
-	info->alpha = false;
-
-	return (comp != 1 && comp != 3);
-}
-
 // =========
 // PNG Image
 // =========
@@ -420,32 +358,6 @@ bool png_c::Save(const char* fileName)
 	return !rc;
 }
 
-// PNG Image Info
-
-bool png_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open file and check signature
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	std::vector<byte> fileData(in.GetLen());
-	if (in.Read(fileData.data(), fileData.size())) {
-		return true;
-	}
-	int x, y, comp;
-	if (stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &comp)) {
-		return true;
-	}
-
-	info->width = x;
-	info->height = y;
-	info->comp = comp <= 3 ? 3 : comp;
-	info->alpha = comp == 4;
-	return false;
-}
-
 // =========
 // GIF Image
 // =========
@@ -484,11 +396,6 @@ bool gif_c::Load(const char* fileName)
 bool gif_c::Save(const char* fileName)
 {
 	// HELL no.
-	return true;
-}
-
-bool gif_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
 	return true;
 }
 
@@ -594,38 +501,4 @@ bool blp_c::Save(const char* fileName)
 {
 	// No.
 	return true;
-}
-
-bool blp_c::ImageInfo(const char* fileName, imageInfo_s* info)
-{
-	// Open the file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true)) {
-		return true;
-	}
-
-	// Read header
-	blpHeader_s hdr;
-	if (in.TRead(hdr)) {
-		return true;
-	}
-	if (hdr.id != BLP2_MAGIC) {
-		return true;
-	}
-	if (hdr.type != BLP_DXTC) {
-		// To hell with compatability
-		return true;
-	}
-	if (hdr.alphaDepth == 0) {
-		info->alpha = false;
-		info->comp = 3;
-	} else if (hdr.alphaDepth == 1 || hdr.alphaDepth == 8) {
-		info->alpha = true;
-		info->comp = 4;
-	} else {
-		return true;
-	}
-	info->width = hdr.width;
-	info->height = hdr.height;
-	return false;
 }

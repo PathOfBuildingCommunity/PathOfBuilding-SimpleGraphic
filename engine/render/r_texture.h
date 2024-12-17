@@ -62,5 +62,4 @@ public:
 	static void FreeHandle(r_ITexManager* hnd);
 
 	virtual int		GetAsyncCount() = 0;
-	virtual bool	GetImageInfo(const char* fileName, imageInfo_s* info) = 0;
 };

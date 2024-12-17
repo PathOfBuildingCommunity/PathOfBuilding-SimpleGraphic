@@ -20,14 +20,6 @@ enum imageType_s {
 	IMGTYPE_RGBA_DXT5 = 0x94
 };
 
-// Image info
-struct imageInfo_s {
-	dword	width;
-	dword	height;
-	bool	alpha;
-	int		comp;
-};
-
 // Image
 class image_c {
 public:
@@ -44,7 +36,6 @@ public:
 
 	virtual bool Load(const char* fileName);
 	virtual bool Save(const char* fileName);
-	virtual bool ImageInfo(const char* fileName, imageInfo_s* info);
 
 	void CopyRaw(int type, dword width, dword height, const byte* dat);
 	void Free();
@@ -59,7 +50,6 @@ public:
 	targa_c(IConsole* conHnd): image_c(conHnd) { rle = true; }
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // JPEG Image
@@ -69,7 +59,6 @@ public:
 	jpeg_c(IConsole* conHnd): image_c(conHnd) { quality = 80; }
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // PNG Image
@@ -78,7 +67,6 @@ public:
 	png_c(IConsole* conHnd): image_c(conHnd) { }
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // GIF Image
@@ -87,7 +75,6 @@ public:
 	gif_c(IConsole* conHnd): image_c(conHnd) { }
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };
 
 // BLP Image
@@ -96,5 +83,4 @@ public:
 	blp_c(IConsole* conHnd): image_c(conHnd) { }
 	bool	Load(const char* fileName) override;
 	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
 };

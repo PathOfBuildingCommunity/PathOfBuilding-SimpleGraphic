@@ -43,7 +43,6 @@ class t_manager_c: public r_ITexManager, public thread_c {
 public:
 	// Interface
 	int		GetAsyncCount() override;
-	bool	GetImageInfo(const char* fileName, imageInfo_s* info) override;
 
 	// Encapsulated
 	t_manager_c(r_renderer_c* renderer);
@@ -110,17 +109,6 @@ int t_manager_c::GetAsyncCount()
 {
 	std::lock_guard<std::mutex> lock ( mutex );
 	return (int)textureQueue.size();
-}
-
-bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
-{
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName);
-	if (img) {
-		bool error = img->ImageInfo(fileName, info);
-		delete img;
-		return error;
-	}
-	return true;
 }
 
 bool t_manager_c::AsyncAdd(r_tex_c* tex)
