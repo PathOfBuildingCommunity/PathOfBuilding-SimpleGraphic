@@ -261,6 +261,7 @@ r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
 
 	// Direct upload
 	Upload(img, flags);
+	status = DONE;
 }
 
 r_tex_c::~r_tex_c()
@@ -297,7 +298,7 @@ void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags
 	loadPri = 0;
 	texId = 0;
 	flags = i_flags;
-	fileName = i_fileName;
+	fileName = i_fileName ? i_fileName : "";
 	fileWidth = 0;
 	fileHeight = 0;
 }

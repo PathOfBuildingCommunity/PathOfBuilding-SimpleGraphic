@@ -23,8 +23,13 @@
 ** func = GetCallback("<name>")
 ** SetMainObject(object)
 **
+** artHandle = NewArtHandle("<filename>")
+** width, height = artHandle:Size()
+**
 ** imgHandle = NewImageHandle()
 ** imgHandle:Load("<fileName>"[, "flag1"[, "flag2"...]])  flag:{"ASYNC"|"CLAMP"|"MIPMAP"}
+** imgHandle:LoadArtRectangle(art, x1, y1, x2, y2[, "flag1"[, "flag2"... ]])  flag:{"CLAMP"|"MIPMAP"}
+** imgHandle:LoadArtArcBand(art, xC, yC, rMin, rMax[, "flag1"[, "flag2"... ]])  flag:{"CLAMP"|"MIPMAP"}
 ** imgHandle:Unload()
 ** isValid = imgHandle:IsValid()
 ** isLoading = imgHandle:IsLoading()
@@ -141,6 +146,66 @@ static int l_##Name(lua_State* L) {                                \
 	if (rc < 0) { LuaErrorWrapper(L); }               \
 	return rc; }
 
+// ===============
+// Data validation
+// ===============
+
+/*
+* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
+* that ensures a consistent assertion message and reduces the risk of mistakes in
+* parameter validation.
+*
+* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
+* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
+* when unwinding.
+*
+* Example use site:
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*   ui_luaReader_c reader(ui, L, "DoTheThing");
+*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
+*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
+*   reader.ArgCheckNumber(2); // -''-
+*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
+*   // Do the thing
+*   return 0;
+* }
+* SG_LUA_CPP_FUN_END()
+*/
+
+class ui_luaReader_c {
+public:
+	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
+
+	// Always zero terminated as all regular strings are terminated in Lua.
+	std::string_view ArgToString(int k) {
+		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+		return lua_tostring(L, k);
+	}
+
+	void ArgCheckTable(int k) {
+		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ArgCheckNumber(int k) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ValCheckNumber(int k, char const* ctx) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
+			funName.c_str(), ctx, k, luaL_typename(L, k));
+	}
+
+private:
+	ui_main_c* ui;
+	lua_State* L;
+	std::string funName;
+};
+
 // =========
 // Callbacks
 // =========
@@ -188,6 +253,77 @@ static int l_SetMainObject(lua_State* L)
 	}
 	lua_settable(L, lua_upvalueindex(1));
 	return 0;
+}
+
+// ===========
+// Art Handles
+// ===========
+
+/*
+* An art handle contains CPU-side image data, typically sourced from a file on disk.
+* This differs from image handles that represent a texture resident on the GPU.
+*
+* Art handles can be used to produce image handles by slicing out masked subimages.
+* Their primary intent is to decompose nested artwork like the connector art for
+* modern revisions of the passive skill tree which has multiple orbit arcs inside
+* of each other in a single image file.
+*/
+
+struct artHandle_s {
+	std::unique_ptr<image_c> img;
+};
+
+SG_LUA_CPP_FUN_BEGIN(NewArtHandle)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui_luaReader_c reader(ui, L, "NewArtHandle");
+
+	int n = lua_gettop(L);
+	ui->LExpect(L, n >= 1, "Usage: NewArtHandle(fileName)");
+	std::filesystem::path filePath = reader.ArgToString(1);
+	if (filePath.is_relative())
+		filePath = ui->scriptWorkDir / filePath;
+	std::string fileName = filePath.generic_string();
+	std::unique_ptr<image_c> img(image_c::LoaderForFile(ui->sys->con, fileName.c_str()));
+	if (!img)
+		return 0;
+	if (img->Load(fileName.c_str()))
+		return 0;
+	if (img->type != IMGTYPE_GRAY && img->type != IMGTYPE_RGB && img->type != IMGTYPE_RGBA)
+		return 0;
+
+	artHandle_s* artHandle = (artHandle_s*)lua_newuserdata(L, sizeof(artHandle_s));
+	new(artHandle) artHandle_s();
+	artHandle->img = std::move(img);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_setmetatable(L, -2);
+	return 1;
+}
+SG_LUA_CPP_FUN_END()
+
+static artHandle_s* GetArtHandle(lua_State* L, ui_main_c* ui, const char* method)
+{
+	ui->LAssert(L, ui->IsUserData(L, 1, "uiarthandlemeta"), "artHandle:%s() must be used on an image handle", method);
+	artHandle_s* artHandle = (artHandle_s*)lua_touserdata(L, 1);
+	lua_remove(L, 1);
+	return artHandle;
+}
+
+static int l_artHandleGC(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	artHandle_s* artHandle = GetArtHandle(L, ui, "__gc");
+	artHandle->~artHandle_s();
+	return 0;
+}
+
+static int l_artHandleSize(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	artHandle_s* artHandle = GetArtHandle(L, ui, "Size");
+	lua_pushinteger(L, artHandle->img ? artHandle->img->width : 0);
+	lua_pushinteger(L, artHandle->img ? artHandle->img->height : 0);
+	return 2;
 }
 
 // =============
@@ -318,66 +454,218 @@ static int l_imgHandleImageSize(lua_State* L)
 	return 2;
 }
 
-// ===============
-// Data validation
-// ===============
-
-/*
-* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
-* that ensures a consistent assertion message and reduces the risk of mistakes in
-* parameter validation.
-*
-* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
-* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
-* when unwinding.
-*
-* Example use site:
-* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
-* {
-*   ui_main_c* ui = GetUIPtr(L);
-*   ui_luaReader_c reader(ui, L, "DoTheThing");
-*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
-*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
-*   reader.ArgCheckNumber(2); // -''-
-*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
-*   // Do the thing
-*   return 0;
-* }
-* SG_LUA_CPP_FUN_END()
-*/
-
-
-class ui_luaReader_c {
-public:
-	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
-
-	// Always zero terminated as all regular strings are terminated in Lua.
-	std::string_view ArgToString(int k) {
-		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
-		return lua_tostring(L, k);
+namespace {
+	int ParseArtFlags(ui_main_c* ui, lua_State* L, int k, int n)
+	{
+		int flags = TF_NOMIPMAP;
+		for (int f = k; f <= n; f++) {
+			if (!lua_isstring(L, f)) {
+				continue;
+			}
+			const char* flag = lua_tostring(L, f);
+			if (!strcmp(flag, "CLAMP")) {
+				flags |= TF_CLAMP;
+			}
+			else if (!strcmp(flag, "MIPMAP")) {
+				flags &= ~TF_NOMIPMAP;
+			}
+			else if (!strcmp(flag, "NEAREST")) {
+				flags |= TF_NEAREST;
+			}
+			else {
+				ui->LExpect(L, 0, "imgHandle:LoadArtRectangle(): unrecognised flag '%s'", flag);
+			}
+		}
+		return flags;
 	}
 
-	void ArgCheckTable(int k) {
-		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
+	r_shaderHnd_c* RegisterShaderFromImage(r_IRenderer& renderer, image_c& img, int flags)
+	{
+		return renderer.RegisterShaderFromData(img.width, img.height, img.type, img.dat, flags);
+	}
+}
+
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	imgHandle_s* imgHandle = GetImgHandle(L, ui, "LoadArtRectangle", false);
+
+	const int n = lua_gettop(L);
+	ui->LExpect(L, n >= 5, "Usage: imgHandle:LoadArtRectangle(art, x1, y1, x2, y2[, flag1[, flag2...]])");
+
+	ui_luaReader_c reader(ui, L, "imgHandle::LoadArtRectangle");
+	reader.ArgCheckNumber(2);
+	reader.ArgCheckNumber(3);
+	reader.ArgCheckNumber(4);
+	reader.ArgCheckNumber(5);
+	int x1 = (int)lua_tointeger(L, 2);
+	int y1 = (int)lua_tointeger(L, 3);
+	int x2 = (int)lua_tointeger(L, 4);
+	int y2 = (int)lua_tointeger(L, 5);
+
+	// Grab the art handle after extracting the parameters so that their error messages have the correct indices.
+	artHandle_s* artHandle = GetArtHandle(L, ui, "LoadArtRectangle");
+
+	if (x1 > x2)
+		std::swap(x1, x2);
+	if (y1 > y2)
+		std::swap(y1, y2);
+
+	auto* srcImg = artHandle->img.get();
+	const int srcWidth = srcImg->width;
+	const int srcHeight = srcImg->height;
+	const int comp = srcImg->comp;
+	ui->LExpect(L, x1 >= 0 && x2 <= srcWidth, "imgHandle:LoadArtRectangle(): X range %d to %d outside of the 0 to %d bounds", x1, x2, srcWidth);
+	ui->LExpect(L, y1 >= 0 && y2 <= srcHeight, "imgHandle:LoadArtRectangle(): Y range %d to %d outside of the 0 to %d bounds", y1, y2, srcHeight);
+
+	// Slice rectangle into temporary target image.
+	auto dstImg = std::make_unique<image_c>(ui->sys->con);
+	const int dstWidth = x2 - x1;
+	const int dstHeight = y2 - y1;
+	dstImg->width = dstWidth;
+	dstImg->height = dstHeight;
+	dstImg->comp = comp;
+	dstImg->type = srcImg->type;
+
+	const int srcStride = srcWidth * comp;
+	const int dstStride = dstWidth * comp;
+	const int dstByteCount = dstHeight * dstStride;
+	dstImg->dat = new byte[dstByteCount];
+
+	byte* srcPtr = srcImg->dat + y1 * srcStride + x1 * comp;
+	byte* dstPtr = dstImg->dat;
+	for (int row = 0; row < (int)dstHeight; ++row) {
+		memcpy(dstPtr, srcPtr, dstStride);
+		srcPtr += srcStride;
+		dstPtr += dstStride;
 	}
 
-	void ArgCheckNumber(int k) {
-		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
+	const int flags = ParseArtFlags(ui, L, 5, n);
+	delete imgHandle->hnd;
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, *dstImg, flags);
+
+	return 0;
+}
+SG_LUA_CPP_FUN_END()
+
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	imgHandle_s* imgHandle = GetImgHandle(L, ui, "LoadArtArcBand", false);
+
+	const int n = lua_gettop(L);
+	ui->LExpect(L, n >= 5, "Usage: imgHandle:LoadArtArcBand(art, xC, yC, rMin, rMax[, flag1[, flag2...]])");
+
+	ui_luaReader_c reader(ui, L, "imgHandle::LoadArtArcBand");
+	reader.ArgCheckNumber(2);
+	reader.ArgCheckNumber(3);
+	reader.ArgCheckNumber(4);
+	reader.ArgCheckNumber(5);
+	const int xC = (int)lua_tointeger(L, 2);
+	const int yC = (int)lua_tointeger(L, 3);
+	int rMin = (int)lua_tointeger(L, 4);
+	int rMax = (int)lua_tointeger(L, 5);
+
+	if (rMin > rMax)
+		std::swap(rMin, rMax);
+
+	const int x1 = xC - rMax;
+	const int y1 = yC - rMax;
+
+	// Grab the art handle after extracting the parameters so that their error messages have the correct indices.
+	artHandle_s* artHandle = GetArtHandle(L, ui, "LoadArtArcBand");
+
+	auto* srcImg = artHandle->img.get();
+	const int srcWidth = srcImg->width;
+	const int srcHeight = srcImg->height;
+	const int comp = srcImg->comp;
+	ui->LExpect(L, xC >= 0 && xC <= srcWidth, "imgHandle:LoadArtArcBand(): X origin %d outside of the 0 to %d bounds", xC, srcWidth);
+	ui->LExpect(L, yC >= 0 && yC <= srcHeight, "imgHandle:LoadArtArcBand(): Y origin %d outside of the 0 to %d bounds", yC, srcHeight);
+
+	ui->LExpect(L, x1 >= 0 && x1 <= srcWidth, "imgHandle:LoadArtArcBand(): X corner %d outside of the 0 to %d bounds", x1, srcWidth);
+	ui->LExpect(L, y1 >= 0 && y1 <= srcHeight, "imgHandle:LoadArtArcBand(): Y corner %d outside of the 0 to %d bounds", y1, srcHeight);
+
+
+	// Slice rectangle into temporary target image.
+	auto dstImg = std::make_unique<image_c>(ui->sys->con);
+	const int dstWidth = xC - x1;
+	const int dstHeight = yC - y1;
+	dstImg->width = dstWidth;
+	dstImg->height = dstHeight;
+	dstImg->comp = comp;
+	dstImg->type = srcImg->type;
+
+	const int srcStride = srcWidth * comp;
+	const int dstStride = dstWidth * comp;
+	const int dstByteCount = dstHeight * dstStride;
+	dstImg->dat = new byte[dstByteCount];
+	memset(dstImg->dat, 0x00, dstByteCount);
+
+	// Copy all pixels whose center are between the two radii, inclusive.
+	{
+		// By doubling all coordinates, we can reference both pixel edges and pixel centers.
+		// Even numbers are between pixel samples, odd numbers are on pixel samples.
+		// This makes the distance test math more robust.
+		// As this is ad-hoc 31.1 bit fixed point math, we should technically shift down the result of
+		// the multiplications that go into the squares but as the same number of operations occur on both
+		// sides of the squared equalities, it's fine. Just something to keep in mind for future changes.
+		const int rMinSq = (rMin * 2) * (rMin * 2), rMaxSq = (rMax * 2) * (rMax * 2);
+		const int width = dstWidth * 2, height = dstHeight * 2;
+		for (int row = 1; row < height; row += 2)
+		{
+			const int dy = height - row;
+			// Find the first pixel center that is inside the outer radius
+			int colLo = -1;
+			for (int x = 1; x < width; x += 2) {
+				const int dx = width - x;
+				const int rSq = dx * dx + dy * dy;
+				if (rSq <= rMaxSq) {
+					colLo = x;
+					break;
+				}
+			}
+			
+			// If no pixel was found to be inside, the row does not contribute.
+			if (colLo == -1)
+				continue;
+
+			int colHi = width;
+			// Find the first pixel center that is inside the inner radius
+			for (int x = colLo; x < width; x += 2) {
+				const int dx = width - x;
+				const int rSq = dx * dx + dy * dy;
+				if (rSq < rMinSq) {
+					colHi = x;
+					break;
+				}
+			}
+
+			// We now have a half-open span of touched pixel centers (or the far border).
+			// Convert that to regular pixel coordinates and copy to the destination image.
+			const int xLo = colLo / 2;
+			const int xHi = colHi / 2;
+
+			if (xLo != xHi) {
+				const int y = row / 2;
+				const int spanByteSize = (xHi - xLo) * comp;
+				const int srcRow = y1 + y;
+				const int dstRow = y;
+				const int srcCol = x1 + xLo;
+				const int dstCol = xLo;
+				byte* srcPtr = srcImg->dat + srcRow * srcStride + srcCol * comp;
+				byte* dstPtr = dstImg->dat + dstRow * dstStride + dstCol * comp;
+				memcpy(dstPtr, srcPtr, spanByteSize);
+			}
+		}
 	}
 
-	void ValCheckNumber(int k, char const* ctx) {
-		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
-			funName.c_str(), ctx, k, luaL_typename(L, k));
-	}
+	const int flags = ParseArtFlags(ui, L, 5, n);
+	delete imgHandle->hnd;
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, *dstImg, flags);
 
-private:
-	ui_main_c* ui;
-	lua_State* L;
-	std::string funName;
-};
+	return 0;
+}
+SG_LUA_CPP_FUN_END()
 
 // =========
 // Rendering
@@ -1498,7 +1786,23 @@ int ui_main_c::InitAPI(lua_State* L)
 	lua_setfield(L, -2, "SetLoadingPriority");
 	lua_pushcfunction(L, l_imgHandleImageSize);
 	lua_setfield(L, -2, "ImageSize");
+	lua_pushcfunction(L, l_imgHandleLoadArtRectangle);
+	lua_setfield(L, -2, "LoadArtRectangle");
+	lua_pushcfunction(L, l_imgHandleLoadArtArcBand);
+	lua_setfield(L, -2, "LoadArtArcBand");
 	lua_setfield(L, LUA_REGISTRYINDEX, "uiimghandlemeta");
+
+	// Art handles
+	lua_newtable(L);		// Art handle metatable
+	lua_pushvalue(L, -1);	// Push art handle metatable
+	ADDFUNCCL(NewArtHandle, 1);
+	lua_pushvalue(L, -1);	// Push art handle metatable
+	lua_setfield(L, -2, "__index");
+	lua_pushcfunction(L, l_artHandleGC);
+	lua_setfield(L, -2, "__gc");
+	lua_pushcfunction(L, l_artHandleSize);
+	lua_setfield(L, -2, "Size");
+	lua_setfield(L, LUA_REGISTRYINDEX, "uiarthandlemeta");
 
 	// Rendering
 	ADDFUNC(RenderInit);
