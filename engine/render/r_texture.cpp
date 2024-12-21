@@ -9,6 +9,8 @@
 #include <atomic>
 #include "r_local.h"
 
+#include "stb_image_resize.h"
+
 // ===================
 // Predefined textures
 // ===================
@@ -415,7 +417,7 @@ void r_tex_c::Upload(image_c* image, int flags)
 	}
 
 	dword up_w = 1, up_h = 1;
-	if (renderer->texNonPOT && (flags & TF_NOMIPMAP) && image->width <= renderer->texMaxDim && image->height <= renderer->texMaxDim) {
+	if (renderer->texNonPOT && image->width <= renderer->texMaxDim && image->height <= renderer->texMaxDim) {
 		up_w = image->width;
 		up_h = image->height;
 	} else {
@@ -462,7 +464,9 @@ void r_tex_c::Upload(image_c* image, int flags)
 	if (up_w != image->width || up_h != image->height) {
 		// Image needs resampling
 		mipBuf[2] = new byte[image->comp * up_w * up_h];
-		T_ResampleImage(image->dat, image->width, image->height, image->comp, mipBuf[2], up_w, up_h);
+		stbir_resize_uint8_srgb(
+			image->dat, image->width, image->height, image->width * image->comp,
+			mipBuf[2], up_w, up_h, up_w * image->comp, image->comp, image->comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
 	} else {
 		// Use original image data
 		mipBuf[2] = image->dat;
@@ -506,51 +510,10 @@ void r_tex_c::Upload(image_c* image, int flags)
 		}
 		byte* out = mipBuf[cibuf];
 
-		if (up_w == 1) {
-			// Only halve height
-			for (dword y = 0; y < mm_h; y++) {
-				int iy = y * 2;
-				for (dword x = 0; x < mm_w; x++) {
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * ((iy  ) * up_w + x) + c] + 
-							in[image->comp * ((iy+1) * up_w + x) + c]
-						) >> 1;
-					}
-				}
-			}
-		}
-		else if (up_h == 1) {
-			// Only halve width
-			for (dword y = 0; y < mm_h; y++) {
-				for (dword x = 0; x < mm_w; x++) {
-					int ix = x * 2;
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * (y * up_w + (ix  )) + c] + 
-							in[image->comp * (y * up_w + (ix+1)) + c]
-						) >> 1;
-					}
-				}
-			}
-		}
-		else {
-			// Halve image size
-			for (dword y = 0; y < mm_h; y++) {
-				int iy = y * 2;
-				for (dword x = 0; x < mm_w; x++) {
-					int ix = x * 2;
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * ((iy  ) * up_w + (ix  )) + c] + 
-							in[image->comp * ((iy  ) * up_w + (ix+1)) + c] +
-							in[image->comp * ((iy+1) * up_w + (ix  )) + c] + 
-							in[image->comp * ((iy+1) * up_w + (ix+1)) + c]
-						) >> 2;
-					}
-				}
-			}
-		}
+		stbir_resize_uint8_srgb(
+			in, up_w, up_h, up_w* image->comp,
+			out, mm_w, mm_h, mm_w* image->comp,
+			image->comp, image->comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
 
 		up_w = mm_w;
 		up_h = mm_h;
