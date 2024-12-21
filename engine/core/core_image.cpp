@@ -22,6 +22,7 @@
 
 #include <jxl/decode.h>
 #include <jxl/decode_cxx.h>
+#include <jxl/resizable_parallel_runner_cxx.h>
 
 // =======
 // Classes
@@ -415,11 +416,13 @@ bool jpeg_xl_c::Load(const char* fileName)
 	if (in.Read(fileData.data(), fileData.size()))
 		return true;
 
+	auto runner = JxlResizableParallelRunnerMake(nullptr);
+
 	auto dec = JxlDecoderMake(nullptr);
 	if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE))
 		return true;
 
-	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), nullptr, nullptr))
+	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), JxlResizableParallelRunner, runner.get()))
 		return true;
 
 	JxlBasicInfo info{};
@@ -450,6 +453,8 @@ bool jpeg_xl_c::Load(const char* fileName)
 				type = IMGTYPE_RGBA;
 			else
 				return true;
+
+			JxlResizableParallelRunnerSetThreads(runner.get(), JxlResizableParallelRunnerSuggestThreads(width, height));
 
 			format.num_channels = comp;
 		} break;

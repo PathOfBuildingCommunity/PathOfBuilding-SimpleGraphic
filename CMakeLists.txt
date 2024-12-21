@@ -114,6 +114,7 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
 pkg_check_modules(libjxl REQUIRED IMPORTED_TARGET libjxl)
+pkg_check_modules(libjxl_threads REQUIRED IMPORTED_TARGET libjxl_threads)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -202,6 +203,7 @@ target_link_libraries(SimpleGraphic
     imgui
     LuaJIT::LuaJIT
     PkgConfig::libjxl
+    PkgConfig::libjxl_threads
     re2::re2
     Threads::Threads
     ZLIB::ZLIB
@@ -224,6 +226,8 @@ if (WIN32)
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
         find_file(JPEG_XL_CMS_DLL_DEBUG NAMES "jxl_cms.dll"
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
+        find_file(JPEG_XL_THREADS_DLL_DEBUG NAMES "jxl_threads.dll"
+            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
         find_file(Little_CMS_DLL_DEBUG NAMES "lcms2.dll"
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
         find_file(Highway_DLL_DEBUG NAMES "hwy.dll"
@@ -242,6 +246,7 @@ if (WIN32)
             ${ZLIB_DLL_DEBUG}
             ${JPEG_XL_DLL_DEBUG}
             ${JPEG_XL_CMS_DLL_DEBUG}
+            ${JPEG_XL_THREADS_DLL_DEBUG}
             ${Little_CMS_DLL_DEBUG}
             ${Highway_DLL_DEBUG}
             ${brotlicommon_DLL_DEBUG}
@@ -262,6 +267,8 @@ if (WIN32)
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
     find_file(JPEG_XL_CMS_DLL_RELEASE NAMES "jxl_cms.dll"
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
+    find_file(JPEG_XL_THREADS_DLL_RELEASE NAMES "jxl_threads.dll"
+        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
     find_file(Little_CMS_DLL_RELEASE NAMES "lcms2.dll"
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
     find_file(Highway_DLL_RELEASE NAMES "hwy.dll"
@@ -280,6 +287,7 @@ if (WIN32)
         ${ZLIB_DLL_RELEASE}
         ${JPEG_XL_DLL_RELEASE}
         ${JPEG_XL_CMS_DLL_RELEASE}
+        ${JPEG_XL_THREADS_DLL_RELEASE}
         ${Little_CMS_DLL_RELEASE}
         ${Highway_DLL_RELEASE}
         ${brotlicommon_DLL_RELEASE}
