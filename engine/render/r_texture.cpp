@@ -397,6 +397,14 @@ void r_tex_c::Upload(image_c* image, int flags)
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	}
 
+	constexpr float anisotropyCap = 16.0f;
+	static const float maxAnisotropy = []{
+		float ret{};
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &ret);
+		return ret;
+		}();
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, (std::min)(maxAnisotropy, anisotropyCap));
+
 	// Set repeating
 	if (flags & TF_CLAMP) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
