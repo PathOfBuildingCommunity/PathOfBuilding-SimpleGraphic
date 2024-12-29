@@ -530,10 +530,10 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
 	const int srcStride = srcWidth * comp;
 	const int dstStride = dstWidth * comp;
 	const int dstByteCount = dstHeight * dstStride;
-	dstImg->dat = new byte[dstByteCount];
+	dstImg->tex = gli::texture2d(srcImg->tex.format(), glm::ivec2(dstWidth, dstHeight), 1);
 
-	byte* srcPtr = srcImg->dat + y1 * srcStride + x1 * comp;
-	byte* dstPtr = dstImg->dat;
+	byte* srcPtr = srcImg->tex.data<byte>(0, 0, 0) + y1 * srcStride + x1 * comp;
+	byte* dstPtr = dstImg->tex.data<byte>(0, 0, 0);
 	for (int row = 0; row < (int)dstHeight; ++row) {
 		memcpy(dstPtr, srcPtr, dstStride);
 		srcPtr += srcStride;
@@ -598,8 +598,10 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
 	const int srcStride = srcWidth * comp;
 	const int dstStride = dstWidth * comp;
 	const int dstByteCount = dstHeight * dstStride;
-	dstImg->dat = new byte[dstByteCount];
-	memset(dstImg->dat, 0x00, dstByteCount);
+	dstImg->tex = gli::texture2d(srcImg->tex.format(), glm::ivec2(dstWidth, dstHeight), 1);
+	const byte* srcData = srcImg->tex.data<byte>(0, 0, 0);
+	byte* dstData = dstImg->tex.data<byte>(0, 0, 0);
+	memset(dstData, 0x00, dstByteCount);
 
 	// Copy all pixels whose center are between the two radii, inclusive.
 	{
@@ -652,8 +654,8 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
 				const int dstRow = y;
 				const int srcCol = x1 + xLo;
 				const int dstCol = xLo;
-				byte* srcPtr = srcImg->dat + srcRow * srcStride + srcCol * comp;
-				byte* dstPtr = dstImg->dat + dstRow * dstStride + dstCol * comp;
+				const byte* srcPtr = srcData + srcRow * srcStride + srcCol * comp;
+				byte* dstPtr = dstData + dstRow * dstStride + dstCol * comp;
 				memcpy(dstPtr, srcPtr, spanByteSize);
 			}
 		}

@@ -107,10 +107,12 @@ find_package(unofficial-angle CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+find_package(gli CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(re2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 
 pkg_check_modules(libjxl REQUIRED IMPORTED_TARGET libjxl)
@@ -199,6 +201,7 @@ target_link_libraries(SimpleGraphic
     unofficial::angle::libGLESv2
     fmt::fmt
     glfw
+    gli
     glm::glm
     imgui
     LuaJIT::LuaJIT

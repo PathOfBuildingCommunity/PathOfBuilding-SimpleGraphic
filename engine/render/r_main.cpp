@@ -1880,9 +1880,9 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	// Flip and convert the image to RGB
 	int const readSpan = xs * 4;
 	int	const writeSpan = xs * 3;
-	byte* ss = new byte[writeSize]; // This is a raw pointer as ownership is taken by the image object.
+	std::vector<byte> ss(writeSize); // This is a raw pointer as ownership is taken by the image object.
 	byte* p1 = sbuf.data();
-	byte* p2 = ss + writeSize - writeSpan;
+	byte* p2 = ss.data() + writeSize - writeSpan;
 	for (int y = 0; y < ys; ++y, p2 -= writeSpan * 2) {
 		for (int x = 0; x < xs; ++x) {
 			*p2++ = *p1++; // R
@@ -1894,7 +1894,8 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	sbuf.clear();
 
 	// Set image info
-	i->dat = ss;
+	i->PopulateTex(ss.data());
+	ss.clear();
 	i->width = xs;
 	i->height = ys;
 	i->comp = 3;

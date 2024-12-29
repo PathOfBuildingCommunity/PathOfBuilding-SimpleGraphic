@@ -25,16 +25,7 @@
 #include <jxl/decode_cxx.h>
 #include <jxl/resizable_parallel_runner_cxx.h>
 
-// =======
-// Classes
-// =======
-
-// Generic client data structure, used by JPEG and PNG
-struct clientData_s {
-	IConsole* con;
-	const char* fileName;
-	ioStream_c* io;
-};
+#include <gli/gli.hpp>
 
 // =========
 // Raw Image
@@ -42,31 +33,71 @@ struct clientData_s {
 
 image_c::image_c(IConsole* conHnd)
 	: con(conHnd)
-{
-	dat = NULL;
-}
-
-image_c::~image_c()
-{
-	Free();
-}
+{}
 
 void image_c::CopyRaw(int inType, dword inWidth, dword inHeight, const byte* inDat)
 {
-	if (dat) delete[] dat;
-	dat = nullptr;
+	// Populate legacy fields
 	comp = inType & 0xF;
 	type = inType;
 	width = inWidth;
 	height = inHeight;
-	dat = new byte[width * height * comp];
-	memcpy(dat, inDat, width * height * comp);
+
+	// Populate gli texture
+	PopulateTex(inDat);
 }
 
 void image_c::Free()
 {
-	delete[] dat;
-	dat = NULL;
+	tex = {};
+}
+
+//TODO(zao): Make this function only care about unpacked source data.
+void image_c::PopulateTex(const byte* dat)
+{
+	gli::format format = gli::format::FORMAT_UNDEFINED;
+	const glm::ivec2 extent{ width, height };
+	size_t dataSize = width * height * comp; // Common default for regular formats.
+
+	const auto PhysicalSize = [](dword width, dword height, dword blockSize, dword side = 4) -> dword {
+		dword numBlocks = ((width + side - 1) / side) * ((height + side - 1) / side);
+		return numBlocks * blockSize;
+		};
+	switch ((imageType_s)type) {
+	case imageType_s::IMGTYPE_NONE:
+		tex = {};
+		return;
+	case imageType_s::IMGTYPE_GRAY:
+		format = gli::format::FORMAT_R8_SRGB_PACK8;
+		break;
+	case imageType_s::IMGTYPE_RGB:
+		format = gli::format::FORMAT_RGB8_SRGB_PACK8;
+		break;
+	case imageType_s::IMGTYPE_RGBA:
+		format = gli::format::FORMAT_RGBA8_SNORM_PACK8;
+		break;
+	case imageType_s::IMGTYPE_RGBA_BC1:
+		format = gli::format::FORMAT_RGBA_DXT1_SRGB_BLOCK8;
+		dataSize = PhysicalSize(width, height, 8);
+		break;
+	case imageType_s::IMGTYPE_RGBA_BC2:
+		format = gli::format::FORMAT_RGBA_DXT3_SRGB_BLOCK16;
+		dataSize = PhysicalSize(width, height, 16);
+		break;
+	case imageType_s::IMGTYPE_RGBA_BC3:
+		format = gli::format::FORMAT_RGBA_DXT5_SRGB_BLOCK16;
+		dataSize = PhysicalSize(width, height, 16);
+		break;
+	case imageType_s::IMGTYPE_RGBA_BC7:
+		format = gli::format::FORMAT_RGBA_BP_SRGB_BLOCK16;
+		dataSize = PhysicalSize(width, height, 16);
+	}
+
+	tex = gli::texture2d(format, extent, 1);
+	if (tex.size(0) == dataSize)
+		memcpy(tex.data(0, 0, 0), dat, dataSize);
+	else
+		assert(tex.size(0) == dataSize);
 }
 
 bool image_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
@@ -176,7 +207,8 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 	comp = hdr.depth >> 3;
 	type = ittable[it_m][2];
 	int rowSize = width * comp;
-	dat = new byte[height * rowSize];
+	std::vector<byte> datBuf(height * rowSize);
+	byte* dat = datBuf.data();
 	bool flipV = !(hdr.descriptor & 0x20);
 	if (hdr.imgType & 8) {
 		// Decode RLE image
@@ -221,6 +253,8 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 		}
 	}
 
+	PopulateTex(dat);
+
 	return false;
 }
 
@@ -236,10 +270,13 @@ bool targa_c::Save(const char* fileName)
 		return true;
 	}
 
+	if (is_compressed(tex.format()))
+		return true;
+
 	auto rc = stbi_write_tga_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-		}, &out, width, height, comp, dat);
+		}, &out, width, height, comp, tex.data(0, 0, 0));
 
 	return !rc;
 }
@@ -282,10 +319,10 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 	height = y;
 	comp = in_comp;
 	type = in_comp == 1 ? IMGTYPE_GRAY : IMGTYPE_RGB;
-	const size_t byteSize = width * height * comp;
-	dat = new byte[byteSize];
-	std::copy_n(data, byteSize, dat);
+
+	PopulateTex(data);
 	stbi_image_free(data);
+
 	return false;
 }
 
@@ -302,10 +339,13 @@ bool jpeg_c::Save(const char* fileName)
 		return true;
 	}
 
+	if (is_compressed(tex.format()))
+		return true;
+
 	int rc = stbi_write_jpg_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-	}, &out, width, height, comp, dat, quality);
+	}, &out, width, height, comp, tex.data(0, 0, 0), quality);
 	return !rc;
 }
 
@@ -344,10 +384,10 @@ bool png_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 		stbi_image_free(data);
 		return true;
 	}
-	const size_t byteSize = width * height * comp;
-	dat = new byte[byteSize];
-	std::copy_n(data, byteSize, dat);
+
+	PopulateTex(data);
 	stbi_image_free(data);
+
 	return false;
 }
 
@@ -366,7 +406,7 @@ bool png_c::Save(const char* fileName)
 	auto rc = stbi_write_png_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-	}, &out, width, height, comp, dat, width * comp);
+	}, &out, width, height, comp, tex.data(0, 0, 0), width * comp);
 	
 	return !rc;
 }
@@ -401,10 +441,10 @@ bool gif_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 
 		comp = in_comp;
 		type = IMGTYPE_RGBA;
-		const size_t byteSize = width * height * comp;
-		dat = new byte[byteSize];
-		std::copy_n(data, byteSize, dat);
+
+		PopulateTex(data);
 		stbi_image_free(data);
+
 		return false;
 	}
 }
@@ -449,6 +489,8 @@ bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCa
 	JxlDecoderSetInput(dec.get(), fileData.data(), fileData.size());
 	JxlDecoderCloseInput(dec.get());
 
+	std::vector<byte> datBuf;
+
 	while (true) {
 		JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
 
@@ -484,18 +526,19 @@ bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCa
 			size_t bufferSize{};
 			if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(dec.get(), &format, &bufferSize))
 				return true;
-			dat = new byte[width * height * comp];
-			if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format, dat, bufferSize))
+			assert(bufferSize == width * height * comp);
+			datBuf.resize(bufferSize);
+			if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format, datBuf.data(), bufferSize))
 				return true;
 		} break;
 
+		case JXL_DEC_SUCCESS:
 		case JXL_DEC_FULL_IMAGE: {
 			// We don't care about animations, consider loading completed when a full image has obtained.
+			PopulateTex(datBuf.data());
 			return false;
 		} break;
 
-		case JXL_DEC_SUCCESS:
-			return false;
 		default:
 			continue;
 		}

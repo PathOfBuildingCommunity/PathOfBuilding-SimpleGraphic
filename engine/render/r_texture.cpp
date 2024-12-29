@@ -416,16 +416,20 @@ public:
 				up_h >>= 1;
 			}
 
+			//TODO(zao): Handle mip generation for blocked textures?
+			assert(!is_compressed(image->tex.format()));
+
 			topImage = std::make_shared<image_c>();
 			int comp = image->comp;
 			topImage->comp = comp;
 			topImage->width = up_w;
 			topImage->height = up_h;
 			topImage->type = image->type;
-			topImage->dat = new byte[up_w * up_h * comp];
+			std::vector<byte> topBuf(up_w * up_h * comp);
 			stbir_resize_uint8_srgb(
-				image->dat, image->width, image->height, image->width * comp,
-				topImage->dat, up_w, up_h, up_w * comp, comp, comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
+				image->tex.data<unsigned char>(0, 0, 0), image->width, image->height, image->width * comp,
+				topBuf.data(), up_w, up_h, up_w * comp, comp, comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
+			topImage->PopulateTex(topBuf.data());
 		}
 	}
 
@@ -490,15 +494,15 @@ struct incremental_mip_set_c : mip_set_c {
 		dword mm_h = (up_h > 1) ? up_h >> 1 : 1;
 
 		// Set mipmapping source/dest
-		const byte* in = currentImage->dat;
+		const byte* in = currentImage->tex.data<byte>(0, 0, 0);
 
 		auto nextImage = std::make_shared<image_c>();
 		nextImage->comp = comp;
 		nextImage->type = currentImage->type;
 		nextImage->width = mm_w;
 		nextImage->height = mm_h;
-		nextImage->dat = new byte[mm_w * mm_h * comp];
-		byte* out = nextImage->dat;
+		nextImage->tex = gli::texture2d(currentImage->tex.format(), glm::ivec2(mm_w, mm_h), 1);
+		byte* out = nextImage->tex.data<byte>(0, 0, 0);
 
 		stbir_resize_uint8_srgb(
 			in, up_w, up_h, up_w * comp,
@@ -678,7 +682,7 @@ void r_tex_c::Upload(mip_set_c& mipSet, int flags)
 
 		// Upload the mipmap
 		uploadedBytes += up_w * up_h * image->comp;
-		glTexImage2D(GL_TEXTURE_2D, miplevel, intformat, up_w, up_h, 0, GLTypeForImgType(image->type), GL_UNSIGNED_BYTE, image->dat);
+		glTexImage2D(GL_TEXTURE_2D, miplevel, intformat, up_w, up_h, 0, GLTypeForImgType(image->type), GL_UNSIGNED_BYTE, image->tex.data(0, 0, 0));
 		if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
 			break;
 		}

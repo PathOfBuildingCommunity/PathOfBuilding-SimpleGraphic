@@ -10,6 +10,9 @@
 
 #include <functional>
 #include <optional>
+
+#include <gli/texture2d.hpp>
+
 // Image types
 enum imageType_s {
 	IMGTYPE_NONE = 0x00,
@@ -17,22 +20,32 @@ enum imageType_s {
 	IMGTYPE_RGB  = 0x23,
 	IMGTYPE_RGBA = 0x34,
 	IMGTYPE_RGB_DXT1 = 0x63,
-	IMGTYPE_RGBA_DXT1 = 0x74,
-	IMGTYPE_RGBA_DXT3 = 0x84,
-	IMGTYPE_RGBA_DXT5 = 0x94
+	IMGTYPE_RGBA_BC1 = 0x74,
+	IMGTYPE_RGBA_DXT1 = IMGTYPE_RGBA_BC1,
+	IMGTYPE_RGBA_BC2 = 0x84,
+	IMGTYPE_RGBA_DXT3 = IMGTYPE_RGBA_BC2,
+	IMGTYPE_RGBA_BC3 = 0x94,
+	IMGTYPE_RGBA_DXT5 = IMGTYPE_RGBA_BC3,
+	//IMGTYPE_R_BC4 = 0xA4,
+	//IMGTYPE_RG_BC5 = 0xB4,
+	//IMGTYPE_RGBF_BC6H = 0xC4,
+	IMGTYPE_RGBA_BC7 = 0xD4,
 };
 
 // Image
 class image_c {
 public:
-	byte* dat = nullptr;
 	dword width = 0;
 	dword height = 0;
 	int comp = 0;
 	int type = 0;
 
-	image_c(IConsole* conHnd = NULL);
-	~image_c();
+	// This `tex` member supersedes the past raw data and metadata fields in order to hold
+	// both unblocked and blocked texture formats with array layers and mip levels.
+	gli::texture2d tex{};
+
+	explicit image_c(IConsole* conHnd = NULL);
+	virtual ~image_c() = default;
 
 	IConsole* con;
 
@@ -43,6 +56,7 @@ public:
 
 	void CopyRaw(int type, dword width, dword height, const byte* dat);
 	void Free();
+	void PopulateTex(const byte* inDat);
 
 	static image_c* LoaderForFile(IConsole* conHnd, const char* fileName);
 };
@@ -51,7 +65,7 @@ public:
 class targa_c : public image_c {
 public:
 	bool rle;
-	targa_c(IConsole* conHnd): image_c(conHnd) { rle = true; }
+	targa_c(IConsole* conHnd) : image_c(conHnd) { rle = true; }
 	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
@@ -60,7 +74,7 @@ public:
 class jpeg_c : public image_c {
 public:
 	int quality;
-	jpeg_c(IConsole* conHnd): image_c(conHnd) { quality = 80; }
+	jpeg_c(IConsole* conHnd) : image_c(conHnd) { quality = 80; }
 	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
@@ -68,7 +82,7 @@ public:
 // PNG Image
 class png_c : public image_c {
 public:
-	png_c(IConsole* conHnd): image_c(conHnd) { }
+	png_c(IConsole* conHnd) : image_c(conHnd) { }
 	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
@@ -84,7 +98,7 @@ public:
 // GIF Image
 class gif_c : public image_c {
 public:
-	gif_c(IConsole* conHnd): image_c(conHnd) { }
+	gif_c(IConsole* conHnd) : image_c(conHnd) { }
 	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
