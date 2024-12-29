@@ -35,6 +35,7 @@ enum r_texFlag_e {
 	TF_CLAMP	= 0x01,	// Clamp texture
 	TF_NOMIPMAP	= 0x02,	// No mipmaps
 	TF_NEAREST	= 0x04,	// Use nearest-pixel magnification instead of linear
+	TF_ASYNC	= 0x08, // Load asynchronously
 };
 
 // Blend modes

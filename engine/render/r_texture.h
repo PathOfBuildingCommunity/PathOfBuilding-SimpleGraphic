@@ -9,7 +9,11 @@
 // =======
 
 #include <atomic>
+#include <memory>
 #include <string>
+
+class image_c;
+class mip_set_c;
 
 // Texture
 class r_tex_c {
@@ -20,6 +24,8 @@ public:
 		INIT,
 		IN_QUEUE,
 		PROCESSING,
+		SIZE_KNOWN,
+		PENDING_UPLOAD,
 		DONE,
 	};
 	std::atomic<Status> status;
@@ -27,8 +33,9 @@ public:
 	dword	texId;
 	int		flags;
 	std::string fileName;
-	dword	fileWidth;
-	dword	fileHeight;
+	std::atomic<dword> fileWidth;
+	std::atomic<dword> fileHeight;
+	std::shared_ptr<mip_set_c> mipSet;
 
 	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, image_c* img, int flags);
@@ -43,12 +50,15 @@ public:
 	void	ForceLoad();
 	void	LoadFile();
 
+	static void PerformUpload(r_tex_c*);
+
 	static int GLTypeForImgType(int type);
 private:
 	class t_manager_c* manager;
 	class r_renderer_c* renderer;
 	void	Init(class r_ITexManager* manager, const char* fileName, int flags);
-	void	Upload(image_c *image, int flags);
+	void	Upload(mip_set_c& mipSet, int flags);
+	std::shared_ptr<mip_set_c> BuildMipSet(std::unique_ptr<image_c> img);
 };
 
 // ==========
@@ -62,4 +72,5 @@ public:
 	static void FreeHandle(r_ITexManager* hnd);
 
 	virtual int		GetAsyncCount() = 0;
+	virtual void	ProcessPendingTextureUploads() = 0;
 };

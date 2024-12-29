@@ -8,6 +8,8 @@
 // Classes
 // =======
 
+#include <functional>
+#include <optional>
 // Image types
 enum imageType_s {
 	IMGTYPE_NONE = 0x00,
@@ -23,18 +25,20 @@ enum imageType_s {
 // Image
 class image_c {
 public:
-	byte*	dat = nullptr;
-	dword	width = 0;
-	dword	height = 0;
-	int		comp = 0;
-	int		type = 0;
+	byte* dat = nullptr;
+	dword width = 0;
+	dword height = 0;
+	int comp = 0;
+	int type = 0;
 
 	image_c(IConsole* conHnd = NULL);
 	~image_c();
 
 	IConsole* con;
 
-	virtual bool Load(const char* fileName);
+	using size_callback_t = std::function<void(int, int)>;
+
+	virtual bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {});
 	virtual bool Save(const char* fileName);
 
 	void CopyRaw(int type, dword width, dword height, const byte* dat);
@@ -44,43 +48,43 @@ public:
 };
 
 // Targa Image
-class targa_c: public image_c {
+class targa_c : public image_c {
 public:
-	bool	rle;
+	bool rle;
 	targa_c(IConsole* conHnd): image_c(conHnd) { rle = true; }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // JPEG Image
-class jpeg_c: public image_c {
+class jpeg_c : public image_c {
 public:
-	int		quality;
+	int quality;
 	jpeg_c(IConsole* conHnd): image_c(conHnd) { quality = 80; }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // PNG Image
-class png_c: public image_c {
+class png_c : public image_c {
 public:
 	png_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // JPEG XL Image
 class jpeg_xl_c : public image_c {
 public:
 	jpeg_xl_c(IConsole* conHnd) : image_c(conHnd) {}
-	bool Load(const char* fileName) override;
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
 
 // GIF Image
-class gif_c: public image_c {
+class gif_c : public image_c {
 public:
 	gif_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };

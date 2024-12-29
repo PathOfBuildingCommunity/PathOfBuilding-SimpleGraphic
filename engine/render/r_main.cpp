@@ -1062,6 +1062,7 @@ void r_renderer_c::Init(r_featureFlag_e features)
 	sys->con->Printf("Loading resources...\n");
 
 	whiteImage = RegisterShader("@white", 0);
+	blackImage = RegisterShader("@black", 0);
 
 	imguiCtx = ImGui::CreateContext();
 	ImGui::SetCurrentContext(imguiCtx);
@@ -1125,6 +1126,16 @@ void r_renderer_c::Shutdown()
 // =================
 // Render Management
 // =================
+
+void r_renderer_c::PumpShaders()
+{
+	texMan->ProcessPendingTextureUploads();
+	for (size_t idx = 0; idx < numShader; ++idx)
+		if (auto tex = shaderList[idx]->tex; tex && tex->status != r_tex_c::DONE) {
+			inhibitElision = true;
+			break;
+		}
+}
 
 void r_renderer_c::BeginFrame()
 {
@@ -1231,6 +1242,9 @@ static std::string BinaryUnitPrefix(uint64_t quantity) {
 
 void r_renderer_c::EndFrame()
 {
+	inhibitElision = false;
+	PumpShaders();
+
 	std::chrono::time_point endFrameTic = std::chrono::steady_clock::now();
 	frameStats.AppendDuration(&FrameStats::midFrameStepDurations, endFrameTic - beginFrameToc);
 
@@ -1291,6 +1305,9 @@ void r_renderer_c::EndFrame()
 			ImGui::Text("%d out of %d frames drawn.", drawnFrames, totalFrames);
 			CVarSliderInt("Optimization", r_layerOptimize);
 			CVarCheckbox("Elide identical frames", r_elideFrames);
+			ImGui::BeginDisabled(true);
+			ImGui::Checkbox("Elision inhibited", &inhibitElision);
+			ImGui::EndDisabled();
 			CVarCheckbox("Draw command culling", r_drawCull);
 
 			size_t totalFootprint{}, totalDenseFootprint{};
@@ -1343,7 +1360,7 @@ void r_renderer_c::EndFrame()
 		ImGui::End();
 	}
 
-	if (elideFrames != !!r_elideFrames->intVal) {
+	if (inhibitElision || elideFrames != !!r_elideFrames->intVal) {
 		elideFrames = !!r_elideFrames->intVal;
 		lastFrameHash.clear();
 	}
@@ -1416,6 +1433,11 @@ void r_renderer_c::EndFrame()
 		else {
 			lastFrameHash.clear();
 		}
+	}
+
+	if (inhibitElision) {
+		// If we explicitly inhibited elision due to things like incomplete textures, make sure that the next frame is drawn.
+		lastFrameHash.clear();
 	}
 
 	for (int l = 0; l < numLayer; ++l) {
@@ -1589,7 +1611,11 @@ r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int t
 
 void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& height)
 {
-	if (hnd && hnd->sh->tex->status == r_tex_c::DONE) {
+	if (hnd)
+	{
+		while (hnd->sh->tex->status < r_tex_c::SIZE_KNOWN) {
+			Sleep(1);
+		}
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;
 	}

@@ -77,6 +77,7 @@ public:
 	r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags);
 	void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height);
 	void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri);
+	void	PumpShaders();
 	void	PurgeShaders();
 	int		GetTexAsyncCount();
 
@@ -134,6 +135,7 @@ public:
 	conVar_c*	r_drawCull = nullptr;
 
 	r_shaderHnd_c* whiteImage = nullptr;	// White image
+	r_shaderHnd_c* blackImage = nullptr;	// Black image
 
 	ImGuiContext* imguiCtx = nullptr;
 
@@ -198,6 +200,7 @@ public:
 	FrameStats frameStats;
 
 	bool	elideFrames = false;
+	bool	inhibitElision = false;
 	bool	debugImGui = false;
 	bool	debugLayers = false;
 

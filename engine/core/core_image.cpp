@@ -18,6 +18,7 @@
 #include "stb_image_write.h"
 
 #include <algorithm>
+#include <thread>
 #include <vector>
 
 #include <jxl/decode.h>
@@ -53,6 +54,7 @@ image_c::~image_c()
 void image_c::CopyRaw(int inType, dword inWidth, dword inHeight, const byte* inDat)
 {
 	if (dat) delete[] dat;
+	dat = nullptr;
 	comp = inType & 0xF;
 	type = inType;
 	width = inWidth;
@@ -67,7 +69,7 @@ void image_c::Free()
 	dat = NULL;
 }
 
-bool image_c::Load(const char* fileName) 
+bool image_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	return true; // o_O
 }
@@ -129,7 +131,7 @@ struct tgaHeader_s {
 };
 #pragma pack(pop)
 
-bool targa_c::Load(const char* fileName)
+bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	Free();
 
@@ -149,7 +151,9 @@ bool targa_c::Load(const char* fileName)
 		con->Warning("TGA '%s': color mapped images not supported", fileName);
 		return true;
 	}
-	in.Seek(hdr.idLen, SEEK_CUR);	
+	in.Seek(hdr.idLen, SEEK_CUR);
+	if (sizeCallback)
+		(*sizeCallback)(hdr.width, hdr.height);
 
 	// Try to match image type
 	int ittable[3][3] = {
@@ -244,7 +248,7 @@ bool targa_c::Save(const char* fileName)
 // JPEG Image
 // ==========
 
-bool jpeg_c::Load(const char* fileName)
+bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	Free();
 
@@ -266,6 +270,9 @@ bool jpeg_c::Load(const char* fileName)
 		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
 		return true;
 	}
+	if (sizeCallback)
+		(*sizeCallback)(x, y);
+
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, in_comp);
 	if (!data) {
 		stbi_image_free(data);
@@ -306,7 +313,7 @@ bool jpeg_c::Save(const char* fileName)
 // PNG Image
 // =========
 
-bool png_c::Load(const char* fileName)
+bool png_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	Free();
 
@@ -324,8 +331,12 @@ bool png_c::Load(const char* fileName)
 	if (!stbi_info_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp)) {
 		return true;
 	}
+
 	width = x;
 	height = y;
+	if (sizeCallback)
+		(*sizeCallback)(width, height);
+
 	comp = (in_comp == 1 || in_comp == 3) ? 3 : 4;
 	type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, comp);
@@ -364,7 +375,7 @@ bool png_c::Save(const char* fileName)
 // GIF Image
 // =========
 
-bool gif_c::Load(const char* fileName)
+bool gif_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	// Open file
 	fileInputStream_c in;
@@ -385,6 +396,9 @@ bool gif_c::Load(const char* fileName)
 		}
 		width = x;
 		height = y;
+		if (sizeCallback)
+			(*sizeCallback)(width, height);
+
 		comp = in_comp;
 		type = IMGTYPE_RGBA;
 		const size_t byteSize = width * height * comp;
@@ -405,7 +419,9 @@ bool gif_c::Save(const char* fileName)
 // JPEG XL Image
 // =========
 
-bool jpeg_xl_c::Load(const char* fileName)
+const std::thread::id g_mainThreadId = std::this_thread::get_id();
+
+bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
 	// Open file
 	fileInputStream_c in;
@@ -416,13 +432,15 @@ bool jpeg_xl_c::Load(const char* fileName)
 	if (in.Read(fileData.data(), fileData.size()))
 		return true;
 
-	auto runner = JxlResizableParallelRunnerMake(nullptr);
+	JxlResizableParallelRunnerPtr runner{};
+	if (g_mainThreadId == std::this_thread::get_id())
+		runner = JxlResizableParallelRunnerMake(nullptr);
 
 	auto dec = JxlDecoderMake(nullptr);
 	if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE))
 		return true;
 
-	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), JxlResizableParallelRunner, runner.get()))
+	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), runner ? JxlResizableParallelRunner : nullptr, runner.get()))
 		return true;
 
 	JxlBasicInfo info{};
@@ -444,6 +462,8 @@ bool jpeg_xl_c::Load(const char* fileName)
 				return true;
 			width = info.xsize;
 			height = info.ysize;
+			if (sizeCallback)
+				(*sizeCallback)(width, height);
 			comp = info.num_color_channels + !!info.alpha_bits;
 			if (comp == 1)
 				type = IMGTYPE_GRAY;
@@ -454,7 +474,8 @@ bool jpeg_xl_c::Load(const char* fileName)
 			else
 				return true;
 
-			JxlResizableParallelRunnerSetThreads(runner.get(), JxlResizableParallelRunnerSuggestThreads(width, height));
+			if (runner)
+				JxlResizableParallelRunnerSetThreads(runner.get(), JxlResizableParallelRunnerSuggestThreads(width, height));
 
 			format.num_channels = comp;
 		} break;
