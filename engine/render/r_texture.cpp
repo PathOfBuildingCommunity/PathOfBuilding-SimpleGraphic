@@ -309,8 +309,7 @@ r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags
 
 	// Direct upload
 	mipSet = BuildMipSet(std::move(img));
-	Upload(*mipSet, flags);
-	status = DONE;
+	PerformUpload(this);
 }
 
 r_tex_c::~r_tex_c()
@@ -592,8 +591,7 @@ void r_tex_c::LoadFile()
 				manager->EnqueueTextureUpload(this);
 			}
 			else {
-				Upload(*mipSet, flags);
-				status = DONE;
+				PerformUpload(this);
 			}
 			return;
 		}
@@ -608,6 +606,7 @@ void r_tex_c::LoadFile()
 void r_tex_c::PerformUpload(r_tex_c* tex)
 {
 	tex->Upload(*tex->mipSet, tex->flags);
+	tex->mipSet = {};
 	tex->status = DONE;
 }
 
