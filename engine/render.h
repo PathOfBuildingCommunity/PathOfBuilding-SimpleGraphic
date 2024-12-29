@@ -59,6 +59,8 @@ private:
 // Interfaces
 // ==========
 
+class image_c;
+
 // Renderer: r_main.cpp
 class r_IRenderer {
 public:
@@ -72,7 +74,7 @@ public:
 	virtual void	EndFrame() = 0;
 	
 	virtual r_shaderHnd_c* RegisterShader(const char* name, int flags) = 0;
-	virtual r_shaderHnd_c* RegisterShaderFromData(int width, int height, int type, byte* dat, int flags) = 0;
+	virtual r_shaderHnd_c* RegisterShaderFromImage(std::unique_ptr<image_c> img, int flags) = 0;
 	virtual void	GetShaderImageSize(r_shaderHnd_c* hnd, int &width, int &height) = 0;
 	virtual void	SetShaderLoadingPriority(r_shaderHnd_c* hnd, int pri) = 0;
 	virtual void	PurgeShaders() = 0;

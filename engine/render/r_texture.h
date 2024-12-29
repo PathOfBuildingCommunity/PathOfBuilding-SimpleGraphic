@@ -38,7 +38,7 @@ public:
 	std::shared_ptr<mip_set_c> mipSet;
 
 	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
-	r_tex_c(class r_ITexManager* manager, image_c* img, int flags);
+	r_tex_c(class r_ITexManager* manager, std::unique_ptr<image_c> img, int flags);
 	~r_tex_c();
 
 	void	Bind();

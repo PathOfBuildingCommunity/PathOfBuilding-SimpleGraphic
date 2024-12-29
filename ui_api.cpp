@@ -479,9 +479,9 @@ namespace {
 		return flags;
 	}
 
-	r_shaderHnd_c* RegisterShaderFromImage(r_IRenderer& renderer, image_c& img, int flags)
+	r_shaderHnd_c* RegisterShaderFromImage(r_IRenderer& renderer, std::unique_ptr<image_c> img, int flags)
 	{
-		return renderer.RegisterShaderFromData(img.width, img.height, img.type, img.dat, flags);
+		return renderer.RegisterShaderFromImage(std::move(img), flags);
 	}
 }
 
@@ -542,7 +542,7 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
 
 	const int flags = ParseArtFlags(ui, L, 5, n);
 	delete imgHandle->hnd;
-	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, *dstImg, flags);
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, std::move(dstImg), flags);
 
 	return 0;
 }
@@ -661,7 +661,7 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
 
 	const int flags = ParseArtFlags(ui, L, 5, n);
 	delete imgHandle->hnd;
-	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, *dstImg, flags);
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, std::move(dstImg), flags);
 
 	return 0;
 }

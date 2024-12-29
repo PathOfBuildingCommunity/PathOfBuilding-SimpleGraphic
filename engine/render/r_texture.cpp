@@ -303,12 +303,12 @@ r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
 	}
 }
 
-r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
+r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags)
 {
 	Init(manager, NULL, flags);
 
 	// Direct upload
-	mipSet = BuildMipSet(std::unique_ptr<image_c>(img));
+	mipSet = BuildMipSet(std::move(img));
 	Upload(*mipSet, flags);
 	status = DONE;
 }

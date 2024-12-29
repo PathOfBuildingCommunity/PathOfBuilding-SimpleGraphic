@@ -51,7 +51,7 @@ public:
 	r_tex_c* tex;
 
 	r_shader_c(r_renderer_c* renderer, const char* shname, int flags);
-	r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat);
+	r_shader_c(r_renderer_c* renderer, const char* shname, int flags, std::unique_ptr<image_c> img);
 	~r_shader_c();
 };
 
@@ -67,20 +67,13 @@ r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags)
 	}
 }
 
-r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags, int width, int height, int type, byte* dat)
+r_shader_c::r_shader_c(r_renderer_c* renderer, const char* shname, int flags, std::unique_ptr<image_c> img)
 	: renderer(renderer)
 {
 	name = AllocString(shname);
 	nameHash = StringHash(shname, 0xFFFF);
 	refCount = 0;
-	image_c img;
-	img.width = width;
-	img.height = height;
-	img.type = type;
-	img.comp = type & 0xF;
-	img.dat = dat;
-	tex = new r_tex_c(renderer->texMan, &img, flags);
-	img.dat = NULL;
+	tex = new r_tex_c(renderer->texMan, std::move(img), flags);
 }
 
 r_shader_c::~r_shader_c()
@@ -1587,7 +1580,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShader(const char* shname, int flags)
 	return new r_shaderHnd_c(shaderList[newId]);
 }
 
-r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int type, byte* dat, int flags)
+r_shaderHnd_c* r_renderer_c::RegisterShaderFromImage(std::unique_ptr<image_c> img, int flags)
 {
 	int newId = -1;
 	for (int s = 0; s < numShader; s++) {
@@ -1605,7 +1598,7 @@ r_shaderHnd_c* r_renderer_c::RegisterShaderFromData(int width, int height, int t
 	}
 	char shname[32];
 	sprintf(shname, "data:%d", newId);
-	shaderList[newId] = new r_shader_c(this, shname, flags, width, height, type, dat);
+	shaderList[newId] = new r_shader_c(this, shname, flags, std::move(img));
 	return new r_shaderHnd_c(shaderList[newId]);
 }
 
