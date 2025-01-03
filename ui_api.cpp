@@ -287,9 +287,16 @@ SG_LUA_CPP_FUN_BEGIN(NewArtHandle)
 	std::unique_ptr<image_c> img(image_c::LoaderForFile(ui->sys->con, fileName.c_str()));
 	if (!img)
 		return 0;
+
 	if (img->Load(fileName.c_str()))
 		return 0;
-	if (img->type != IMGTYPE_GRAY && img->type != IMGTYPE_RGB && img->type != IMGTYPE_RGBA)
+
+	const auto format = img->tex.format();
+	if (is_compressed(format) || !is_unsigned(format))
+		return 0;
+
+	const auto comp = component_count(format);
+	if (comp != 1 || comp != 3 || comp != 4)
 		return 0;
 
 	artHandle_s* artHandle = (artHandle_s*)lua_newuserdata(L, sizeof(artHandle_s));
@@ -321,8 +328,10 @@ static int l_artHandleSize(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	artHandle_s* artHandle = GetArtHandle(L, ui, "Size");
-	lua_pushinteger(L, artHandle->img ? artHandle->img->width : 0);
-	lua_pushinteger(L, artHandle->img ? artHandle->img->height : 0);
+
+	const auto extent = artHandle->img ? artHandle->img->tex.extent() : gli::texture2d_array::extent_type{0, 0};
+	lua_pushinteger(L, extent.x);
+	lua_pushinteger(L, extent.y);
 	return 2;
 }
 
@@ -512,9 +521,11 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
 		std::swap(y1, y2);
 
 	auto* srcImg = artHandle->img.get();
-	const int srcWidth = srcImg->width;
-	const int srcHeight = srcImg->height;
-	const int comp = srcImg->comp;
+	const auto srcFormat = srcImg->tex.format();
+	auto extent = srcImg->tex.extent();
+	const int srcWidth = extent.x;
+	const int srcHeight = extent.y;
+	const int comp = (int)component_count(srcFormat);
 	ui->LExpect(L, x1 >= 0 && x2 <= srcWidth, "imgHandle:LoadArtRectangle(): X range %d to %d outside of the 0 to %d bounds", x1, x2, srcWidth);
 	ui->LExpect(L, y1 >= 0 && y2 <= srcHeight, "imgHandle:LoadArtRectangle(): Y range %d to %d outside of the 0 to %d bounds", y1, y2, srcHeight);
 
@@ -522,22 +533,20 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
 	auto dstImg = std::make_unique<image_c>(ui->sys->con);
 	const int dstWidth = x2 - x1;
 	const int dstHeight = y2 - y1;
-	dstImg->width = dstWidth;
-	dstImg->height = dstHeight;
-	dstImg->comp = comp;
-	dstImg->type = srcImg->type;
 
 	const int srcStride = srcWidth * comp;
 	const int dstStride = dstWidth * comp;
 	const int dstByteCount = dstHeight * dstStride;
-	dstImg->tex = gli::texture2d(srcImg->tex.format(), glm::ivec2(dstWidth, dstHeight), 1);
+	dstImg->tex = gli::texture2d_array(srcFormat, glm::ivec2(dstWidth, dstHeight), 1, 1);
 
 	byte* srcPtr = srcImg->tex.data<byte>(0, 0, 0) + y1 * srcStride + x1 * comp;
 	byte* dstPtr = dstImg->tex.data<byte>(0, 0, 0);
-	for (int row = 0; row < (int)dstHeight; ++row) {
-		memcpy(dstPtr, srcPtr, dstStride);
-		srcPtr += srcStride;
-		dstPtr += dstStride;
+	for (int col = 0; col < (int)dstWidth; ++col) {
+		for (int row = 0; row < (int)dstHeight; ++row) {
+			memcpy(dstPtr, srcPtr, dstStride);
+			srcPtr += srcStride;
+			dstPtr += dstStride;
+		}
 	}
 
 	const int flags = ParseArtFlags(ui, L, 5, n);
@@ -576,9 +585,11 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
 	artHandle_s* artHandle = GetArtHandle(L, ui, "LoadArtArcBand");
 
 	auto* srcImg = artHandle->img.get();
-	const int srcWidth = srcImg->width;
-	const int srcHeight = srcImg->height;
-	const int comp = srcImg->comp;
+	const auto srcFormat = srcImg->tex.format();
+	const auto srcExtent = srcImg->tex.extent();
+	const int srcWidth = srcExtent.x;
+	const int srcHeight = srcExtent.y;
+	const int comp = (int)component_count(srcFormat);
 	ui->LExpect(L, xC >= 0 && xC <= srcWidth, "imgHandle:LoadArtArcBand(): X origin %d outside of the 0 to %d bounds", xC, srcWidth);
 	ui->LExpect(L, yC >= 0 && yC <= srcHeight, "imgHandle:LoadArtArcBand(): Y origin %d outside of the 0 to %d bounds", yC, srcHeight);
 
@@ -590,15 +601,12 @@ SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
 	auto dstImg = std::make_unique<image_c>(ui->sys->con);
 	const int dstWidth = xC - x1;
 	const int dstHeight = yC - y1;
-	dstImg->width = dstWidth;
-	dstImg->height = dstHeight;
-	dstImg->comp = comp;
-	dstImg->type = srcImg->type;
 
 	const int srcStride = srcWidth * comp;
 	const int dstStride = dstWidth * comp;
 	const int dstByteCount = dstHeight * dstStride;
-	dstImg->tex = gli::texture2d(srcImg->tex.format(), glm::ivec2(dstWidth, dstHeight), 1);
+	dstImg->tex = gli::texture2d_array(srcFormat, glm::ivec2(dstWidth, dstHeight), 1, 1);
+
 	const byte* srcData = srcImg->tex.data<byte>(0, 0, 0);
 	byte* dstData = dstImg->tex.data<byte>(0, 0, 0);
 	memset(dstData, 0x00, dstByteCount);

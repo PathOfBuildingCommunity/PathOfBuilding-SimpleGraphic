@@ -35,7 +35,8 @@ public:
 	std::string fileName;
 	std::atomic<dword> fileWidth;
 	std::atomic<dword> fileHeight;
-	std::shared_ptr<mip_set_c> mipSet;
+	std::unique_ptr<image_c> img;
+	GLenum target{};
 
 	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, std::unique_ptr<image_c> img, int flags);
@@ -52,13 +53,12 @@ public:
 
 	static void PerformUpload(r_tex_c*);
 
-	static int GLTypeForImgType(int type);
 private:
 	class t_manager_c* manager;
 	class r_renderer_c* renderer;
 	void	Init(class r_ITexManager* manager, const char* fileName, int flags);
-	void	Upload(mip_set_c& mipSet, int flags);
-	std::shared_ptr<mip_set_c> BuildMipSet(std::unique_ptr<image_c> img);
+	void	Upload(image_c& img, int flags);
+	std::unique_ptr<image_c> BuildMipSet(std::unique_ptr<image_c> img);
 };
 
 // ==========

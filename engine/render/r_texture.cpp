@@ -10,6 +10,8 @@
 #include "r_local.h"
 
 #include "stb_image_resize.h"
+#include <gli/gl.hpp>
+#include <gli/generate_mipmaps.hpp>
 
 // ===================
 // Predefined textures
@@ -308,7 +310,7 @@ r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags
 	Init(manager, NULL, flags);
 
 	// Direct upload
-	mipSet = BuildMipSet(std::move(img));
+	img = BuildMipSet(std::move(img));
 	PerformUpload(this);
 }
 
@@ -318,23 +320,6 @@ r_tex_c::~r_tex_c()
 		manager->AsyncRemove(this);
 	}
 	glDeleteTextures(1, &texId);
-}
-
-int r_tex_c::GLTypeForImgType(int type)
-{
-	static int gt[] = {
-		0,
-		GL_LUMINANCE,
-		GL_RGB,
-		GL_RGBA,
-		0,
-		0,
-		GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-	};
-	return gt[type >> 4];
 }
 
 void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags)
@@ -354,7 +339,7 @@ void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags
 void r_tex_c::Bind()
 {
 	if (status == DONE) {
-		glBindTexture(GL_TEXTURE_2D, texId);
+		glBindTexture(target, texId);
 	} else {
 		manager->blackTex->Bind();
 	}
@@ -362,7 +347,7 @@ void r_tex_c::Bind()
 
 void r_tex_c::Unbind()
 {
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(target, 0);
 }
 
 void r_tex_c::Enable()
@@ -397,163 +382,63 @@ void r_tex_c::ForceLoad()
 	}
 }
 
-class mip_set_c {
-public:
-	// Take ownership of the top-level image or a shrunk copy of it if it exceeds the max texture dimensions.
-	mip_set_c(std::unique_ptr<image_c>&& image, dword maxDim)
-	{
-		dword up_w = 1, up_h = 1;
-		if (image->type >= IMGTYPE_RGB_DXT1 && image->type <= IMGTYPE_RGBA_DXT5 || image->width <= maxDim && image->height <= maxDim) {
-			topImage = std::move(image);
+std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
+{
+	const auto format = img->tex.format();
+
+	const bool blockCompressed = is_compressed(format);
+	const bool isAsync = !!(flags & TF_ASYNC);
+	const bool hasExistingMips = img->tex.layers() > 1;
+	const bool generateMips = !blockCompressed && !(flags & TF_NOMIPMAP);
+
+	auto extent = img->tex.extent();
+	const auto maxDim = (int)renderer->texMaxDim;
+	auto numLevels = img->tex.levels();
+
+	const auto shrinksNeeded = [&t = img->tex, maxDim] {
+		auto extent = t.extent();
+		int shrinks = 0;
+		for (; extent.x > maxDim && extent.y > maxDim; ++shrinks) {
+			extent.x /= 2;
+			extent.y /= 2;
+		}
+		return shrinks;
+		}();
+
+	// There is an invariant we need to maintain here of that no sides may exceed the maximum dimensions of the renderer.
+	// For block-compressed textures we could drop finer mips until we reach a coarser level that's sufficiently reduced in size.
+	// We can't generate additional levels for those unless we pull in block format decoding via something like Compressonator
+	// and then we would have to consider whether to upload recompressed or burn VRAM on a non-compressed texture.
+	// For regular textures we can resize proportionally down for the largest axis to reach the max dimension.
+
+	if (shrinksNeeded) {
+		if (shrinksNeeded >= numLevels) {
+			// Not enough levels in texture to satsify shrinking requirement.
+			if (blockCompressed) {
+				// TODO(zao): Fail hard, ignore, or decompress+rescale.
+			}
+			else {
+				// TODO(zao): Synthesise a new top level for all layers.
+				auto smallExtent = img->tex.extent(img->tex.levels() - 1);
+			}
 		}
 		else {
-			// Find next highest powers of 2
-			while (up_w < image->width) up_w <<= 1;
-			while (up_h < image->height) up_h <<= 1;
-			while (up_w > maxDim || up_h > maxDim) {
-				// Really big image, downscale to legal limits
-				up_w >>= 1;
-				up_h >>= 1;
-			}
-
-			//TODO(zao): Handle mip generation for blocked textures?
-			assert(!is_compressed(image->tex.format()));
-
-			topImage = std::make_shared<image_c>();
-			int comp = image->comp;
-			topImage->comp = comp;
-			topImage->width = up_w;
-			topImage->height = up_h;
-			topImage->type = image->type;
-			std::vector<byte> topBuf(up_w * up_h * comp);
-			stbir_resize_uint8_srgb(
-				image->tex.data<unsigned char>(0, 0, 0), image->width, image->height, image->width * comp,
-				topBuf.data(), up_w, up_h, up_w * comp, comp, comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
-			topImage->PopulateTex(topBuf.data());
+			auto& t = img->tex;
+			t = gli::texture2d_array(t,
+				t.base_layer(), t.max_layer(),
+				t.base_level() + shrinksNeeded, t.max_level());
 		}
 	}
 
-	virtual int GetMipCount() const = 0;
-	virtual std::weak_ptr<image_c> BorrowMipImage(int level) = 0;
-
-protected:
-	std::shared_ptr<image_c> topImage;
-};
-
-struct single_mip_set_c : mip_set_c {
-	single_mip_set_c(std::unique_ptr<image_c>&& img, dword maxDim) : mip_set_c(std::move(img), maxDim) {}
-
-	virtual int GetMipCount() const override { return 1; }
-
-	virtual std::weak_ptr<image_c> BorrowMipImage(int level) override
-	{
-		if (level != 0)
-			return {};
-		return topImage;
-	}
-};
-
-struct incremental_mip_set_c : mip_set_c {
-	incremental_mip_set_c(std::unique_ptr<image_c>&& img, dword maxDim) : mip_set_c(std::move(img), maxDim), currentImage(topImage) {
-		dword longest = (unsigned)(std::max)(topImage->width, topImage->height);
-		mipCount = 1;
-		while (longest > 1) {
-			longest /= 2;
-			++mipCount;
+	if (generateMips) {
+		if (blockCompressed) {
+			// TODO(LV): Mipmap generation requested for a block-compressed texture. This requires decompression.
+		}
+		else {
+			img->tex = gli::generate_mipmaps(img->tex, gli::FILTER_LINEAR);
 		}
 	}
-
-	virtual int GetMipCount() const override { return mipCount; }
-
-	virtual std::weak_ptr<image_c> BorrowMipImage(int level) override {
-		if (level < 0 || level >= GetMipCount())
-			return {};
-		if (level == 0)
-			return topImage;
-
-		// We can only ever incrementally step down in size, if a rewind is required we regenerate from the top.
-		if (level < currentLevel) {
-			currentImage = topImage;
-			currentLevel = 0;
-		}
-		while (currentLevel < level) {
-			currentImage = GenerateNextLevel();
-			++currentLevel;
-		}
-		return currentImage;
-	}
-
-	std::shared_ptr<image_c> GenerateNextLevel()
-	{
-		int comp = currentImage->comp;
-		dword up_w = currentImage->width;
-		dword up_h = currentImage->height;
-
-		// Calculate mipmap size
-		dword mm_w = (up_w > 1) ? up_w >> 1 : 1;
-		dword mm_h = (up_h > 1) ? up_h >> 1 : 1;
-
-		// Set mipmapping source/dest
-		const byte* in = currentImage->tex.data<byte>(0, 0, 0);
-
-		auto nextImage = std::make_shared<image_c>();
-		nextImage->comp = comp;
-		nextImage->type = currentImage->type;
-		nextImage->width = mm_w;
-		nextImage->height = mm_h;
-		nextImage->tex = gli::texture2d(currentImage->tex.format(), glm::ivec2(mm_w, mm_h), 1);
-		byte* out = nextImage->tex.data<byte>(0, 0, 0);
-
-		stbir_resize_uint8_srgb(
-			in, up_w, up_h, up_w * comp,
-			out, mm_w, mm_h, mm_w * comp,
-			comp, comp == 4 ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0);
-
-		return nextImage;
-	}
-
-	std::shared_ptr<image_c> currentImage;
-	int currentLevel = 0;
-	int mipCount;
-};
-
-struct filled_mip_set_c : incremental_mip_set_c {
-	using Base = incremental_mip_set_c;
-	filled_mip_set_c(std::unique_ptr<image_c>&& img, dword maxDim) : incremental_mip_set_c(std::move(img), maxDim)
-	{
-		for (int level = 1; level < GetMipCount(); ++level) {
-			tailImages.push_back(Base::BorrowMipImage(level).lock());
-		}
-	}
-
-	virtual std::weak_ptr<image_c> BorrowMipImage(int level) override
-	{
-		if (level < 0 || level >= GetMipCount())
-			return {};
-		if (level == 0)
-			return topImage;
-		return tailImages[level - 1];
-	}
-
-	// All but the top level image
-	std::vector<std::shared_ptr<image_c>> tailImages;
-};
-
-std::shared_ptr<mip_set_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
-{
-	const bool is_async = !!(flags & TF_ASYNC);
-	const bool has_existing_mips = img->type >= IMGTYPE_RGB_DXT1 && img->type <= IMGTYPE_RGBA_DXT5;
-	const bool want_mips = !(flags & TF_NOMIPMAP);
-
-	if (!want_mips)
-		// No mips, just conform to the interface.
-		return std::make_shared<single_mip_set_c>(std::move(img), renderer->texMaxDim);
-	else if (is_async)
-		// Compute all the mips into memory.
-		return std::make_shared<filled_mip_set_c>(std::move(img), renderer->texMaxDim);
-	else
-		// Lazily produce the mips on demand.
-		return std::make_shared<incremental_mip_set_c>(std::move(img), renderer->texMaxDim);
+	return img;
 }
 
 void r_tex_c::LoadFile()
@@ -562,7 +447,7 @@ void r_tex_c::LoadFile()
 		// Upload an 8x8 white image
 		auto raw = std::make_unique<image_c>();
 		raw->CopyRaw(IMGTYPE_GRAY, 8, 8, t_whiteImage);
-		Upload(single_mip_set_c(std::move(raw), renderer->texMaxDim), TF_NOMIPMAP);
+		Upload(*raw, TF_NOMIPMAP);
 		status = DONE;
 		return;
 	}
@@ -570,7 +455,7 @@ void r_tex_c::LoadFile()
 		// Upload an 8x8 black image
 		auto raw = std::make_unique<image_c>();
 		raw->CopyRaw(IMGTYPE_RGBA, 8, 8, t_blackImage);
-		Upload(single_mip_set_c(std::move(raw), renderer->texMaxDim), TF_NOMIPMAP);
+		Upload(*raw, TF_NOMIPMAP);
 		status = DONE;
 		return;
 	}
@@ -587,7 +472,7 @@ void r_tex_c::LoadFile()
 		error = img->Load(loadPath.c_str(), sizeCallback);
 		if ( !error ) {
 			const bool is_async = !!(flags & TF_ASYNC);
-			mipSet = BuildMipSet(std::move(img));
+			img = BuildMipSet(std::move(img));
 
 			status = PENDING_UPLOAD;
 			if (is_async) {
@@ -603,40 +488,55 @@ void r_tex_c::LoadFile()
 
 	auto raw = std::make_unique<image_c>();
 	raw->CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
-	Upload(single_mip_set_c(std::move(raw), renderer->texMaxDim), TF_NOMIPMAP);
+	Upload(*raw, TF_NOMIPMAP);
 	status = DONE;
 }
 
 void r_tex_c::PerformUpload(r_tex_c* tex)
 {
-	tex->Upload(*tex->mipSet, tex->flags);
-	tex->mipSet = {};
+	tex->Upload(*tex->img, tex->flags);
+	tex->img = {};
 	tex->status = DONE;
 }
 
 static std::atomic<size_t> inputBytes = 0;
 static std::atomic<size_t> uploadedBytes = 0;
 
-void r_tex_c::Upload(mip_set_c& mipSet, int flags)
+void r_tex_c::Upload(image_c& img, int flags)
 {
+	static gli::gl gl(gli::gl::PROFILE_ES30);
+
+	const auto& tex = img.tex;
+	target = gl.translate(tex.target());
+	const auto format = gl.translate(tex.format(), tex.swizzles());
+
 	// Find and bind texture name
 	glGenTextures(1, &texId);
-	glBindTexture(GL_TEXTURE_2D, texId);
+	glBindTexture(target, texId);
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
+	glTexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, (GLint)tex.levels());
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, format.Swizzles.r);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, format.Swizzles.g);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, format.Swizzles.b);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, format.Swizzles.a);
+
+	const int miplevels = TF_NOMIPMAP ? 1 : (int)tex.levels();
+
 	// Set filters
-	if (flags & TF_NOMIPMAP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	if (miplevels == 1) {
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	}
 	else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	}
 	if (flags & TF_NEAREST) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
 	else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	}
 
 	constexpr float anisotropyCap = 16.0f;
@@ -645,46 +545,48 @@ void r_tex_c::Upload(mip_set_c& mipSet, int flags)
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &ret);
 		return ret;
 		}();
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY, (std::min)(maxAnisotropy, anisotropyCap));
+	glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY, (std::min)(maxAnisotropy, anisotropyCap));
 
 	// Set repeating
 	if (flags & TF_CLAMP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	}
 	else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	}
 
-	auto image = mipSet.BorrowMipImage(0).lock();
+	const int layers = (int)tex.layers();
+	const auto extent = tex.extent();
+	const bool isTextureArray = target == GL_TEXTURE_2D_ARRAY;
 
-	int intformat = 0;
-	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2D) {
-		// Enable compression
-		if (image->comp == 3) {
-			intformat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
-		}
-		else if (image->comp == 4) {
-			intformat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-		}
-	}
-	if (!intformat) {
-		intformat = GLTypeForImgType(image->type);
-	}
+	if (isTextureArray)
+		glTexStorage3D(target, miplevels, format.Internal, extent.x, extent.y, layers);
+	else
+		glTexStorage2D(target, miplevels, format.Internal, extent.x, extent.y);
 
-	for (int miplevel = 0; miplevel < mipSet.GetMipCount(); ++miplevel) {
-		if (miplevel)
-			image = mipSet.BorrowMipImage(miplevel).lock();
+	for (int layer = 0; layer < layers; ++layer) {
+		for (int miplevel = 0; miplevel < miplevels; ++miplevel) {
 
-		const int up_w = image->width;
-		const int up_h = image->height;
+			const auto extent = tex.extent(miplevel);
 
-		// Upload the mipmap
-		uploadedBytes += up_w * up_h * image->comp;
-		glTexImage2D(GL_TEXTURE_2D, miplevel, intformat, up_w, up_h, 0, GLTypeForImgType(image->type), GL_UNSIGNED_BYTE, image->tex.data(0, 0, 0));
-		if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
-			break;
+			const int up_w = extent.x;
+			const int up_h = extent.y;
+
+			// Upload the mipmap
+			uploadedBytes += tex.size(miplevel);
+			const auto* data = tex.data(layer, 0, miplevel);
+			if (is_compressed(tex.format()))
+				if (isTextureArray)
+					glCompressedTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.External, (GLsizei)tex.size(miplevel), data);
+				else
+					glCompressedTexImage2D(target, miplevel, format.Internal, extent.x, extent.y, 0, (GLsizei)tex.size(miplevel), data);
+			else
+				if (isTextureArray)
+					glTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.External, format.Type, data);
+				else
+					glTexImage2D(target, miplevel, format.Internal, extent.x, extent.y, 0, format.External, format.Type, data);
 		}
 	}
 }

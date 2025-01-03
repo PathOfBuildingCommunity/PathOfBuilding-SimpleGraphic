@@ -205,7 +205,7 @@ public:
 	bool	debugLayers = false;
 
 	int		takeScreenshot = 0;
-	void	DoScreenshot(image_c* i, const char* ext);
+	void	DoScreenshot(image_c* i, int type, const char* ext);
 
 	void	C_Screenshot(IConsole* conHnd, args_c &args);
 

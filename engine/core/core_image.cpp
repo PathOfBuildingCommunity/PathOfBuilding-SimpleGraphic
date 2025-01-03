@@ -35,69 +35,49 @@ image_c::image_c(IConsole* conHnd)
 	: con(conHnd)
 {}
 
-void image_c::CopyRaw(int inType, dword inWidth, dword inHeight, const byte* inDat)
+bool image_c::CopyRaw(int type, dword inWidth, dword inHeight, const byte* inDat)
 {
-	// Populate legacy fields
-	comp = inType & 0xF;
-	type = inType;
-	width = inWidth;
-	height = inHeight;
+	gli::format format = gli::format::FORMAT_UNDEFINED;
+	const glm::ivec2 extent{ inWidth, inHeight };
+	if (type == IMGTYPE_NONE)
+		tex = {};
+		
+	if (type > IMGTYPE_RGBA)
+		return false;
 
-	// Populate gli texture
-	PopulateTex(inDat);
+	if (inWidth >= (1 << 15) || inHeight >= (1 << 15))
+		return false;
+
+	const int comp = type & 0xF;
+	size_t dataSize = extent.x * extent.y * comp;
+
+	switch (comp) {
+	case 0:
+		tex = {};
+		return false;
+	case 1:
+		format = gli::format::FORMAT_L8_UNORM_PACK8;
+		break;
+	case 3:
+		format = gli::format::FORMAT_RGB8_UNORM_PACK8;
+		break;
+	case 4:
+		format = gli::format::FORMAT_RGBA8_UNORM_PACK8;
+		break;
+	default:
+		return false;
+	}
+	tex = gli::texture2d_array(format, extent, 1, 1);
+	if (tex.size(0) == dataSize)
+		memcpy(tex.data(0, 0, 0), inDat, dataSize);
+	else
+		assert(tex.size(0) == dataSize);
+	return true;
 }
 
 void image_c::Free()
 {
 	tex = {};
-}
-
-//TODO(zao): Make this function only care about unpacked source data.
-void image_c::PopulateTex(const byte* dat)
-{
-	gli::format format = gli::format::FORMAT_UNDEFINED;
-	const glm::ivec2 extent{ width, height };
-	size_t dataSize = width * height * comp; // Common default for regular formats.
-
-	const auto PhysicalSize = [](dword width, dword height, dword blockSize, dword side = 4) -> dword {
-		dword numBlocks = ((width + side - 1) / side) * ((height + side - 1) / side);
-		return numBlocks * blockSize;
-		};
-	switch ((imageType_s)type) {
-	case imageType_s::IMGTYPE_NONE:
-		tex = {};
-		return;
-	case imageType_s::IMGTYPE_GRAY:
-		format = gli::format::FORMAT_R8_SRGB_PACK8;
-		break;
-	case imageType_s::IMGTYPE_RGB:
-		format = gli::format::FORMAT_RGB8_SRGB_PACK8;
-		break;
-	case imageType_s::IMGTYPE_RGBA:
-		format = gli::format::FORMAT_RGBA8_SNORM_PACK8;
-		break;
-	case imageType_s::IMGTYPE_RGBA_BC1:
-		format = gli::format::FORMAT_RGBA_DXT1_SRGB_BLOCK8;
-		dataSize = PhysicalSize(width, height, 8);
-		break;
-	case imageType_s::IMGTYPE_RGBA_BC2:
-		format = gli::format::FORMAT_RGBA_DXT3_SRGB_BLOCK16;
-		dataSize = PhysicalSize(width, height, 16);
-		break;
-	case imageType_s::IMGTYPE_RGBA_BC3:
-		format = gli::format::FORMAT_RGBA_DXT5_SRGB_BLOCK16;
-		dataSize = PhysicalSize(width, height, 16);
-		break;
-	case imageType_s::IMGTYPE_RGBA_BC7:
-		format = gli::format::FORMAT_RGBA_BP_SRGB_BLOCK16;
-		dataSize = PhysicalSize(width, height, 16);
-	}
-
-	tex = gli::texture2d(format, extent, 1);
-	if (tex.size(0) == dataSize)
-		memcpy(tex.data(0, 0, 0), dat, dataSize);
-	else
-		assert(tex.size(0) == dataSize);
 }
 
 bool image_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
@@ -202,10 +182,10 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 	}
 
 	// Read image
-	width = hdr.width;
-	height = hdr.height;
-	comp = hdr.depth >> 3;
-	type = ittable[it_m][2];
+	dword width = hdr.width;
+	dword height = hdr.height;
+	int comp = hdr.depth >> 3;
+	int type = ittable[it_m][2];
 	int rowSize = width * comp;
 	std::vector<byte> datBuf(height * rowSize);
 	byte* dat = datBuf.data();
@@ -253,16 +233,18 @@ bool targa_c::Load(const char* fileName, std::optional<size_callback_t> sizeCall
 		}
 	}
 
-	PopulateTex(dat);
-
-	return false;
+	return !CopyRaw(type, width, height, dat);
 }
 
 bool targa_c::Save(const char* fileName)
 {
-	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
+	auto format = tex.format();
+	if (is_compressed(format) || !is_unsigned_integer(format))
 		return true;
-	}
+
+	int comp = (int)component_count(format);
+	if (comp != 3 && comp != 4)
+		return true;
 
 	// Open file
 	fileOutputStream_c out;
@@ -270,13 +252,11 @@ bool targa_c::Save(const char* fileName)
 		return true;
 	}
 
-	if (is_compressed(tex.format()))
-		return true;
-
+	auto extent = tex.extent();
 	auto rc = stbi_write_tga_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-		}, &out, width, height, comp, tex.data(0, 0, 0));
+		}, &out, extent.x, extent.y, comp, tex.data(0, 0, 0));
 
 	return !rc;
 }
@@ -304,7 +284,7 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 		return true;
 	}
 	if (in_comp != 1 && in_comp != 3) {
-		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, comp);
+		con->Warning("JPEG '%s': unsupported component count '%d'", fileName, in_comp);
 		return true;
 	}
 	if (sizeCallback)
@@ -315,23 +295,23 @@ bool jpeg_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallb
 		stbi_image_free(data);
 		return true;
 	}
-	width = x;
-	height = y;
-	comp = in_comp;
-	type = in_comp == 1 ? IMGTYPE_GRAY : IMGTYPE_RGB;
 
-	PopulateTex(data);
+	bool success = CopyRaw(in_comp == 1 ? IMGTYPE_GRAY : IMGTYPE_RGB, x, y, data);
 	stbi_image_free(data);
 
-	return false;
+	return !success;
 }
 
 bool jpeg_c::Save(const char* fileName)
 {
 	// JPEG only supports RGB and grayscale images
-	if (type != IMGTYPE_RGB && type != IMGTYPE_GRAY) {
+	auto format = tex.format();
+	if (is_compressed(format) || !is_unsigned_integer(format))
 		return true;
-	}
+
+	int comp = (int)component_count(format);
+	if (comp != 1 && comp != 3)
+		return true;
 
 	// Open the file
 	fileOutputStream_c out;
@@ -339,13 +319,11 @@ bool jpeg_c::Save(const char* fileName)
 		return true;
 	}
 
-	if (is_compressed(tex.format()))
-		return true;
-
+	auto extent = tex.extent();
 	int rc = stbi_write_jpg_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-	}, &out, width, height, comp, tex.data(0, 0, 0), quality);
+	}, &out, extent.x, extent.y, comp, tex.data(0, 0, 0), quality);
 	return !rc;
 }
 
@@ -372,30 +350,34 @@ bool png_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 		return true;
 	}
 
-	width = x;
-	height = y;
+	dword width = x;
+	dword height = y;
 	if (sizeCallback)
 		(*sizeCallback)(width, height);
 
-	comp = (in_comp == 1 || in_comp == 3) ? 3 : 4;
-	type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
+	int comp = (in_comp == 1 || in_comp == 3) ? 3 : 4;
+	int type = comp == 3 ? IMGTYPE_RGB : IMGTYPE_RGBA;
 	stbi_uc* data = stbi_load_from_memory(fileData.data(), (int)fileData.size(), &x, &y, &in_comp, comp);
 	if (!data) {
 		stbi_image_free(data);
 		return true;
 	}
 
-	PopulateTex(data);
+	bool success = CopyRaw(type, width, height, data);
 	stbi_image_free(data);
 
-	return false;
+	return !success;
 }
 
 bool png_c::Save(const char* fileName)
 {
-	if (type != IMGTYPE_RGB && type != IMGTYPE_RGBA) {
+	auto format = tex.format();
+	if (is_compressed(format) || !is_unsigned_integer(format))
 		return true;
-	}
+
+	int comp = (int)component_count(format);
+	if (comp != 3 && comp != 4)
+		return true;
 
 	// Open file
 	fileOutputStream_c out;
@@ -403,10 +385,11 @@ bool png_c::Save(const char* fileName)
 		return true;
 	}
 
+	auto extent = tex.extent();
 	auto rc = stbi_write_png_to_func([](void* ctx, void* data, int size) {
 		auto out = (fileOutputStream_c*)ctx;
 		out->Write(data, size);
-	}, &out, width, height, comp, tex.data(0, 0, 0), width * comp);
+	}, &out, extent.x, extent.y, comp, tex.data(0, 0, 0), extent.x * comp);
 	
 	return !rc;
 }
@@ -434,18 +417,15 @@ bool gif_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallba
 			stbi_image_free(data);
 			return true;
 		}
-		width = x;
-		height = y;
+		dword width = x;
+		dword height = y;
 		if (sizeCallback)
 			(*sizeCallback)(width, height);
 
-		comp = in_comp;
-		type = IMGTYPE_RGBA;
-
-		PopulateTex(data);
+		bool success = CopyRaw(IMGTYPE_RGBA, width, height, data);
 		stbi_image_free(data);
 
-		return false;
+		return !success;
 	}
 }
 
@@ -490,6 +470,9 @@ bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCa
 	JxlDecoderCloseInput(dec.get());
 
 	std::vector<byte> datBuf;
+	int width{};
+	int height{};
+	int comp{};
 
 	while (true) {
 		JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
@@ -507,13 +490,7 @@ bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCa
 			if (sizeCallback)
 				(*sizeCallback)(width, height);
 			comp = info.num_color_channels + !!info.alpha_bits;
-			if (comp == 1)
-				type = IMGTYPE_GRAY;
-			else if (comp == 3)
-				type = IMGTYPE_RGB;
-			else if (comp == 4)
-				type = IMGTYPE_RGBA;
-			else
+			if (comp != 1 && comp != 3 && comp != 4)
 				return true;
 
 			if (runner)
@@ -535,8 +512,7 @@ bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCa
 		case JXL_DEC_SUCCESS:
 		case JXL_DEC_FULL_IMAGE: {
 			// We don't care about animations, consider loading completed when a full image has obtained.
-			PopulateTex(datBuf.data());
-			return false;
+			return !CopyRaw(g_imageTypeFromComp[comp], width, height, datBuf.data());
 		} break;
 
 		default:

@@ -1515,22 +1515,19 @@ void r_renderer_c::EndFrame()
 	case R_SSTGA:
 	{
 		targa_c i(sys->con);
-		i.type = IMGTYPE_RGB;
-		DoScreenshot(&i, "tga");
+		DoScreenshot(&i, IMGTYPE_RGB, "tga");
 	}
 	break;
 	case R_SSJPEG:
 	{
 		jpeg_c i(sys->con);
-		i.type = IMGTYPE_RGB;
-		DoScreenshot(&i, "jpg");
+		DoScreenshot(&i, IMGTYPE_RGB, "jpg");
 	}
 	break;
 	case R_SSPNG:
 	{
 		png_c i(sys->con);
-		i.type = IMGTYPE_RGB;
-		DoScreenshot(&i, "png");
+		DoScreenshot(&i, IMGTYPE_RGB, "png");
 	}
 	break;
 	}
@@ -1855,9 +1852,9 @@ void r_renderer_c::C_Screenshot(IConsole* conHnd, args_c& args)
 	}
 }
 
-void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
+void r_renderer_c::DoScreenshot(image_c* i, int type, const char* ext)
 {
-	if (i->type != IMGTYPE_RGB) {
+	if (type != IMGTYPE_RGB) {
 		return;
 	}
 	auto& rt = GetPresentRenderTarget();
@@ -1898,11 +1895,8 @@ void r_renderer_c::DoScreenshot(image_c* i, const char* ext)
 	sbuf.clear();
 
 	// Set image info
-	i->PopulateTex(ss.data());
+	i->CopyRaw(IMGTYPE_RGB, xs, ys, ss.data());
 	ss.clear();
-	i->width = xs;
-	i->height = ys;
-	i->comp = 3;
 
 	time_t curTime;
 	time(&curTime);

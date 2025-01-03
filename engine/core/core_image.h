@@ -11,7 +11,7 @@
 #include <functional>
 #include <optional>
 
-#include <gli/texture2d.hpp>
+#include <gli/texture2d_array.hpp>
 
 // Image types
 enum imageType_s {
@@ -32,17 +32,20 @@ enum imageType_s {
 	IMGTYPE_RGBA_BC7 = 0xD4,
 };
 
+constexpr imageType_s g_imageTypeFromComp[]{
+	IMGTYPE_NONE,
+	IMGTYPE_GRAY,
+	IMGTYPE_NONE,
+	IMGTYPE_RGB,
+	IMGTYPE_RGBA,
+};
+
 // Image
 class image_c {
 public:
-	dword width = 0;
-	dword height = 0;
-	int comp = 0;
-	int type = 0;
-
 	// This `tex` member supersedes the past raw data and metadata fields in order to hold
 	// both unblocked and blocked texture formats with array layers and mip levels.
-	gli::texture2d tex{};
+	gli::texture2d_array tex{};
 
 	explicit image_c(IConsole* conHnd = NULL);
 	virtual ~image_c() = default;
@@ -54,9 +57,8 @@ public:
 	virtual bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {});
 	virtual bool Save(const char* fileName);
 
-	void CopyRaw(int type, dword width, dword height, const byte* dat);
+	bool CopyRaw(int type, dword width, dword height, const byte* dat);
 	void Free();
-	void PopulateTex(const byte* inDat);
 
 	static image_c* LoaderForFile(IConsole* conHnd, const char* fileName);
 };
