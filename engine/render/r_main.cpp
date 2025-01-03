@@ -318,7 +318,7 @@ bool AabbAabbIntersects(r_aabb_s& a, r_aabb_s& b)
 
 struct Vertex {
 	float x, y;
-	float u, v;
+	float u, v, w;
 	float r, g, b, a;
 	float viewX, viewY, viewW, viewH;
 	float texId;
@@ -390,7 +390,7 @@ void Batch::Execute(GLuint sharedVbo, size_t vertexBase)
 	auto dataSize = vertices.size() * sizeof(Vertex);
 	glBufferSubData(GL_ARRAY_BUFFER, dataOff, dataSize, dataPtr);
 	glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, x));
-	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
+	glVertexAttribPointer(uvAttr, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
 	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
 	glVertexAttribPointer(texIdAttr, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, texId));
 	glVertexAttribPointer(viewportAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, viewX));
@@ -528,7 +528,7 @@ struct AdjacentMergeStrategy : RenderStrategy {
 				texSlot = std::distance(textures.begin(), texI);
 			}
 
-			Vertex quad[4];
+			Vertex quad[4]{};
 			for (int v = 0; v < 4; v++) {
 				auto& q = quad[v];
 				auto& vp = nextViewport_;
@@ -622,7 +622,7 @@ private:
 					}
 				}
 				else {
-					glBindTexture(GL_TEXTURE_2D, 0);
+					glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
 				}
 			}
 			glActiveTexture(GL_TEXTURE0);
@@ -776,21 +776,21 @@ static std::string GetProgramInfoLog(GLuint id)
 	return std::string(msg.data(), msg.data() + len);
 }
 
-static char const* s_tintedTextureVertexSource = R"(#version 100
+static char const* s_tintedTextureVertexSource = R"(#version 300 es
 
 uniform mat4 mvp_matrix;
 
-attribute vec2 a_vertex;
-attribute vec2 a_texcoord;
-attribute vec4 a_tint;
-attribute float a_texId;
-attribute vec4 a_viewport;
+in vec2 a_vertex;
+in vec3 a_texcoord;
+in vec4 a_tint;
+in float a_texId;
+in vec4 a_viewport;
 
-varying vec2 v_screenPos;
-varying vec2 v_texcoord;
-varying vec4 v_tint;
-varying float v_texId;
-varying vec4 v_viewport;
+out vec2 v_screenPos;
+out vec3 v_texcoord;
+out vec4 v_tint;
+out float v_texId;
+out vec4 v_viewport;
 
 void main(void)
 {
@@ -808,17 +808,19 @@ void main(void)
 }
 )";
 
-static char const* s_tintedTextureFragmentTemplate = R"(#version 100
+static char const* s_tintedTextureFragmentTemplate = R"(#version 300 es
 precision mediump float;
 
-uniform sampler2D s_tex[{SG_TEXTURE_COUNT}];
+uniform highp sampler2DArray s_tex[{SG_TEXTURE_COUNT}];
 uniform vec4 i_tint;
 
-varying vec2 v_screenPos;
-varying vec2 v_texcoord;
-varying vec4 v_tint;
-varying float v_texId;
-varying vec4 v_viewport; // x0, y0, x1, y1
+in vec2 v_screenPos;
+in vec3 v_texcoord;
+in vec4 v_tint;
+in float v_texId;
+in vec4 v_viewport; // x0, y0, x1, y1
+
+out vec4 f_fragColor;
 
 void main(void)
 {{
@@ -831,15 +833,15 @@ void main(void)
 	}}
 	vec4 color;
 	{SG_TEXTURE_SWITCH}
-	gl_FragColor = color * v_tint;
+	f_fragColor = color * v_tint;
 }}
 )";
 
-std::string const s_scaleVsSource = R"(#version 100
-attribute vec4 a_position;
-attribute vec2 a_texcoord;
+std::string const s_scaleVsSource = R"(#version 300 es
+in vec4 a_position;
+in vec2 a_texcoord;
 
-varying vec2 v_texcoord;
+out vec2 v_texcoord;
 
 void main(void) {
 	gl_Position = a_position;
@@ -847,16 +849,18 @@ void main(void) {
 }
 )";
 
-std::string const s_scaleFsSource = R"(#version 100
+std::string const s_scaleFsSource = R"(#version 300 es
 precision mediump float;
 
-uniform sampler2D s_tex;
+uniform highp sampler2D s_tex;
 
-varying vec2 v_texcoord;
+in vec2 v_texcoord;
+
+out vec4 f_fragColor;
 
 void main(void) {
-	vec3 color = texture2D(s_tex, v_texcoord).rgb;
-	gl_FragColor = vec4(color, 1.0);
+	vec3 color = texture(s_tex, v_texcoord).rgb;
+	f_fragColor = vec4(color, 1.0);
 }
 )";
 
@@ -961,7 +965,7 @@ void r_renderer_c::Init(r_featureFlag_e features)
 				else {
 					fmt::format_to(fmt::appender(buf), "else if (v_texId < {}.5)", i);
 				}
-				fmt::format_to(fmt::appender(buf), "color = texture2D(s_tex[{}], v_texcoord);\n", i);
+				fmt::format_to(fmt::appender(buf), "color = texture(s_tex[{}], v_texcoord);\n", i);
 			}
 			textureSwitch = to_string(buf);
 		}
