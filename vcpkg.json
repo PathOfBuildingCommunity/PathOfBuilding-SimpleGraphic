@@ -11,6 +11,8 @@
     "luajit",
     "pkgconf",
     "re2",
+    "sol2",
+    "zstd",
     "zlib"
   ]
 }

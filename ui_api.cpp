@@ -7,7 +7,10 @@
 #include "ui_local.h"
 
 #include <filesystem>
+#include <fstream>
 #include <zlib.h>
+
+#include "core/core_tex_manipulation.h"
 
 /* OnFrame()
 ** OnChar("<char>")
@@ -35,6 +38,18 @@
 ** isLoading = imgHandle:IsLoading()
 ** imgHandle:SetLoadingPriority(pri)
 ** width, height = imgHandle:ImageSize()
+**
+** texHandle = NewTexHandle()
+** texHandle:Allocate(format, width, height, layerCount, mipCount)
+** texHandle:Load("<fileName>")
+** texHandle:Save("<fileName>")
+** info = texHandle:Info()
+** isvalid = texHandle:IsValid()
+** texHandle:StackTextures({tex1, tex2, .. texN})  -- all textures must be same shape and format
+** -- texHandle:SetLayer(srcTexHandle, layer)
+** -- texHandle:CopyImage(srcTexHandle, targetX, targetY)
+** -- texHandle:Transcode(newFormat)
+** -- texHandle:GenerateMipmaps()
 **
 ** RenderInit(["flag1"[, "flag2"...]])  flag:{"DPI_AWARE"}
 ** width, height = GetScreenSize()
@@ -94,7 +109,7 @@
 // Grab UI main pointer from the registry
 static ui_main_c* GetUIPtr(lua_State* L)
 {
-	lua_rawgeti(L, LUA_REGISTRYINDEX, 0);
+	lua_geti(L, LUA_REGISTRYINDEX, ui_main_c::REGISTRY_KEY);
 	ui_main_c* ui = (ui_main_c*)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	return ui;
@@ -296,7 +311,7 @@ SG_LUA_CPP_FUN_BEGIN(NewArtHandle)
 		return 0;
 
 	const auto comp = component_count(format);
-	if (comp != 1 || comp != 3 || comp != 4)
+	if (comp != 1 && comp != 3 && comp != 4)
 		return 0;
 
 	artHandle_s* artHandle = (artHandle_s*)lua_newuserdata(L, sizeof(artHandle_s));
@@ -1751,6 +1766,7 @@ static int l_Exit(lua_State* L)
 
 int ui_main_c::InitAPI(lua_State* L)
 {
+	sol::state_view lua(L);
 	luaL_openlibs(L);
 
 	// Add "lua/" subdir for non-JIT Lua
@@ -1813,6 +1829,33 @@ int ui_main_c::InitAPI(lua_State* L)
 	lua_pushcfunction(L, l_artHandleSize);
 	lua_setfield(L, -2, "Size");
 	lua_setfield(L, LUA_REGISTRYINDEX, "uiarthandlemeta");
+
+	sol::usertype<Texture_c> textureType = lua.new_usertype<Texture_c>("Texture",
+		sol::constructors<Texture_c()>());
+
+	textureType["Allocate"] = sol::overload(
+		sol::resolve<bool(gli::format,int,int,int,int)>(&Texture_c::Allocate),
+		sol::resolve<bool(std::string_view,int,int,int,int)>(&Texture_c::Allocate));
+	textureType["Load"] = &Texture_c::Load;
+	textureType["Save"] = &Texture_c::Save;
+	textureType["Info"] = &Texture_c::Info;
+	textureType["IsValid"] = &Texture_c::IsValid;
+	
+	//textureType["SetLayer"] = &Texture_c::SetLayer;
+	//textureType["CopyImage"] = &Texture_c::CopyImage;
+	//textureType["Transcode"] = &Texture_c::Transcode;
+	//textureType["GenerateMipmaps"] = &Texture_c::Transcode;
+
+	textureType["StackTextures"] = &Texture_c::StackTextures;
+
+	sol::usertype<TextureInfo_s> textureInfoType = lua.new_usertype<TextureInfo_s>("TextureInfo");
+
+	textureInfoType["formatId"] = &TextureInfo_s::formatId;
+	textureInfoType["formatStr"] = &TextureInfo_s::formatStr;
+	textureInfoType["width"] = &TextureInfo_s::width;
+	textureInfoType["height"] = &TextureInfo_s::height;
+	textureInfoType["layerCount"] = &TextureInfo_s::layerCount;
+	textureInfoType["mipCount"] = &TextureInfo_s::mipCount;
 
 	// Rendering
 	ADDFUNC(RenderInit);

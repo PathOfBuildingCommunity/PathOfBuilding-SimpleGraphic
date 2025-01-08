@@ -115,6 +115,7 @@ find_package(gli CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
 find_package(PkgConfig REQUIRED)
 find_package(re2 CONFIG REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -212,8 +213,10 @@ target_link_libraries(SimpleGraphic
     PkgConfig::libjxl
     PkgConfig::libjxl_threads
     re2::re2
+    sol2
     Threads::Threads
     ZLIB::ZLIB
+    zstd::libzstd_shared
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
