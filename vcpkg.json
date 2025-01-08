@@ -9,6 +9,7 @@
     "gli",
     "libjxl",
     "luajit",
+    "ms-gsl",
     "pkgconf",
     "re2",
     "sol2",
