@@ -462,7 +462,7 @@ void r_tex_c::LoadFile()
 
 	// Try to load image file using appropriate loader
 	std::string loadPath = fileName;
-	std::unique_ptr<image_c> img(image_c::LoaderForFile(renderer->sys->con, loadPath.c_str()));
+	img = std::unique_ptr<image_c>(image_c::LoaderForFile(renderer->sys->con, loadPath.c_str()));
 	if (img) {
 		auto sizeCallback = [this](int width, int height) {
 			this->fileWidth = width;
@@ -523,7 +523,7 @@ void r_tex_c::Upload(image_c& img, int flags)
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, format.Swizzles.b);
 	glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, format.Swizzles.a);
 
-	const int miplevels = TF_NOMIPMAP ? 1 : (int)tex.levels();
+	const int miplevels = (int)tex.levels();
 
 	// Set filters
 	if (miplevels == 1) {
@@ -579,14 +579,14 @@ void r_tex_c::Upload(image_c& img, int flags)
 			const auto* data = tex.data(layer, 0, miplevel);
 			if (is_compressed(tex.format()))
 				if (isTextureArray)
-					glCompressedTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.External, (GLsizei)tex.size(miplevel), data);
+					glCompressedTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.Internal, (GLsizei)tex.size(miplevel), data);
 				else
-					glCompressedTexImage2D(target, miplevel, format.Internal, extent.x, extent.y, 0, (GLsizei)tex.size(miplevel), data);
+					glCompressedTexSubImage2D(target, miplevel, 0, 0, extent.x, extent.y, format.Internal, (GLsizei)tex.size(miplevel), data);
 			else
 				if (isTextureArray)
 					glTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.External, format.Type, data);
 				else
-					glTexImage2D(target, miplevel, format.Internal, extent.x, extent.y, 0, format.External, format.Type, data);
+					glTexSubImage2D(target, miplevel, 0, 0, extent.x, extent.y, format.External, format.Type, data);
 		}
 	}
 }

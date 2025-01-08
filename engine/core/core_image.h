@@ -104,3 +104,11 @@ public:
 	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(const char* fileName) override;
 };
+
+// DDS Image
+class dds_c : public image_c {
+public:
+	dds_c(IConsole* conHnd) : image_c(conHnd) {}
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
+};

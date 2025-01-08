@@ -7,6 +7,7 @@
 #include "common.h"
 
 #include "core_image.h"
+#include "core_compress.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -18,6 +19,7 @@
 #include "stb_image_write.h"
 
 #include <algorithm>
+#include <filesystem>
 #include <thread>
 #include <vector>
 
@@ -26,6 +28,7 @@
 #include <jxl/resizable_parallel_runner_cxx.h>
 
 #include <gli/gli.hpp>
+#include <gsl/span>
 
 // =========
 // Raw Image
@@ -97,6 +100,18 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 		conHnd->Warning("'%s' doesn't exist or cannot be opened", fileName);
 		return NULL;
 	}
+
+	// Detect first by extension, as decompressing could be expensive.
+	auto p = std::filesystem::u8path(fileName);
+	if (p.extension() == ".zst") {
+		auto inner = p.filename();
+		inner.replace_extension();
+		if (inner.extension() == ".dds")
+			return new dds_c(conHnd);
+	}
+	if (p.extension() == ".dds")
+		return new dds_c(conHnd);
+
 	// Attempt to detect image file type from first 12 bytes of file
 	byte dat[12];
 	if (in.Read(dat, 12)) {
@@ -115,6 +130,9 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (auto sig = JxlSignatureCheck(dat, 12); sig == JXL_SIG_CODESTREAM || sig == JXL_SIG_CONTAINER) {
 		// JPEG XL
 		return new jpeg_xl_c(conHnd);
+	} else if (*(dword*)dat == 0x20534444) {
+		// D D S 0x20
+		return new dds_c(conHnd);
 	} else if ((dat[1] == 0 && (dat[2] == 2 || dat[2] == 3 || dat[2] == 10 || dat[2] == 11)) || (dat[1] == 1 && (dat[2] == 1 || dat[2] == 9))) {
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
@@ -524,4 +542,36 @@ bool jpeg_xl_c::Save(const char* fileName)
 {
 	// Yeah, nah.
 	return false;
+}
+
+bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
+{
+	auto p = std::filesystem::u8path(fileName);
+	// Open file
+	fileInputStream_c in;
+	if (in.FileOpen(fileName, true))
+		return true;
+
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size()))
+		return true;
+
+	if (p.extension() == ".zst" || fileData.size() >= 4 && *(uint32_t*)fileData.data() == 0xFD2FB528) {
+		auto ret = DecompressZstandard(as_bytes(gsl::span(fileData)));
+		if (!ret.has_value())
+			return true;
+		fileData.assign(ret->data(), ret->data() + ret->size());
+	}
+
+	tex = gli::texture2d_array(gli::load_dds((const char*)fileData.data(), fileData.size()));
+	if (sizeCallback)
+		(*sizeCallback)(tex.extent().x, tex.extent().y);
+
+	return false;
+}
+
+bool dds_c::Save(const char* fileName)
+{
+	// Nope.
+	return true;
 }
