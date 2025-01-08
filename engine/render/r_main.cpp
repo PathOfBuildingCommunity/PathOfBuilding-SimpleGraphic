@@ -1131,10 +1131,11 @@ void r_renderer_c::PumpShaders()
 {
 	texMan->ProcessPendingTextureUploads();
 	for (size_t idx = 0; idx < numShader; ++idx)
-		if (auto tex = shaderList[idx]->tex; tex && tex->status != r_tex_c::DONE) {
-			inhibitElision = true;
-			break;
-		}
+		if (auto* sh = shaderList[idx])
+			if (auto tex = sh->tex; tex && tex->status != r_tex_c::DONE) {
+				inhibitElision = true;
+				break;
+			}
 }
 
 void r_renderer_c::BeginFrame()
