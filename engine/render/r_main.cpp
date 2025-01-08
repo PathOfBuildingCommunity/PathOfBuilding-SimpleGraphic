@@ -163,6 +163,7 @@ struct r_layerCmdQuad_s {
 		float t[4];
 		float x[4];
 		float y[4];
+		int stackLayer;
 	} quad;
 };
 
@@ -262,7 +263,7 @@ void r_layer_c::Color(col4_t col)
 	}
 }
 
-void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3)
+void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3, int stackLayer)
 {
 	if (auto* cmd = (r_layerCmdQuad_s*)NewCommand(CommandSize(r_layerCmd_s::QUAD))) {
 		cmd->cmd = r_layerCmd_s::QUAD;
@@ -270,6 +271,7 @@ void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1,
 		cmd->quad.t[0] = t0; cmd->quad.t[1] = t1; cmd->quad.t[2] = t2; cmd->quad.t[3] = t3;
 		cmd->quad.x[0] = x0; cmd->quad.x[1] = x1; cmd->quad.x[2] = x2; cmd->quad.x[3] = x3;
 		cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
+		cmd->quad.stackLayer = stackLayer;
 	}
 }
 
@@ -534,6 +536,7 @@ struct AdjacentMergeStrategy : RenderStrategy {
 				auto& vp = nextViewport_;
 				q.u = c->quad.s[v];
 				q.v = c->quad.t[v];
+				q.w = (float)c->quad.stackLayer;
 				q.x = c->quad.x[v];
 				q.y = c->quad.y[v];
 				q.r = tint_[0];
@@ -1284,14 +1287,14 @@ void r_renderer_c::EndFrame()
 			sprintf(str, "%zu (%4d,%4d) [%2d]", layerSort[l]->numCmd, layerSort[l]->layer, layerSort[l]->subLayer, l);
 			float w = (float)DrawStringWidth(16, F_FIXED, str);
 			DrawColor(0x7F000000);
-			DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - (l + 2) * 16.0f, w, 16);
+			DrawImage(NULL, { (float)VirtualScreenWidth() - w, VirtualScreenHeight() - (l + 2) * 16.0f }, { w, 16 });
 			DrawStringFormat(0, VirtualScreenHeight() - (l + 2) * 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 		}
 		char str[1024];
 		sprintf(str, "%zu", totalCmd);
 		float w = (float)DrawStringWidth(16, F_FIXED, str);
 		DrawColor(0xAF000000);
-		DrawImage(NULL, (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f, w, 16);
+		DrawImage(NULL, { (float)VirtualScreenWidth() - w, VirtualScreenHeight() - 16.0f }, { w, 16 });
 		DrawStringFormat(0, VirtualScreenHeight() - 16.0f, F_RIGHT, 16, colorWhite, F_FIXED, str);
 	}
 
@@ -1717,21 +1720,37 @@ void r_renderer_c::DrawColor(dword col)
 	drawColor[3] = (col >> 24) / 255.0f;
 }
 
-void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, float x, float y, float w, float h, float s1, float t1, float s2, float t2)
+void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1, glm::vec2 uv2, int stackLayer)
 {
-	DrawImageQuad(hnd, x, y, x + w, y, x + w, y + h, x, y + h, s1, t1, s2, t1, s2, t2, s1, t2);
+	DrawImageQuad(hnd,
+		pos,
+		pos + glm::vec2{ extent.x, 0 },
+		pos + extent,
+		pos + glm::vec2{ 0, extent.y },
+		uv1,
+		{ uv2.s, uv1.t },
+		uv2,
+		{ uv1.s, uv2.t },
+		stackLayer);
 }
 
-void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float s0, float t0, float s1, float t1, float s2, float t2, float s3, float t3)
+void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, glm::vec2 uv3, int stackLayer)
 {
 	if (hnd) {
 		curLayer->Bind(hnd->sh->tex);
+		stackLayer = clamp(stackLayer, 0, (int)hnd->sh->tex->stackLayers - 1);
 	}
 	else {
 		curLayer->Bind(whiteImage->sh->tex);
+		stackLayer = 0;
 	}
 	curLayer->Color(drawColor);
-	curLayer->Quad(s0, t0, x0, y0, s1, t1, x1, y1, s2, t2, x2, y2, s3, t3, x3, y3);
+	curLayer->Quad(
+		uv0.s, uv0.t, p0.x, p0.y,
+		uv1.s, uv1.t, p1.x, p1.y,
+		uv2.s, uv2.t, p2.x, p2.y,
+		uv3.s, uv3.t, p3.x, p3.y,
+		stackLayer);
 }
 
 void r_renderer_c::DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str)

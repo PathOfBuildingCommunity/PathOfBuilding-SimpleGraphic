@@ -59,8 +59,8 @@
 ** GetDrawLayer()
 ** SetViewport([x, y, width, height])
 ** SetDrawColor(red, green, blue[, alpha]) / SetDrawColor("<escapeStr>")
-** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])
-** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])
+** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, mask]])  mask: nil|"arc"|"circle" // TODO(zao): define how mask works, none implemented yet
+** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, mask]])
 ** DrawString(left, top, align{"LEFT"|"CENTER"|"RIGHT"|"CENTER_X"|"RIGHT_X"}, height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** width = DrawStringWidth(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** index = DrawStringCursorIndex(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>", cursorX, cursorY)
@@ -852,30 +852,77 @@ static int l_DrawImage(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImage() called outside of OnFrame");
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 5, "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])");
+	const char* usage = "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, mask]])";
+	ui->LAssert(L, n >= 5, usage);
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImage() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
-	if (!lua_isnil(L, 1)) {
-		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
-		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImage(): image handle has no image loaded");
-		hnd = imgHandle->hnd;
+	glm::vec2 xys[2]{}, uvs[2]{};
+	int stackLayer = 0;
+
+	// | n  |img| corners | uvs | stack | mask |
+	// | 5  | X | X       |	    |       |      |
+	// | 6  | X | X       |     | X     |      |
+	// | 7  | X | X       |     | X     | X    |
+	// | 9  | X | X       | X   |       |      |
+	// | 10 | X | X       | X   | X     |      |
+	// | 11 | X | X       | X   | X     | X    |
+	
+	enum ArgFlag : uint8_t { AF_IMG = 0x1, AF_XY = 0x2, AF_UV = 0x4, AF_STACK = 0x8, AF_MASK = 0x10 };
+	ArgFlag af{};
+	switch (n) {
+	case 11: af = (ArgFlag)(af | AF_MASK);
+	case 10: af = (ArgFlag)(af | AF_STACK);
+	case 9: af = (ArgFlag)(af | AF_IMG | AF_XY | AF_UV); break;
+	case 7: af = (ArgFlag)(af | AF_MASK);
+	case 6: af = (ArgFlag)(af | AF_STACK);
+	case 5: af = (ArgFlag)(af | AF_IMG | AF_XY); break;
+	default: ui->LAssert(L, false, usage);
 	}
-	float arg[8];
-	if (n > 5) {
-		ui->LAssert(L, n >= 9, "DrawImage(): incomplete set of texture coordinates provided");
-		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
+
+	int k = 1;
+	if (af & AF_IMG) {
+		if (!lua_isnil(L, k)) {
+			imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, k);
+			ui->LAssert(L, imgHandle->hnd != NULL, "DrawImage(): image handle has no image loaded");
+			hnd = imgHandle->hnd;
 		}
-		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
+		k += 1;
+	}
+	
+	if (af & AF_XY) {
+		for (int i = k; i < k + 4; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			const int idx = i - k;
+			xys[idx/2][idx%2] = (float)lua_tonumber(L, i);
+		}
+		k += 4;
+	}
+
+	if (af & AF_UV) {
+		for (int i = k; i < k + 4; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			int idx = i - k;
+			uvs[idx/2][idx%2] = (float)lua_tonumber(L, i);
+		}
+		k += 4;
 	}
 	else {
-		for (int i = 2; i <= 5; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
-		}
-		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3]);
+		uvs[0] = { 0, 0 };
+		uvs[1] = { 1, 1 };
 	}
+
+	if (af & AF_STACK) {
+		ui->LAssert(L, lua_isinteger(L, k), "DrawImage() argument %d: expected integer, got %s", k, luaL_typename(L, k));
+		stackLayer = (int)lua_tointeger(L, k);
+		k += 1;
+	}
+
+	if (af & AF_MASK) {
+		ui->LAssert(L, lua_isnil(L, k) || lua_istable(L, k), "DrawImage() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+	}
+
+	ui->renderer->DrawImage(hnd, xys[0], xys[1], uvs[0], uvs[1], stackLayer);
+
 	return 0;
 }
 
@@ -885,30 +932,81 @@ static int l_DrawImageQuad(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImageQuad() called outside of OnFrame");
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 9, "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])");
+	const char* usage = "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, mask]])";
+	ui->LAssert(L, n >= 9, usage);
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImageQuad() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
+
 	r_shaderHnd_c* hnd = NULL;
-	if (!lua_isnil(L, 1)) {
-		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
-		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImageQuad(): image handle has no image loaded");
-		hnd = imgHandle->hnd;
+	glm::vec2 xys[4]{}, uvs[4]{};
+	int stackLayer{};
+	
+	// | n  |img| corners | uvs | stack | mask |
+	// | 9  | X | X       |	    |       |      |
+	// | 10 | X | X       |     | X     |      |
+	// | 11 | X | X       |     | X     | X    |
+	// | 17 | X | X       | X   |       |      |
+	// | 18 | X | X       | X   | X     |      |
+	// | 19 | X | X       | X   | X     | X    |
+
+	enum ArgFlag : uint8_t { AF_IMG = 0x1, AF_XY = 0x2, AF_UV = 0x4, AF_STACK = 0x8, AF_MASK = 0x10 };
+	ArgFlag af{};
+	switch (n) {
+	case 19: af = (ArgFlag)(af | AF_MASK);
+	case 18: af = (ArgFlag)(af | AF_STACK);
+	case 17: af = (ArgFlag)(af | AF_IMG | AF_XY | AF_UV); break;
+	case 11: af = (ArgFlag)(af | AF_MASK);
+	case 10: af = (ArgFlag)(af | AF_STACK);
+	case 9: af = (ArgFlag)(af | AF_IMG | AF_XY); break;
+	default: ui->LAssert(L, false, usage);
 	}
-	float arg[16];
-	if (n > 9) {
-		ui->LAssert(L, n >= 17, "DrawImageQuad(): incomplete set of texture coordinates provided");
-		for (int i = 2; i <= 17; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
+
+	int k = 1;
+	if (af & AF_IMG) {
+		if (!lua_isnil(L, k)) {
+			imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, k);
+			ui->LAssert(L, imgHandle->hnd != NULL, "DrawImageQuad(): image handle has no image loaded");
+			hnd = imgHandle->hnd;
 		}
-		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7], arg[8], arg[9], arg[10], arg[11], arg[12], arg[13], arg[14], arg[15]);
+		k += 1;
+	}
+
+	if (af & AF_XY) {
+		for (int i = k; i < k + 8; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			const int idx = i - k;
+			xys[idx / 2][idx % 2] = (float)lua_tonumber(L, i);
+		}
+		k += 8;
+	}
+
+	if (af & AF_UV) {
+		for (int i = k; i < k + 8; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			int idx = i - k;
+			uvs[idx / 2][idx % 2] = (float)lua_tonumber(L, i);
+		}
+		k += 8;
 	}
 	else {
-		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
-		}
-		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
+		uvs[0] = { 0, 0 };
+		uvs[1] = { 1, 0 };
+		uvs[2] = { 1, 1 };
+		uvs[3] = { 0, 1 };
 	}
+
+	if (af & AF_STACK) {
+		ui->LAssert(L, lua_isinteger(L, k), "DrawImageQuad() argument %d: expected integer, got %s", k, luaL_typename(L, k));
+		stackLayer = (int)lua_tointeger(L, k);
+		k += 1;
+	}
+
+	if (af & AF_MASK) {
+		ui->LAssert(L, lua_isnil(L, k) || lua_istable(L, k), "DrawImageQuad() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+	}
+
+
+	ui->renderer->DrawImageQuad(hnd, xys[0], xys[1], xys[2], xys[3], uvs[0], uvs[1], uvs[2], uvs[3], stackLayer);
+
 	return 0;
 }
 

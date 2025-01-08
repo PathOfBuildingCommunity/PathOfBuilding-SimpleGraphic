@@ -37,6 +37,7 @@ public:
 	std::atomic<dword> fileHeight;
 	std::unique_ptr<image_c> img;
 	GLenum target{};
+	size_t stackLayers = 1;
 
 	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, std::unique_ptr<image_c> img, int flags);

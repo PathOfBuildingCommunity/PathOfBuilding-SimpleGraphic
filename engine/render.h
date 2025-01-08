@@ -4,6 +4,8 @@
 // Render Global Header
 //
 
+#include <glm/vec2.hpp>
+
 // =======
 // Classes
 // =======
@@ -88,8 +90,8 @@ public:
 	virtual void	SetBlendMode(int mode) = 0;
 	virtual void	DrawColor(const col4_t col = NULL) = 0;
 	virtual void	DrawColor(dword col) = 0;
-	virtual void	DrawImage(r_shaderHnd_c* hnd, float x, float y, float w, float h, float s1 = 0.0f, float t1 = 0.0f, float s2 = 1.0f, float t2 = 1.0f) = 0;
-	virtual void	DrawImageQuad(r_shaderHnd_c* hnd, float x0, float y0, float x1, float y1, float x2, float y2, float x3, float y3, float s0 = 0, float t0 = 0, float s1 = 1, float t1 = 0, float s2 = 1, float t2 = 1, float s3 = 0, float t3 = 1) = 0;
+	virtual void	DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1 = { 0, 0 }, glm::vec2 uv2 = { 1, 1 }, int stackLayer = 0) = 0;
+	virtual void	DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, glm::vec2 uv0 = { 0, 0 }, glm::vec2 uv1 = { 1, 0 }, glm::vec2 uv2 = { 1, 1 }, glm::vec2 uv3 = { 0, 1 }, int stackLayer = 0) = 0;
 	virtual void	DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str) = 0;
 	virtual void	DrawStringFormat(float x, float y, int align, int height, const col4_t col, int font, const char* fmt, ...) = 0;
 	virtual int		DrawStringWidth(int height, int font, const char* str) = 0;

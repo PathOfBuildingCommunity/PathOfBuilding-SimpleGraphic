@@ -471,6 +471,7 @@ void r_tex_c::LoadFile()
 		};
 		error = img->Load(loadPath.c_str(), sizeCallback);
 		if ( !error ) {
+			stackLayers = img->tex.layers();
 			const bool is_async = !!(flags & TF_ASYNC);
 			img = BuildMipSet(std::move(img));
 
