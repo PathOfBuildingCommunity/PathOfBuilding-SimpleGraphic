@@ -441,9 +441,21 @@ std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
 			const auto layers = img->tex.layers();
 			const auto swizzles = img->tex.swizzles();
 			auto newTex = gli::texture2d_array(format, extent, layers, swizzles);
-			for (size_t layer = 0; layer < layers; ++layer)
+			for (size_t layer = 0; layer < layers; ++layer) {
 				newTex.copy(img->tex, layer, 0, 0, layer, 0, 0);
-			newTex = gli::generate_mipmaps(newTex, gli::FILTER_LINEAR);
+				const size_t levels = newTex.levels();
+				for (size_t level = 1; level < levels; ++level) {
+					const auto srcExtent = newTex.extent(level - 1);
+					const auto comp = gli::component_count(format);
+					const auto dstExtent = newTex.extent(level);
+					const bool hasAlpha = comp == 4;
+					stbir_resize_uint8_srgb_edgemode(
+						newTex.data<uint8_t>(layer, 0, level - 1), srcExtent.x, srcExtent.y, srcExtent.x * comp,
+						newTex.data<uint8_t>(layer, 0, level), dstExtent.x, dstExtent.y, dstExtent.x * comp,
+						comp, hasAlpha ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0, STBIR_EDGE_CLAMP);
+				}
+			}
+			//newTex = gli::generate_mipmaps(newTex, gli::FILTER_LINEAR);
 			img->tex = newTex;
 		}
 	}
