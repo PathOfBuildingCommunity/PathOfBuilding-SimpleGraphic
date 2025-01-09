@@ -389,7 +389,6 @@ std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
 	const bool blockCompressed = is_compressed(format);
 	const bool isAsync = !!(flags & TF_ASYNC);
 	const bool hasExistingMips = img->tex.layers() > 1;
-	const bool generateMips = !blockCompressed && !(flags & TF_NOMIPMAP);
 
 	auto extent = img->tex.extent();
 	const auto maxDim = (int)renderer->texMaxDim;
@@ -430,12 +429,22 @@ std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
 		}
 	}
 
+	const bool generateMips = !blockCompressed && img->tex.levels() == 1 && !(flags & TF_NOMIPMAP);
+
 	if (generateMips) {
 		if (blockCompressed) {
 			// TODO(LV): Mipmap generation requested for a block-compressed texture. This requires decompression.
 		}
 		else {
-			img->tex = gli::generate_mipmaps(img->tex, gli::FILTER_LINEAR);
+			const auto format = img->tex.format();
+			const auto extent = img->tex.extent();
+			const auto layers = img->tex.layers();
+			const auto swizzles = img->tex.swizzles();
+			auto newTex = gli::texture2d_array(format, extent, layers, swizzles);
+			for (size_t layer = 0; layer < layers; ++layer)
+				newTex.copy(img->tex, layer, 0, 0, layer, 0, 0);
+			newTex = gli::generate_mipmaps(newTex, gli::FILTER_LINEAR);
+			img->tex = newTex;
 		}
 	}
 	return img;
