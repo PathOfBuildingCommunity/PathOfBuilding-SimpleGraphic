@@ -59,8 +59,8 @@
 ** GetDrawLayer()
 ** SetViewport([x, y, width, height])
 ** SetDrawColor(red, green, blue[, alpha]) / SetDrawColor("<escapeStr>")
-** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, mask]])  mask: nil|"arc"|"circle" // TODO(zao): define how mask works, none implemented yet
-** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, mask]])
+** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, maskIdx]])  maskIdx: use a stack layer as multiplicative mask
+** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, maskIdx]])
 ** DrawString(left, top, align{"LEFT"|"CENTER"|"RIGHT"|"CENTER_X"|"RIGHT_X"}, height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** width = DrawStringWidth(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** index = DrawStringCursorIndex(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>", cursorX, cursorY)
@@ -858,6 +858,7 @@ static int l_DrawImage(lua_State* L)
 	r_shaderHnd_c* hnd = NULL;
 	glm::vec2 xys[2]{}, uvs[2]{};
 	int stackLayer = 0;
+	std::optional<int> maskLayer{};
 
 	// | n  |img| corners | uvs | stack | mask |
 	// | 5  | X | X       |	    |       |      |
@@ -911,17 +912,33 @@ static int l_DrawImage(lua_State* L)
 		uvs[1] = { 1, 1 };
 	}
 
+	std::optional<int> maxStackValue;
+	if (hnd)
+		maxStackValue = hnd->StackCount();
+
 	if (af & AF_STACK) {
 		ui->LAssert(L, lua_isinteger(L, k), "DrawImage() argument %d: expected integer, got %s", k, luaL_typename(L, k));
-		stackLayer = (int)lua_tointeger(L, k);
+		const int val = (int)lua_tointeger(L, k);
+		ui->LAssert(L, val > 0, "DrawImage() argument %d: expected positive integer, got %d", k, val);
+		if (maxStackValue.has_value())
+			ui->LAssert(L, val <= *maxStackValue, "DrawImage() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+		stackLayer = val - 1;
 		k += 1;
 	}
 
 	if (af & AF_MASK) {
-		ui->LAssert(L, lua_isnil(L, k) || lua_istable(L, k), "DrawImage() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		ui->LAssert(L, lua_isnil(L, k) || lua_isinteger(L, k), "DrawImage() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		if (lua_isinteger(L, k)) {
+			const int val = (int)lua_tointeger(L, k);
+			ui->LAssert(L, val > 0, "DrawImage() argument %d: expected positive integer, got %d", k, val);
+			if (maxStackValue.has_value())
+				ui->LAssert(L, val <= *maxStackValue, "DrawImage() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+			maskLayer = val - 1;
+		}
+		k += 1;
 	}
 
-	ui->renderer->DrawImage(hnd, xys[0], xys[1], uvs[0], uvs[1], stackLayer);
+	ui->renderer->DrawImage(hnd, xys[0], xys[1], uvs[0], uvs[1], stackLayer, maskLayer);
 
 	return 0;
 }
@@ -938,7 +955,8 @@ static int l_DrawImageQuad(lua_State* L)
 
 	r_shaderHnd_c* hnd = NULL;
 	glm::vec2 xys[4]{}, uvs[4]{};
-	int stackLayer{};
+	int stackLayer = 0;
+	std::optional<int> maskLayer{};
 	
 	// | n  |img| corners | uvs | stack | mask |
 	// | 9  | X | X       |	    |       |      |
@@ -994,18 +1012,34 @@ static int l_DrawImageQuad(lua_State* L)
 		uvs[3] = { 0, 1 };
 	}
 
+	std::optional<int> maxStackValue;
+	if (hnd)
+		maxStackValue = hnd->StackCount();
+
 	if (af & AF_STACK) {
 		ui->LAssert(L, lua_isinteger(L, k), "DrawImageQuad() argument %d: expected integer, got %s", k, luaL_typename(L, k));
-		stackLayer = (int)lua_tointeger(L, k);
+		const int val = (int)lua_tointeger(L, k);
+		ui->LAssert(L, val > 0, "DrawImageQuad() argument %d: expected positive integer, got %d", k, val);
+		if (maxStackValue.has_value())
+			ui->LAssert(L, val <= *maxStackValue, "DrawImageQuad() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+		stackLayer = val - 1;
 		k += 1;
 	}
 
 	if (af & AF_MASK) {
-		ui->LAssert(L, lua_isnil(L, k) || lua_istable(L, k), "DrawImageQuad() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		ui->LAssert(L, lua_isnil(L, k) || lua_isinteger(L, k), "DrawImageQuad() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		if (lua_isinteger(L, k)) {
+			const int val = (int)lua_tointeger(L, k);
+			ui->LAssert(L, val > 0, "DrawImageQuad() argument %d: expected positive integer, got %d", k, val);
+			if (maxStackValue.has_value())
+				ui->LAssert(L, val <= *maxStackValue, "DrawImageQuad() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+			maskLayer = val - 1;
+		}
+		k += 1;
 	}
 
 
-	ui->renderer->DrawImageQuad(hnd, xys[0], xys[1], xys[2], xys[3], uvs[0], uvs[1], uvs[2], uvs[3], stackLayer);
+	ui->renderer->DrawImageQuad(hnd, xys[0], xys[1], xys[2], xys[3], uvs[0], uvs[1], uvs[2], uvs[3], stackLayer, maskLayer);
 
 	return 0;
 }

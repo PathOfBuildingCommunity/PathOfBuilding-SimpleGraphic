@@ -446,7 +446,7 @@ std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
 				const size_t levels = newTex.levels();
 				for (size_t level = 1; level < levels; ++level) {
 					const auto srcExtent = newTex.extent(level - 1);
-					const auto comp = gli::component_count(format);
+					const auto comp = (int)gli::component_count(format);
 					const auto dstExtent = newTex.extent(level);
 					const bool hasAlpha = comp == 4;
 					stbir_resize_uint8_srgb_edgemode(

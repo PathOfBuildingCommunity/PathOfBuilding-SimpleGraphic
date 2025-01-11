@@ -163,7 +163,7 @@ struct r_layerCmdQuad_s {
 		float t[4];
 		float x[4];
 		float y[4];
-		int stackLayer;
+		int stackLayer, maskLayer;
 	} quad;
 };
 
@@ -263,7 +263,7 @@ void r_layer_c::Color(col4_t col)
 	}
 }
 
-void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3, int stackLayer)
+void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1, float x1, float y1, float s2, float t2, float x2, float y2, float s3, float t3, float x3, float y3, int stackLayer, int maskLayer)
 {
 	if (auto* cmd = (r_layerCmdQuad_s*)NewCommand(CommandSize(r_layerCmd_s::QUAD))) {
 		cmd->cmd = r_layerCmd_s::QUAD;
@@ -272,6 +272,7 @@ void r_layer_c::Quad(float s0, float t0, float x0, float y0, float s1, float t1,
 		cmd->quad.x[0] = x0; cmd->quad.x[1] = x1; cmd->quad.x[2] = x2; cmd->quad.x[3] = x3;
 		cmd->quad.y[0] = y0; cmd->quad.y[1] = y1; cmd->quad.y[2] = y2; cmd->quad.y[3] = y3;
 		cmd->quad.stackLayer = stackLayer;
+		cmd->quad.maskLayer = maskLayer;
 	}
 }
 
@@ -320,10 +321,10 @@ bool AabbAabbIntersects(r_aabb_s& a, r_aabb_s& b)
 
 struct Vertex {
 	float x, y;
-	float u, v, w;
+	float u, v;
 	float r, g, b, a;
 	float viewX, viewY, viewW, viewH;
-	float texId;
+	float texId, stackIdx, maskIdx;
 };
 
 struct Batch {
@@ -338,8 +339,8 @@ struct Batch {
 	GLint xyAttr;
 	GLint uvAttr;
 	GLint tintAttr;
-	GLint texIdAttr;
 	GLint viewportAttr;
+	GLint texIdAttr;
 
 	std::vector<Vertex> vertices;
 
@@ -352,8 +353,8 @@ Batch::Batch(GLuint prog)
 	xyAttr = glGetAttribLocation(prog, "a_vertex");
 	uvAttr = glGetAttribLocation(prog, "a_texcoord");
 	tintAttr = glGetAttribLocation(prog, "a_tint");
-	texIdAttr = glGetAttribLocation(prog, "a_texId");
 	viewportAttr = glGetAttribLocation(prog, "a_viewport");
+	texIdAttr = glGetAttribLocation(prog, "a_texId");
 }
 
 Batch::Batch(Batch&& rhs)
@@ -362,6 +363,7 @@ Batch::Batch(Batch&& rhs)
 	, uvAttr(rhs.uvAttr)
 	, tintAttr(rhs.tintAttr)
 	, viewportAttr(rhs.viewportAttr)
+	, texIdAttr(rhs.texIdAttr)
 	, vertices(std::move(rhs.vertices))
 {
 }
@@ -371,8 +373,8 @@ Batch& Batch::operator = (Batch&& rhs) {
 	xyAttr = rhs.xyAttr;
 	uvAttr = rhs.uvAttr;
 	tintAttr = rhs.tintAttr;
-	texIdAttr = rhs.texIdAttr;
 	viewportAttr = rhs.viewportAttr;
+	texIdAttr = rhs.texIdAttr;
 	vertices = std::move(rhs.vertices);
 
 	return *this;
@@ -392,21 +394,21 @@ void Batch::Execute(GLuint sharedVbo, size_t vertexBase)
 	auto dataSize = vertices.size() * sizeof(Vertex);
 	glBufferSubData(GL_ARRAY_BUFFER, dataOff, dataSize, dataPtr);
 	glVertexAttribPointer(xyAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, x));
-	glVertexAttribPointer(uvAttr, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
+	glVertexAttribPointer(uvAttr, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, u));
 	glVertexAttribPointer(tintAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, r));
-	glVertexAttribPointer(texIdAttr, 1, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, texId));
 	glVertexAttribPointer(viewportAttr, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, viewX));
+	glVertexAttribPointer(texIdAttr, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void const*)offsetof(Vertex, texId));
 	glEnableVertexAttribArray(xyAttr);
 	glEnableVertexAttribArray(uvAttr);
 	glEnableVertexAttribArray(tintAttr);
-	glEnableVertexAttribArray(texIdAttr);
 	glEnableVertexAttribArray(viewportAttr);
+	glEnableVertexAttribArray(texIdAttr);
 	glDrawArrays(GL_TRIANGLES, 0, (GLsizei)vertices.size());
 	glDisableVertexAttribArray(xyAttr);
 	glDisableVertexAttribArray(uvAttr);
 	glDisableVertexAttribArray(tintAttr);
-	glDisableVertexAttribArray(texIdAttr);
 	glDisableVertexAttribArray(viewportAttr);
+	glDisableVertexAttribArray(texIdAttr);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	vertices.clear();
 }
@@ -536,18 +538,19 @@ struct AdjacentMergeStrategy : RenderStrategy {
 				auto& vp = nextViewport_;
 				q.u = c->quad.s[v];
 				q.v = c->quad.t[v];
-				q.w = (float)c->quad.stackLayer;
 				q.x = c->quad.x[v];
 				q.y = c->quad.y[v];
 				q.r = tint_[0];
 				q.g = tint_[1];
 				q.b = tint_[2];
 				q.a = tint_[3];
-				q.texId = (float)texSlot;
 				q.viewX = (float)vp.x;
 				q.viewY = (float)vp.y;
 				q.viewW = (float)vp.width;
 				q.viewH = (float)vp.height;
+				q.texId = (float)texSlot;
+				q.stackIdx = (float)c->quad.stackLayer;
+				q.maskIdx = (float)c->quad.maskLayer;
 			}
 			// 3-2
 			// |/|
@@ -784,16 +787,16 @@ static char const* s_tintedTextureVertexSource = R"(#version 300 es
 uniform mat4 mvp_matrix;
 
 in vec2 a_vertex;
-in vec3 a_texcoord;
+in vec2 a_texcoord;
 in vec4 a_tint;
-in float a_texId;
 in vec4 a_viewport;
+in vec3 a_texId;
 
 out vec2 v_screenPos;
-out vec3 v_texcoord;
+out vec2 v_texcoord;
 out vec4 v_tint;
-out float v_texId;
 out vec4 v_viewport;
+out vec3 v_texId;
 
 void main(void)
 {
@@ -818,10 +821,10 @@ uniform highp sampler2DArray s_tex[{SG_TEXTURE_COUNT}];
 uniform vec4 i_tint;
 
 in vec2 v_screenPos;
-in vec3 v_texcoord;
+in vec2 v_texcoord;
 in vec4 v_tint;
-in float v_texId;
 in vec4 v_viewport; // x0, y0, x1, y1
+in vec3 v_texId;
 
 out vec4 f_fragColor;
 
@@ -960,15 +963,20 @@ void r_renderer_c::Init(r_featureFlag_e features)
 			fmt::memory_buffer buf;
 			for (size_t i = 0; i < maxTextureImageUnits; ++i) {
 				if (i == 0) {
-					fmt::format_to(fmt::appender(buf), "if (v_texId < {}.5) ", i);
+					fmt::format_to(fmt::appender(buf), "if (v_texId.x < {}.5) ", i);
 				}
 				else if (i == maxTextureImageUnits - 1) {
 					fmt::format_to(fmt::appender(buf), "else ");
 				}
 				else {
-					fmt::format_to(fmt::appender(buf), "else if (v_texId < {}.5)", i);
+					fmt::format_to(fmt::appender(buf), "else if (v_texId.x < {}.5)", i);
 				}
-				fmt::format_to(fmt::appender(buf), "color = texture(s_tex[{}], v_texcoord);\n", i);
+				fmt::format_to(fmt::appender(buf), R"( {{
+	color = texture(s_tex[{}], vec3(v_texcoord, v_texId.y));
+	if (v_texId.z > -0.5)
+		color *= texture(s_tex[{}], vec3(v_texcoord, v_texId.z));
+}}
+)", i, i);
 			}
 			textureSwitch = to_string(buf);
 		}
@@ -1544,6 +1552,13 @@ void r_renderer_c::EndFrame()
 // Shader Management
 // =================
 
+std::optional<int> r_shaderHnd_c::StackCount() const
+{
+	if (!sh || sh->tex->status != r_tex_c::Status::DONE)
+		return {};
+	return (int)sh->tex->stackLayers;
+}
+
 void r_renderer_c::PurgeShaders()
 {
 	// Delete released shaders
@@ -1721,7 +1736,7 @@ void r_renderer_c::DrawColor(dword col)
 	drawColor[3] = (col >> 24) / 255.0f;
 }
 
-void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1, glm::vec2 uv2, int stackLayer)
+void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1, glm::vec2 uv2, int stackLayer, std::optional<int> maskLayer)
 {
 	DrawImageQuad(hnd,
 		pos,
@@ -1732,10 +1747,10 @@ void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent
 		{ uv2.s, uv1.t },
 		uv2,
 		{ uv1.s, uv2.t },
-		stackLayer);
+		stackLayer, maskLayer);
 }
 
-void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, glm::vec2 uv3, int stackLayer)
+void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, glm::vec2 uv0, glm::vec2 uv1, glm::vec2 uv2, glm::vec2 uv3, int stackLayer, std::optional<int> maskLayer)
 {
 	if (hnd) {
 		curLayer->Bind(hnd->sh->tex);
@@ -1751,7 +1766,7 @@ void r_renderer_c::DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1,
 		uv1.s, uv1.t, p1.x, p1.y,
 		uv2.s, uv2.t, p2.x, p2.y,
 		uv3.s, uv3.t, p3.x, p3.y,
-		stackLayer);
+		stackLayer, maskLayer.value_or(-1));
 }
 
 void r_renderer_c::DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str)
