@@ -98,6 +98,20 @@ void sys_IVideo::FreeHandle(sys_IVideo* hnd)
 	delete (sys_video_c*)hnd;
 }
 
+
+using WineGetVersionFun = const char* ();
+static bool RunningOnWine()
+{
+#ifdef _WIN32
+	HMODULE mod = GetModuleHandleA("ntdll.dll");
+	if (!mod)
+		return false;
+	auto ptr = GetProcAddress(mod, "wine_get_version");
+	return !!ptr;
+#endif
+	return false;
+}
+
 sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	: sys((sys_main_c*)sysHnd)
 {
@@ -107,7 +121,10 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 
 	strcpy(curTitle, CFG_TITLE);
 
-	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, GLFW_ANGLE_PLATFORM_TYPE_D3D11);
+	const int platformType = RunningOnWine()
+		? GLFW_ANGLE_PLATFORM_TYPE_OPENGL
+		: GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, platformType);
 	glfwInit();
 }
 
