@@ -99,17 +99,24 @@ void sys_IVideo::FreeHandle(sys_IVideo* hnd)
 }
 
 
-using WineGetVersionFun = const char* ();
-static bool RunningOnWine()
+static std::string GetWineHostVersion()
 {
 #ifdef _WIN32
+	using WineHostVersionFun = void (const char** /*sysname*/, const char** /*release*/);
 	HMODULE mod = GetModuleHandleA("ntdll.dll");
 	if (!mod)
-		return false;
-	auto ptr = GetProcAddress(mod, "wine_get_version");
-	return !!ptr;
+		return "";
+	auto ptr = GetProcAddress(mod, "wine_get_host_version");
+	if (!ptr)
+		return "";
+	auto fun = (WineHostVersionFun*)ptr;
+	const char* sysname{};
+	const char* release{};
+	fun(&sysname, &release);
+	return sysname ? sysname : "";
+#else
+	return "";
 #endif
-	return false;
 }
 
 sys_video_c::sys_video_c(sys_IMain* sysHnd)
@@ -121,9 +128,16 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 
 	strcpy(curTitle, CFG_TITLE);
 
-	const int platformType = RunningOnWine()
-		? GLFW_ANGLE_PLATFORM_TYPE_OPENGL
-		: GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+	int platformType = GLFW_ANGLE_PLATFORM_TYPE_NONE;
+#ifdef _WIN32
+	const std::string wineHost = GetWineHostVersion();
+	if (wineHost == "Linux")
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_OPENGL;
+	else if (wineHost == "Darwin")
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+	else // Native Windows
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+#endif
 	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, platformType);
 	glfwInit();
 }
