@@ -154,11 +154,15 @@ static int l_##Name(lua_State* L) {                                \
 	int (*fun)(lua_State*) = [](lua_State* L) SG_NOINLINE -> int { \
 		try
 
-#define SG_LUA_CPP_FUN_END()                          \
-		catch (ui_expectationFailed_s) { return -1; } \
-    };                                                \
-	int rc = fun(L);                                  \
-	if (rc < 0) { LuaErrorWrapper(L); }               \
+#define SG_LUA_CPP_FUN_END()                                    \
+		catch (ui_expectationFailed_s) { return -1; }           \
+		catch (std::exception& e) {                             \
+			lua_pushfstring(L, "C++ exception:\n%s", e.what()); \
+			return -1;                                          \
+		}                                                       \
+    };                                                          \
+	int rc = fun(L);                                            \
+	if (rc < 0) { LuaErrorWrapper(L); }                         \
 	return rc; }
 
 // ===============
@@ -386,14 +390,14 @@ static int l_imgHandleGC(lua_State* L)
 	return 0;
 }
 
-static int l_imgHandleLoad(lua_State* L)
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoad)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LExpect(L, ui->renderer != NULL, "Renderer is not initialised");
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "Load", false);
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
-	ui->LAssert(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
+	ui->LExpect(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
+	ui->LExpect(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* fileName = lua_tostring(L, 1);
 	char fullFileName[512];
 	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
@@ -422,12 +426,13 @@ static int l_imgHandleLoad(lua_State* L)
 			flags |= TF_NEAREST;
 		}
 		else {
-			ui->LAssert(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
+			ui->LExpect(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
 		}
 	}
 	imgHandle->hnd = ui->renderer->RegisterShader(fullFileName, flags);
 	return 0;
 }
+SG_LUA_CPP_FUN_END()
 
 static int l_imgHandleUnload(lua_State* L)
 {

@@ -98,7 +98,7 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	}
 
 	// Detect first by extension, as decompressing could be expensive.
-	auto p = std::filesystem::u8path(fileName);
+	auto p = std::filesystem::path(fileName); // NOTE(LV): This should be u8path later.
 	if (p.extension() == ".zst") {
 		auto inner = p.filename();
 		inner.replace_extension();
@@ -452,7 +452,7 @@ bool gif_c::Save(const char* fileName)
 
 bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
-	auto p = std::filesystem::u8path(fileName);
+	auto p = std::filesystem::path(fileName); // NOTE(LV): This should be u8path later.
 	// Open file
 	fileInputStream_c in;
 	if (in.FileOpen(fileName, true))
