@@ -7,7 +7,6 @@
     "fmt",
     "glfw3",
     "gli",
-    "libjxl",
     "luajit",
     "ms-gsl",
     "pkgconf",

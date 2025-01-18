@@ -121,8 +121,6 @@ find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 
-pkg_check_modules(libjxl REQUIRED IMPORTED_TARGET libjxl)
-pkg_check_modules(libjxl_threads REQUIRED IMPORTED_TARGET libjxl_threads)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -212,8 +210,6 @@ target_link_libraries(SimpleGraphic
     imgui
     LuaJIT::LuaJIT
     Microsoft.GSL::GSL
-    PkgConfig::libjxl
-    PkgConfig::libjxl_threads
     re2::re2
     sol2
     Threads::Threads
@@ -233,37 +229,9 @@ if (WIN32)
         find_file(ZLIB_DLL_DEBUG NAMES "zlibd1.dll"
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
 
-        # JPEG XL
-        find_file(JPEG_XL_DLL_DEBUG NAMES "jxl.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(JPEG_XL_CMS_DLL_DEBUG NAMES "jxl_cms.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(JPEG_XL_THREADS_DLL_DEBUG NAMES "jxl_threads.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(Little_CMS_DLL_DEBUG NAMES "lcms2.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(Highway_DLL_DEBUG NAMES "hwy.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-
-        # Brotli
-        find_file(brotlicommon_DLL_DEBUG NAMES "brotlicommon.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(brotlidec_DLL_DEBUG NAMES "brotlidec.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-        find_file(brotlienc_DLL_DEBUG NAMES "brotlienc.dll"
-            PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-
         install(FILES
             ${LuaJIT_DLL_DEBUG}
             ${ZLIB_DLL_DEBUG}
-            ${JPEG_XL_DLL_DEBUG}
-            ${JPEG_XL_CMS_DLL_DEBUG}
-            ${JPEG_XL_THREADS_DLL_DEBUG}
-            ${Little_CMS_DLL_DEBUG}
-            ${Highway_DLL_DEBUG}
-            ${brotlicommon_DLL_DEBUG}
-            ${brotlidec_DLL_DEBUG}
-            ${brotlienc_DLL_DEBUG}
             DESTINATION "."
             CONFIGURATIONS Debug
         )
@@ -274,37 +242,9 @@ if (WIN32)
     find_file(ZLIB_DLL_RELEASE NAMES "zlib1.dll"
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
 
-    # JPEG XL
-    find_file(JPEG_XL_DLL_RELEASE NAMES "jxl.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(JPEG_XL_CMS_DLL_RELEASE NAMES "jxl_cms.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(JPEG_XL_THREADS_DLL_RELEASE NAMES "jxl_threads.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(Little_CMS_DLL_RELEASE NAMES "lcms2.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(Highway_DLL_RELEASE NAMES "hwy.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-
-    # Brotli
-    find_file(brotlicommon_DLL_RELEASE NAMES "brotlicommon.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(brotlidec_DLL_RELEASE NAMES "brotlidec.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-    find_file(brotlienc_DLL_RELEASE NAMES "brotlienc.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
-
     install(FILES
         ${LuaJIT_DLL_RELEASE}
         ${ZLIB_DLL_RELEASE}
-        ${JPEG_XL_DLL_RELEASE}
-        ${JPEG_XL_CMS_DLL_RELEASE}
-        ${JPEG_XL_THREADS_DLL_RELEASE}
-        ${Little_CMS_DLL_RELEASE}
-        ${Highway_DLL_RELEASE}
-        ${brotlicommon_DLL_RELEASE}
-        ${brotlidec_DLL_RELEASE}
-        ${brotlienc_DLL_RELEASE}
         DESTINATION "."
         CONFIGURATIONS Release MinSizeRel RelWithDebInfo
     )

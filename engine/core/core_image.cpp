@@ -23,10 +23,6 @@
 #include <thread>
 #include <vector>
 
-#include <jxl/decode.h>
-#include <jxl/decode_cxx.h>
-#include <jxl/resizable_parallel_runner_cxx.h>
-
 #include <gli/gli.hpp>
 #include <gsl/span>
 
@@ -113,8 +109,8 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 		return new dds_c(conHnd);
 
 	// Attempt to detect image file type from first 12 bytes of file
-	byte dat[12];
-	if (in.Read(dat, 12)) {
+	byte dat[4];
+	if (in.Read(dat, 4)) {
 		conHnd->Warning("'%s': cannot read image file (file is corrupt?)", fileName);
 		return NULL;
 	}
@@ -127,9 +123,6 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, const char* fileName)
 	} else if (*(dword*)dat == 0x38464947) {
 		// G I F 8
 		return new gif_c(conHnd);
-	} else if (auto sig = JxlSignatureCheck(dat, 12); sig == JXL_SIG_CODESTREAM || sig == JXL_SIG_CONTAINER) {
-		// JPEG XL
-		return new jpeg_xl_c(conHnd);
 	} else if (*(dword*)dat == 0x20534444) {
 		// D D S 0x20
 		return new dds_c(conHnd);
@@ -454,95 +447,8 @@ bool gif_c::Save(const char* fileName)
 }
 
 // =========
-// JPEG XL Image
+// DDS Image
 // =========
-
-const std::thread::id g_mainThreadId = std::this_thread::get_id();
-
-bool jpeg_xl_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
-{
-	// Open file
-	fileInputStream_c in;
-	if (in.FileOpen(fileName, true))
-		return true;
-
-	std::vector<byte> fileData(in.GetLen());
-	if (in.Read(fileData.data(), fileData.size()))
-		return true;
-
-	JxlResizableParallelRunnerPtr runner{};
-	if (g_mainThreadId == std::this_thread::get_id())
-		runner = JxlResizableParallelRunnerMake(nullptr);
-
-	auto dec = JxlDecoderMake(nullptr);
-	if (JXL_DEC_SUCCESS != JxlDecoderSubscribeEvents(dec.get(), JXL_DEC_BASIC_INFO | JXL_DEC_FULL_IMAGE))
-		return true;
-
-	if (JXL_DEC_SUCCESS != JxlDecoderSetParallelRunner(dec.get(), runner ? JxlResizableParallelRunner : nullptr, runner.get()))
-		return true;
-
-	JxlBasicInfo info{};
-	JxlPixelFormat format = { 4, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
-
-	JxlDecoderSetInput(dec.get(), fileData.data(), fileData.size());
-	JxlDecoderCloseInput(dec.get());
-
-	std::vector<byte> datBuf;
-	int width{};
-	int height{};
-	int comp{};
-
-	while (true) {
-		JxlDecoderStatus status = JxlDecoderProcessInput(dec.get());
-
-		switch (status) {
-		case JXL_DEC_ERROR:
-		case JXL_DEC_NEED_MORE_INPUT:
-			return true;
-
-		case JXL_DEC_BASIC_INFO: {
-			if (JXL_DEC_SUCCESS != JxlDecoderGetBasicInfo(dec.get(), &info))
-				return true;
-			width = info.xsize;
-			height = info.ysize;
-			if (sizeCallback)
-				(*sizeCallback)(width, height);
-			comp = info.num_color_channels + !!info.alpha_bits;
-			if (comp != 1 && comp != 3 && comp != 4)
-				return true;
-
-			if (runner)
-				JxlResizableParallelRunnerSetThreads(runner.get(), JxlResizableParallelRunnerSuggestThreads(width, height));
-
-			format.num_channels = comp;
-		} break;
-		
-		case JXL_DEC_NEED_IMAGE_OUT_BUFFER: {
-			size_t bufferSize{};
-			if (JXL_DEC_SUCCESS != JxlDecoderImageOutBufferSize(dec.get(), &format, &bufferSize))
-				return true;
-			assert(bufferSize == width * height * comp);
-			datBuf.resize(bufferSize);
-			if (JXL_DEC_SUCCESS != JxlDecoderSetImageOutBuffer(dec.get(), &format, datBuf.data(), bufferSize))
-				return true;
-		} break;
-
-		case JXL_DEC_SUCCESS:
-		case JXL_DEC_FULL_IMAGE: {
-			// We don't care about animations, consider loading completed when a full image has obtained.
-			return !CopyRaw(g_imageTypeFromComp[comp], width, height, datBuf.data());
-		} break;
-
-		default:
-			continue;
-		}
-	}
-}
-bool jpeg_xl_c::Save(const char* fileName)
-{
-	// Yeah, nah.
-	return false;
-}
 
 bool dds_c::Load(const char* fileName, std::optional<size_callback_t> sizeCallback)
 {
