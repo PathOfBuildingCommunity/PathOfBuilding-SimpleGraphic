@@ -9,6 +9,10 @@
 #include <atomic>
 #include "r_local.h"
 
+#include "stb_image_resize.h"
+#include <gli/gl.hpp>
+#include <gli/generate_mipmaps.hpp>
+
 // ===================
 // Predefined textures
 // ===================
@@ -23,6 +27,8 @@ static const byte t_whiteImage[64] = {
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
 };
+
+static const byte t_blackImage[64 * 4] = {};
 
 static const byte t_defaultTexture[64] = {
 	0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
@@ -43,7 +49,7 @@ class t_manager_c: public r_ITexManager, public thread_c {
 public:
 	// Interface
 	int		GetAsyncCount() override;
-	bool	GetImageInfo(const char* fileName, imageInfo_s* info) override;
+	void	ProcessPendingTextureUploads() override;
 
 	// Encapsulated
 	t_manager_c(r_renderer_c* renderer);
@@ -52,16 +58,24 @@ public:
 	r_renderer_c* renderer;
 
 	r_tex_c* whiteTex;
+	r_tex_c* blackTex;
 
 	bool	AsyncAdd(r_tex_c* tex);
 	bool	AsyncRemove(r_tex_c* tex);
 
+	void	EnqueueTextureUpload(r_tex_c* tex);
+	void	RemovePendingTextureUpload(r_tex_c* tex);
+
 private:
 	std::atomic<bool> doRun;
-	std::atomic<bool> isRunning;
+	std::atomic<int> runnersRunning;
 
+	std::vector<std::thread> workers;
 	std::vector<r_tex_c *> textureQueue;
 	std::mutex mutex;
+
+	std::vector<r_tex_c *> uploadQueue;
+	std::mutex uploadMutex;
 
 	void	ThreadProc() override;
 };
@@ -80,11 +94,20 @@ t_manager_c::t_manager_c(r_renderer_c* renderer)
 	: thread_c(renderer->sys), renderer(renderer)
 {
 	whiteTex = new r_tex_c(this, "@white", 0);
+	blackTex = new r_tex_c(this, "@black", 0);
 
 	doRun = true;
-	isRunning = false;
-	ThreadStart();
-	while (!isRunning) {
+	runnersRunning = 0;
+	const int runnersWanted = 4;
+
+	for (int i = 0; i < runnersWanted; ++i)
+	{
+		workers.emplace_back([this] {
+			ThreadProc();
+			});
+	}
+	//ThreadStart();
+	while (runnersRunning < runnersWanted) {
 		renderer->sys->Sleep( 1 );
 	}
 }
@@ -92,14 +115,14 @@ t_manager_c::t_manager_c(r_renderer_c* renderer)
 t_manager_c::~t_manager_c()
 {
 	doRun = false;
-	while (isRunning) {
-		renderer->sys->Sleep( 1 );
-	}
+	for (auto& worker : workers)
+		worker.join();
+
 	for (auto tex : textureQueue)
-	{
 		delete tex;
-	}
+
 	delete whiteTex;
+	delete blackTex;
 }
 
 // =====================
@@ -112,21 +135,19 @@ int t_manager_c::GetAsyncCount()
 	return (int)textureQueue.size();
 }
 
-bool t_manager_c::GetImageInfo(const char* fileName, imageInfo_s* info)
+void t_manager_c::ProcessPendingTextureUploads()
 {
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName);
-	if (img) {
-		bool error = img->ImageInfo(fileName, info);
-		delete img;
-		return error;
+	std::unique_lock lk(uploadMutex);
+	for (auto tex : uploadQueue) {
+		r_tex_c::PerformUpload(tex);
 	}
-	return true;
+	uploadQueue.clear();
 }
 
 bool t_manager_c::AsyncAdd(r_tex_c* tex)
 {
 	std::lock_guard<std::mutex> lock( mutex );
-	if ( !isRunning ) {
+	if ( runnersRunning == 0 ) {
 		return true;
 	}
 	textureQueue.push_back( tex );
@@ -148,16 +169,33 @@ bool t_manager_c::AsyncRemove(r_tex_c* tex)
 			}
 		}
 	}
-	while (tex->status == r_tex_c::PROCESSING) {
+	while (tex->status == r_tex_c::PROCESSING || tex->status == r_tex_c::SIZE_KNOWN) {
 		renderer->sys->Sleep( 1 );
+	}
+
+	if (tex->status == r_tex_c::PENDING_UPLOAD) {
+		RemovePendingTextureUpload(tex);
 	}
 	
 	return true;
 }
 
+void t_manager_c::EnqueueTextureUpload(r_tex_c* tex)
+{
+	std::scoped_lock lk(uploadMutex);
+	uploadQueue.push_back(tex);
+}
+
+void t_manager_c::RemovePendingTextureUpload(r_tex_c* tex)
+{
+	std::scoped_lock lk(uploadMutex);
+	if (auto I = std::find(uploadQueue.begin(), uploadQueue.end(), tex); I != uploadQueue.end())
+		uploadQueue.erase(I);
+}
+
 void t_manager_c::ThreadProc()
 {
-	isRunning = true;
+	++runnersRunning;
 	while (doRun) {
 		r_tex_c *doTex = nullptr;
 		{
@@ -190,7 +228,7 @@ void t_manager_c::ThreadProc()
 			renderer->sys->Sleep(1);
 		}
 	}
-	isRunning = false;
+	--runnersRunning;
 }
 
 // ===============
@@ -267,37 +305,21 @@ r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
 	}
 }
 
-r_tex_c::r_tex_c(r_ITexManager* manager, image_c* img, int flags)
+r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags)
 {
 	Init(manager, NULL, flags);
 
 	// Direct upload
-	Upload(img, flags);
+	img = BuildMipSet(std::move(img));
+	PerformUpload(this);
 }
 
 r_tex_c::~r_tex_c()
 {
-	if (status == IN_QUEUE || status == PROCESSING) {
+	if (status >= IN_QUEUE && status < DONE) {
 		manager->AsyncRemove(this);
 	}
 	glDeleteTextures(1, &texId);
-}
-
-int r_tex_c::GLTypeForImgType(int type)
-{
-	static int gt[] = {
-		0,
-		GL_LUMINANCE,
-		GL_RGB,
-		GL_RGBA,
-		0,
-		0,
-		GL_COMPRESSED_RGB_S3TC_DXT1_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
-		GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-	};
-	return gt[type >> 4];
 }
 
 void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags)
@@ -309,24 +331,23 @@ void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags
 	loadPri = 0;
 	texId = 0;
 	flags = i_flags;
-	fileName = i_fileName;
+	fileName = i_fileName ? i_fileName : "";
 	fileWidth = 0;
 	fileHeight = 0;
 }
 
 void r_tex_c::Bind()
 {
-	ForceLoad();
-	if (fileWidth) {
-		glBindTexture(GL_TEXTURE_2D, texId);
+	if (status == DONE) {
+		glBindTexture(target, texId);
 	} else {
-		manager->whiteTex->Bind();
+		manager->blackTex->Bind();
 	}
 }
 
 void r_tex_c::Unbind()
 {
-	glBindTexture(GL_TEXTURE_2D, 0);
+	glBindTexture(target, 0);
 }
 
 void r_tex_c::Enable()
@@ -341,7 +362,10 @@ void r_tex_c::Disable()
 }
 
 void r_tex_c::StartLoad()
-{}
+{
+	if (flags & TF_ASYNC)
+		manager->AsyncAdd(this);
+}
 
 void r_tex_c::AbortLoad()
 {
@@ -358,213 +382,233 @@ void r_tex_c::ForceLoad()
 	}
 }
 
+std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
+{
+	const auto format = img->tex.format();
+
+	const bool blockCompressed = is_compressed(format);
+	const bool isAsync = !!(flags & TF_ASYNC);
+	const bool hasExistingMips = img->tex.layers() > 1;
+
+	auto extent = img->tex.extent();
+	const auto maxDim = (int)renderer->texMaxDim;
+	auto numLevels = img->tex.levels();
+
+	const auto shrinksNeeded = [&t = img->tex, maxDim] {
+		auto extent = t.extent();
+		int shrinks = 0;
+		for (; extent.x > maxDim && extent.y > maxDim; ++shrinks) {
+			extent.x /= 2;
+			extent.y /= 2;
+		}
+		return shrinks;
+		}();
+
+	// There is an invariant we need to maintain here of that no sides may exceed the maximum dimensions of the renderer.
+	// For block-compressed textures we could drop finer mips until we reach a coarser level that's sufficiently reduced in size.
+	// We can't generate additional levels for those unless we pull in block format decoding via something like Compressonator
+	// and then we would have to consider whether to upload recompressed or burn VRAM on a non-compressed texture.
+	// For regular textures we can resize proportionally down for the largest axis to reach the max dimension.
+
+	if (shrinksNeeded) {
+		if (shrinksNeeded >= numLevels) {
+			// Not enough levels in texture to satsify shrinking requirement.
+			if (blockCompressed) {
+				// TODO(zao): Fail hard, ignore, or decompress+rescale.
+			}
+			else {
+				// TODO(zao): Synthesise a new top level for all layers.
+				auto smallExtent = img->tex.extent(img->tex.levels() - 1);
+			}
+		}
+		else {
+			auto& t = img->tex;
+			t = gli::texture2d_array(t,
+				t.base_layer(), t.max_layer(),
+				t.base_level() + shrinksNeeded, t.max_level());
+		}
+	}
+
+	const bool generateMips = !blockCompressed && img->tex.levels() == 1 && !(flags & TF_NOMIPMAP);
+
+	if (generateMips) {
+		if (blockCompressed) {
+			// TODO(LV): Mipmap generation requested for a block-compressed texture. This requires decompression.
+		}
+		else {
+			const auto format = img->tex.format();
+			const auto extent = img->tex.extent();
+			const auto layers = img->tex.layers();
+			const auto swizzles = img->tex.swizzles();
+			auto newTex = gli::texture2d_array(format, extent, layers, swizzles);
+			for (size_t layer = 0; layer < layers; ++layer) {
+				newTex.copy(img->tex, layer, 0, 0, layer, 0, 0);
+				const size_t levels = newTex.levels();
+				for (size_t level = 1; level < levels; ++level) {
+					const auto srcExtent = newTex.extent(level - 1);
+					const auto comp = (int)gli::component_count(format);
+					const auto dstExtent = newTex.extent(level);
+					const bool hasAlpha = comp == 4;
+					stbir_resize_uint8_srgb_edgemode(
+						newTex.data<uint8_t>(layer, 0, level - 1), srcExtent.x, srcExtent.y, srcExtent.x * comp,
+						newTex.data<uint8_t>(layer, 0, level), dstExtent.x, dstExtent.y, dstExtent.x * comp,
+						comp, hasAlpha ? 3 : STBIR_ALPHA_CHANNEL_NONE, 0, STBIR_EDGE_CLAMP);
+				}
+			}
+			//newTex = gli::generate_mipmaps(newTex, gli::FILTER_LINEAR);
+			img->tex = newTex;
+		}
+	}
+	return img;
+}
+
 void r_tex_c::LoadFile()
 {
 	if (_stricmp(fileName.c_str(), "@white") == 0) {
 		// Upload an 8x8 white image
-		image_c raw;
-		raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_whiteImage);
-		Upload(&raw, TF_NOMIPMAP);
+		auto raw = std::make_unique<image_c>();
+		raw->CopyRaw(IMGTYPE_GRAY, 8, 8, t_whiteImage);
+		Upload(*raw, TF_NOMIPMAP);
+		status = DONE;
+		return;
+	}
+	else if (_stricmp(fileName.c_str(), "@black") == 0) {
+		// Upload an 8x8 black image
+		auto raw = std::make_unique<image_c>();
+		raw->CopyRaw(IMGTYPE_RGBA, 8, 8, t_blackImage);
+		Upload(*raw, TF_NOMIPMAP);
 		status = DONE;
 		return;
 	}
 
 	// Try to load image file using appropriate loader
-	image_c* img = image_c::LoaderForFile(renderer->sys->con, fileName.c_str() );
+	std::string loadPath = fileName;
+	img = std::unique_ptr<image_c>(image_c::LoaderForFile(renderer->sys->con, loadPath.c_str()));
 	if (img) {
-		error = img->Load(fileName.c_str());
+		auto sizeCallback = [this](int width, int height) {
+			this->fileWidth = width;
+			this->fileHeight = height;
+			this->status = SIZE_KNOWN;
+		};
+		error = img->Load(loadPath.c_str(), sizeCallback);
 		if ( !error ) {
-			Upload(img, flags);
-			delete img;
-			status = DONE;
+			stackLayers = img->tex.layers();
+			const bool is_async = !!(flags & TF_ASYNC);
+			img = BuildMipSet(std::move(img));
+
+			status = PENDING_UPLOAD;
+			if (is_async) {
+				// Post a main thread task to create and fill GPU textures.
+				manager->EnqueueTextureUpload(this);
+			}
+			else {
+				PerformUpload(this);
+			}
 			return;
 		}
-		delete img;
 	}
 
-	image_c raw;
-	raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
-	Upload(&raw, TF_NOMIPMAP);
+	auto raw = std::make_unique<image_c>();
+	raw->CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
+	Upload(*raw, TF_NOMIPMAP);
 	status = DONE;
 }
 
-void r_tex_c::Upload(image_c* image, int flags)
+void r_tex_c::PerformUpload(r_tex_c* tex)
 {
+	tex->Upload(*tex->img, tex->flags);
+	tex->img = {};
+	tex->status = DONE;
+}
+
+static std::atomic<size_t> inputBytes = 0;
+static std::atomic<size_t> uploadedBytes = 0;
+
+void r_tex_c::Upload(image_c& img, int flags)
+{
+	static gli::gl gl(gli::gl::PROFILE_ES30);
+
+	const auto& tex = img.tex;
+	target = gl.translate(tex.target());
+	const auto format = gl.translate(tex.format(), tex.swizzles());
+
 	// Find and bind texture name
 	glGenTextures(1, &texId);
-	glBindTexture(GL_TEXTURE_2D, texId);
+	glBindTexture(target, texId);
 
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
+	glTexParameteri(target, GL_TEXTURE_BASE_LEVEL, 0);
+	glTexParameteri(target, GL_TEXTURE_MAX_LEVEL, (GLint)tex.levels());
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_R, format.Swizzles.r);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_G, format.Swizzles.g);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_B, format.Swizzles.b);
+	glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, format.Swizzles.a);
+
+	const int miplevels = (int)tex.levels();
+
 	// Set filters
-	if (flags & TF_NOMIPMAP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	} else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	if (miplevels == 1) {
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	}
+	else {
+		glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	}
 	if (flags & TF_NEAREST) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	} else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
+	else {
+		glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	}
+
+	constexpr float anisotropyCap = 16.0f;
+	static const float maxAnisotropy = [] {
+		float ret{};
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &ret);
+		return ret;
+		}();
+	glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY, (std::min)(maxAnisotropy, anisotropyCap));
 
 	// Set repeating
 	if (flags & TF_CLAMP) {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	} else {
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	}
+	else {
+		glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_REPEAT);
 	}
 
-	dword up_w = 1, up_h = 1;
-	if (renderer->texNonPOT && (flags & TF_NOMIPMAP) && image->width <= renderer->texMaxDim && image->height <= renderer->texMaxDim) {
-		up_w = image->width;
-		up_h = image->height;
-	} else {
-		// Find next highest powers of 2
-		while (up_w < image->width) up_w<<= 1;
-		while (up_h < image->height) up_h<<= 1;
-		if (up_w > renderer->texMaxDim || up_h > renderer->texMaxDim) {
-			// Really big image, use next lowest instead
-			up_w>>= 1;
-			up_h>>= 1;
-		}
-	}
+	const int layers = (int)tex.layers();
+	const auto extent = tex.extent();
+	const bool isTextureArray = target == GL_TEXTURE_2D_ARRAY;
 
-	// Special case for precompressed textures (BLP DXT)
-	if (image->type >= IMGTYPE_RGB_DXT1 && image->type <= IMGTYPE_RGBA_DXT5) {
-		if ( !renderer->glCompressedTexImage2D ) {
-			image_c raw;
-			raw.CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
-			Upload(&raw, TF_NOMIPMAP);
-			return;
-		}
-		int miplevel = 0;
-		byte* datPtr = image->dat;
-		dword mipSize;
-		while (1) {
-			mipSize = *(dword*)datPtr;
-			datPtr+= sizeof(dword);
-			renderer->glCompressedTexImage2D(GL_TEXTURE_2D, miplevel, GLTypeForImgType(image->type), up_w, up_h, 0, mipSize, datPtr);
-			datPtr+= mipSize;
-			if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
-				break;
-			}
-			up_w = (up_w > 1)? up_w >> 1 : 1;
-			up_h = (up_h > 1)? up_h >> 1 : 1;
-			miplevel++;
-		}
-		fileWidth = image->width;
-		fileHeight = image->height;
-		return;
-	}
+	if (isTextureArray)
+		glTexStorage3D(target, miplevels, format.Internal, extent.x, extent.y, layers);
+	else
+		glTexStorage2D(target, miplevels, format.Internal, extent.x, extent.y);
 
-	byte* mipBuf[3] = {NULL, NULL};
+	for (int layer = 0; layer < layers; ++layer) {
+		for (int miplevel = 0; miplevel < miplevels; ++miplevel) {
 
-	if (up_w != image->width || up_h != image->height) {
-		// Image needs resampling
-		mipBuf[2] = new byte[image->comp * up_w * up_h];
-		T_ResampleImage(image->dat, image->width, image->height, image->comp, mipBuf[2], up_w, up_h);
-	} else {
-		// Use original image data
-		mipBuf[2] = image->dat;
-	}
+			const auto extent = tex.extent(miplevel);
 
-	int intformat = 0;
-	if (renderer->r_compress->intVal && renderer->glCompressedTexImage2D) {
-		// Enable compression
-		if (image->comp == 3) {
-			intformat = GL_COMPRESSED_RGB_S3TC_DXT1_EXT;
-		} else if (image->comp == 4) {
-			intformat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-		}
-	}
-	if (!intformat) {
-		intformat = GLTypeForImgType(image->type);
-	}
+			const int up_w = extent.x;
+			const int up_h = extent.y;
 
-	int miplevel = 0;
-	int cibuf = 2;
-
-	while (1) {
-		if (up_w <= renderer->texMaxDim && up_h <= renderer->texMaxDim) {
 			// Upload the mipmap
-			glTexImage2D(GL_TEXTURE_2D, miplevel, intformat, up_w, up_h, 0, GLTypeForImgType(image->type), GL_UNSIGNED_BYTE, mipBuf[cibuf]);	
-			if ((up_w == 1 && up_h == 1) || flags & TF_NOMIPMAP) {
-				break;
-			}
-			miplevel++;
+			uploadedBytes += tex.size(miplevel);
+			const auto* data = tex.data(layer, 0, miplevel);
+			if (is_compressed(tex.format()))
+				if (isTextureArray)
+					glCompressedTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.Internal, (GLsizei)tex.size(miplevel), data);
+				else
+					glCompressedTexSubImage2D(target, miplevel, 0, 0, extent.x, extent.y, format.Internal, (GLsizei)tex.size(miplevel), data);
+			else
+				if (isTextureArray)
+					glTexSubImage3D(target, miplevel, 0, 0, layer, extent.x, extent.y, 1, format.External, format.Type, data);
+				else
+					glTexSubImage2D(target, miplevel, 0, 0, extent.x, extent.y, format.External, format.Type, data);
 		}
-
-		// Calculate mipmap size
-		dword mm_w = (up_w > 1)? up_w >> 1 : 1;
-		dword mm_h = (up_h > 1)? up_h >> 1 : 1;
-
-		// Set mipmapping source/dest
-		byte* in = mipBuf[cibuf];
-		cibuf = !cibuf;
-		if ( !mipBuf[cibuf] ) {
-			mipBuf[cibuf] = new byte[image->comp * mm_w * mm_h];
-		}
-		byte* out = mipBuf[cibuf];
-
-		if (up_w == 1) {
-			// Only halve height
-			for (dword y = 0; y < mm_h; y++) {
-				int iy = y * 2;
-				for (dword x = 0; x < mm_w; x++) {
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * ((iy  ) * up_w + x) + c] + 
-							in[image->comp * ((iy+1) * up_w + x) + c]
-						) >> 1;
-					}
-				}
-			}
-		}
-		else if (up_h == 1) {
-			// Only halve width
-			for (dword y = 0; y < mm_h; y++) {
-				for (dword x = 0; x < mm_w; x++) {
-					int ix = x * 2;
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * (y * up_w + (ix  )) + c] + 
-							in[image->comp * (y * up_w + (ix+1)) + c]
-						) >> 1;
-					}
-				}
-			}
-		}
-		else {
-			// Halve image size
-			for (dword y = 0; y < mm_h; y++) {
-				int iy = y * 2;
-				for (dword x = 0; x < mm_w; x++) {
-					int ix = x * 2;
-					for (int c = 0; c < image->comp; c++) {
-						out[image->comp * (y * mm_w + x) + c] = (
-							in[image->comp * ((iy  ) * up_w + (ix  )) + c] + 
-							in[image->comp * ((iy  ) * up_w + (ix+1)) + c] +
-							in[image->comp * ((iy+1) * up_w + (ix  )) + c] + 
-							in[image->comp * ((iy+1) * up_w + (ix+1)) + c]
-						) >> 2;
-					}
-				}
-			}
-		}
-
-		up_w = mm_w;
-		up_h = mm_h;
 	}
-
-	delete mipBuf[0];
-	delete mipBuf[1];
-	if (mipBuf[2] != image->dat) {
-		delete mipBuf[2];
-	}
-
-	fileWidth = image->width;
-	fileHeight = image->height;
 }
