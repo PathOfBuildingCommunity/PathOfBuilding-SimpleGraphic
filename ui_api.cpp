@@ -1894,6 +1894,13 @@ static int l_Exit(lua_State* L)
 	return 0;
 }
 
+static int l_TakeScreenshot(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->sys->con->Execute("screenshot");
+	return 0;
+}
+
 // ==============================
 // Library and API Initialisation
 // ==============================
@@ -2067,6 +2074,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(SpawnProcess);
 	ADDFUNC(OpenURL);
 	ADDFUNC(SetProfiling);
+	ADDFUNC(TakeScreenshot);
 	ADDFUNC(Restart);
 	ADDFUNC(Exit);
 	lua_getglobal(L, "os");
