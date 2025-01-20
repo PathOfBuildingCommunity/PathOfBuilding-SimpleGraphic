@@ -11,18 +11,9 @@
 
 #include "ui.h"
 
-extern "C" {
-#ifdef _WIN32
-#include <luajit/lua.h>
-#include <luajit/lauxlib.h>
-#include <luajit/lualib.h>
-#include <luajit/luajit.h>
-#else
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-#endif
-}
+#define SOL_ALL_SAFETIES_ON 1
+#define SOL_USING_CXX_LUAJIT 1
+#include <sol/sol.hpp>
 
 #include "ui_console.h"
 #include "ui_debug.h"

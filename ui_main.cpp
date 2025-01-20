@@ -189,7 +189,7 @@ static int traceback (lua_State *L) {
 
 static int l_panicFunc(lua_State* L)
 {
-	lua_rawgeti(L, LUA_REGISTRYINDEX, 0);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, ui_main_c::REGISTRY_KEY);
 	ui_main_c* ui = (ui_main_c*)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	ui->sys->Error("Unprotected Lua error:\n%s", lua_tostring(L, -1));
@@ -289,11 +289,12 @@ void ui_main_c::ScriptInit()
 
 	// Initialise Lua
 	sys->con->Printf("Initialising Lua...\n");
-	L = luaL_newstate();
+	solState.emplace();
+	L = solState->lua_state();
 	if ( !L ) sys->Error("Error: unable to create Lua state.");
 	lua_atpanic(L, l_panicFunc);
 	lua_pushlightuserdata(L, this);
-	lua_rawseti(L, LUA_REGISTRYINDEX, 0);
+	lua_seti(L, LUA_REGISTRYINDEX, ui_main_c::REGISTRY_KEY);
 	lua_pushcfunction(L, traceback);
 	lua_pushvalue(L, -1);
 	lua_setfield(L, LUA_REGISTRYINDEX, "traceback");
@@ -444,8 +445,8 @@ void ui_main_c::ScriptShutdown()
 	ui_IDebug::FreeHandle(debug);
 
 	// Shutdown Lua
-	lua_close(L);
 	L = NULL;
+	solState.reset();
 }
 
 void ui_main_c::Shutdown()
@@ -514,9 +515,6 @@ void ui_main_c::KeyEvent(int key, int type)
 		break;
 	case KE_KEYUP:
 		switch (key) {
-		case KEY_PRINTSCRN:
-			sys->con->Execute("screenshot");
-			break;
 		case KEY_F10:
 			renderer->ToggleDebugImGui();
 			break;

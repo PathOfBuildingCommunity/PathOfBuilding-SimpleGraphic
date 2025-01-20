@@ -36,12 +36,16 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/common/memtrak3.h"
     "engine/common/streams.cpp"
     "engine/common/streams.h"
+    "engine/core/core_compress.cpp"
+    "engine/core/core_compress.h"
     "engine/core/core_config.cpp"
     "engine/core/core_config.h"
     "engine/core/core_image.cpp"
     "engine/core/core_image.h"
     "engine/core/core_main.cpp"
     "engine/core/core_main.h"
+    "engine/core/core_tex_manipulation.cpp"
+    "engine/core/core_tex_manipulation.h"
     "engine/core/core_video.cpp"
     "engine/core/core_video.h"
     "engine/render/r_font.cpp"
@@ -107,10 +111,16 @@ find_package(unofficial-angle CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+find_package(gli CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_package(re2 CONFIG REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
+
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -195,12 +205,16 @@ target_link_libraries(SimpleGraphic
     unofficial::angle::libGLESv2
     fmt::fmt
     glfw
+    gli
     glm::glm
     imgui
     LuaJIT::LuaJIT
+    Microsoft.GSL::GSL
     re2::re2
+    sol2
     Threads::Threads
     ZLIB::ZLIB
+    zstd::libzstd_shared
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
@@ -214,7 +228,7 @@ if (WIN32)
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
         find_file(ZLIB_DLL_DEBUG NAMES "zlibd1.dll"
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-             
+
         install(FILES
             ${LuaJIT_DLL_DEBUG}
             ${ZLIB_DLL_DEBUG}
@@ -226,8 +240,7 @@ if (WIN32)
     find_file(LuaJIT_DLL_RELEASE NAMES "lua51.dll"
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
     find_file(ZLIB_DLL_RELEASE NAMES "zlib1.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH
-    )
+        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
 
     install(FILES
         ${LuaJIT_DLL_RELEASE}
