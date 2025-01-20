@@ -8,6 +8,11 @@
 // Classes
 // =======
 
+#include <functional>
+#include <optional>
+
+#include <gli/texture2d_array.hpp>
+
 // Image types
 enum imageType_s {
 	IMGTYPE_NONE = 0x00,
@@ -15,86 +20,87 @@ enum imageType_s {
 	IMGTYPE_RGB  = 0x23,
 	IMGTYPE_RGBA = 0x34,
 	IMGTYPE_RGB_DXT1 = 0x63,
-	IMGTYPE_RGBA_DXT1 = 0x74,
-	IMGTYPE_RGBA_DXT3 = 0x84,
-	IMGTYPE_RGBA_DXT5 = 0x94
+	IMGTYPE_RGBA_BC1 = 0x74,
+	IMGTYPE_RGBA_DXT1 = IMGTYPE_RGBA_BC1,
+	IMGTYPE_RGBA_BC2 = 0x84,
+	IMGTYPE_RGBA_DXT3 = IMGTYPE_RGBA_BC2,
+	IMGTYPE_RGBA_BC3 = 0x94,
+	IMGTYPE_RGBA_DXT5 = IMGTYPE_RGBA_BC3,
+	//IMGTYPE_R_BC4 = 0xA4,
+	//IMGTYPE_RG_BC5 = 0xB4,
+	//IMGTYPE_RGBF_BC6H = 0xC4,
+	IMGTYPE_RGBA_BC7 = 0xD4,
 };
 
-// Image info
-struct imageInfo_s {
-	dword	width;
-	dword	height;
-	bool	alpha;
-	int		comp;
+constexpr imageType_s g_imageTypeFromComp[]{
+	IMGTYPE_NONE,
+	IMGTYPE_GRAY,
+	IMGTYPE_NONE,
+	IMGTYPE_RGB,
+	IMGTYPE_RGBA,
 };
 
 // Image
 class image_c {
 public:
-	byte*	dat = nullptr;
-	dword	width = 0;
-	dword	height = 0;
-	int		comp = 0;
-	int		type = 0;
+	// This `tex` member supersedes the past raw data and metadata fields in order to hold
+	// both unblocked and blocked texture formats with array layers and mip levels.
+	gli::texture2d_array tex{};
 
-	image_c(IConsole* conHnd = NULL);
-	~image_c();
+	explicit image_c(IConsole* conHnd = NULL);
+	virtual ~image_c() = default;
 
 	IConsole* con;
 
-	virtual bool Load(const char* fileName);
-	virtual bool Save(const char* fileName);
-	virtual bool ImageInfo(const char* fileName, imageInfo_s* info);
+	using size_callback_t = std::function<void(int, int)>;
 
-	void CopyRaw(int type, dword width, dword height, const byte* dat);
+	virtual bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {});
+	virtual bool Save(const char* fileName);
+
+	bool CopyRaw(int type, dword width, dword height, const byte* dat);
 	void Free();
 
 	static image_c* LoaderForFile(IConsole* conHnd, const char* fileName);
 };
 
 // Targa Image
-class targa_c: public image_c {
+class targa_c : public image_c {
 public:
-	bool	rle;
-	targa_c(IConsole* conHnd): image_c(conHnd) { rle = true; }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
+	bool rle;
+	targa_c(IConsole* conHnd) : image_c(conHnd) { rle = true; }
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // JPEG Image
-class jpeg_c: public image_c {
+class jpeg_c : public image_c {
 public:
-	int		quality;
-	jpeg_c(IConsole* conHnd): image_c(conHnd) { quality = 80; }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
+	int quality;
+	jpeg_c(IConsole* conHnd) : image_c(conHnd) { quality = 80; }
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // PNG Image
-class png_c: public image_c {
+class png_c : public image_c {
 public:
-	png_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
+	png_c(IConsole* conHnd) : image_c(conHnd) { }
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
 // GIF Image
-class gif_c: public image_c {
+class gif_c : public image_c {
 public:
-	gif_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
+	gif_c(IConsole* conHnd) : image_c(conHnd) { }
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };
 
-// BLP Image
-class blp_c: public image_c {
+// DDS Image
+class dds_c : public image_c {
 public:
-	blp_c(IConsole* conHnd): image_c(conHnd) { }
-	bool	Load(const char* fileName) override;
-	bool	Save(const char* fileName) override;
-	bool	ImageInfo(const char* fileName, imageInfo_s* info) override;
+	dds_c(IConsole* conHnd) : image_c(conHnd) {}
+	bool Load(const char* fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(const char* fileName) override;
 };

@@ -6,9 +6,13 @@
     "curl",
     "fmt",
     "glfw3",
+    "gli",
     "luajit",
+    "ms-gsl",
     "pkgconf",
     "re2",
+    "sol2",
+    "zstd",
     "zlib"
   ]
 }

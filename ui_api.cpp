@@ -7,7 +7,10 @@
 #include "ui_local.h"
 
 #include <filesystem>
+#include <fstream>
 #include <zlib.h>
+
+#include "core/core_tex_manipulation.h"
 
 /* OnFrame()
 ** OnChar("<char>")
@@ -23,13 +26,30 @@
 ** func = GetCallback("<name>")
 ** SetMainObject(object)
 **
+** artHandle = NewArtHandle("<filename>")
+** width, height = artHandle:Size()
+**
 ** imgHandle = NewImageHandle()
 ** imgHandle:Load("<fileName>"[, "flag1"[, "flag2"...]])  flag:{"ASYNC"|"CLAMP"|"MIPMAP"}
+** imgHandle:LoadArtRectangle(art, x1, y1, x2, y2[, "flag1"[, "flag2"... ]])  flag:{"CLAMP"|"MIPMAP"}
+** imgHandle:LoadArtArcBand(art, xC, yC, rMin, rMax[, "flag1"[, "flag2"... ]])  flag:{"CLAMP"|"MIPMAP"}
 ** imgHandle:Unload()
 ** isValid = imgHandle:IsValid()
 ** isLoading = imgHandle:IsLoading()
 ** imgHandle:SetLoadingPriority(pri)
 ** width, height = imgHandle:ImageSize()
+**
+** texHandle = NewTexHandle()
+** texHandle:Allocate(format, width, height, layerCount, mipCount)
+** texHandle:Load("<fileName>")
+** texHandle:Save("<fileName>")
+** info = texHandle:Info()
+** isvalid = texHandle:IsValid()
+** texHandle:StackTextures({tex1, tex2, .. texN})  -- all textures must be same shape and format
+** -- texHandle:SetLayer(srcTexHandle, layer)
+** -- texHandle:CopyImage(srcTexHandle, targetX, targetY)
+** -- texHandle:Transcode(newFormat)
+** -- texHandle:GenerateMipmaps()
 **
 ** RenderInit(["flag1"[, "flag2"...]])  flag:{"DPI_AWARE"}
 ** width, height = GetScreenSize()
@@ -39,8 +59,8 @@
 ** GetDrawLayer()
 ** SetViewport([x, y, width, height])
 ** SetDrawColor(red, green, blue[, alpha]) / SetDrawColor("<escapeStr>")
-** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])
-** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])
+** DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, maskIdx]])  maskIdx: use a stack layer as multiplicative mask
+** DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, maskIdx]])
 ** DrawString(left, top, align{"LEFT"|"CENTER"|"RIGHT"|"CENTER_X"|"RIGHT_X"}, height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** width = DrawStringWidth(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>")
 ** index = DrawStringCursorIndex(height, font{"FIXED"|"VAR"|"VAR BOLD"}, "<text>", cursorX, cursorY)
@@ -89,7 +109,7 @@
 // Grab UI main pointer from the registry
 static ui_main_c* GetUIPtr(lua_State* L)
 {
-	lua_rawgeti(L, LUA_REGISTRYINDEX, 0);
+	lua_geti(L, LUA_REGISTRYINDEX, ui_main_c::REGISTRY_KEY);
 	ui_main_c* ui = (ui_main_c*)lua_touserdata(L, -1);
 	lua_pop(L, 1);
 	return ui;
@@ -134,12 +154,76 @@ static int l_##Name(lua_State* L) {                                \
 	int (*fun)(lua_State*) = [](lua_State* L) SG_NOINLINE -> int { \
 		try
 
-#define SG_LUA_CPP_FUN_END()                          \
-		catch (ui_expectationFailed_s) { return -1; } \
-    };                                                \
-	int rc = fun(L);                                  \
-	if (rc < 0) { LuaErrorWrapper(L); }               \
+#define SG_LUA_CPP_FUN_END()                                    \
+		catch (ui_expectationFailed_s) { return -1; }           \
+		catch (std::exception& e) {                             \
+			lua_pushfstring(L, "C++ exception:\n%s", e.what()); \
+			return -1;                                          \
+		}                                                       \
+    };                                                          \
+	int rc = fun(L);                                            \
+	if (rc < 0) { LuaErrorWrapper(L); }                         \
 	return rc; }
+
+// ===============
+// Data validation
+// ===============
+
+/*
+* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
+* that ensures a consistent assertion message and reduces the risk of mistakes in
+* parameter validation.
+*
+* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
+* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
+* when unwinding.
+*
+* Example use site:
+* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
+* {
+*   ui_main_c* ui = GetUIPtr(L);
+*   ui_luaReader_c reader(ui, L, "DoTheThing");
+*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
+*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
+*   reader.ArgCheckNumber(2); // -''-
+*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
+*   // Do the thing
+*   return 0;
+* }
+* SG_LUA_CPP_FUN_END()
+*/
+
+class ui_luaReader_c {
+public:
+	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
+
+	// Always zero terminated as all regular strings are terminated in Lua.
+	std::string_view ArgToString(int k) {
+		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+		return lua_tostring(L, k);
+	}
+
+	void ArgCheckTable(int k) {
+		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ArgCheckNumber(int k) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
+			funName.c_str(), k, luaL_typename(L, k));
+	}
+
+	void ValCheckNumber(int k, char const* ctx) {
+		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
+			funName.c_str(), ctx, k, luaL_typename(L, k));
+	}
+
+private:
+	ui_main_c* ui;
+	lua_State* L;
+	std::string funName;
+};
 
 // =========
 // Callbacks
@@ -190,6 +274,86 @@ static int l_SetMainObject(lua_State* L)
 	return 0;
 }
 
+// ===========
+// Art Handles
+// ===========
+
+/*
+* An art handle contains CPU-side image data, typically sourced from a file on disk.
+* This differs from image handles that represent a texture resident on the GPU.
+*
+* Art handles can be used to produce image handles by slicing out masked subimages.
+* Their primary intent is to decompose nested artwork like the connector art for
+* modern revisions of the passive skill tree which has multiple orbit arcs inside
+* of each other in a single image file.
+*/
+
+struct artHandle_s {
+	std::unique_ptr<image_c> img;
+};
+
+SG_LUA_CPP_FUN_BEGIN(NewArtHandle)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui_luaReader_c reader(ui, L, "NewArtHandle");
+
+	int n = lua_gettop(L);
+	ui->LExpect(L, n >= 1, "Usage: NewArtHandle(fileName)");
+	std::filesystem::path filePath = reader.ArgToString(1);
+	if (filePath.is_relative())
+		filePath = ui->scriptWorkDir / filePath;
+	std::string fileName = filePath.generic_string();
+	std::unique_ptr<image_c> img(image_c::LoaderForFile(ui->sys->con, fileName.c_str()));
+	if (!img)
+		return 0;
+
+	if (img->Load(fileName.c_str()))
+		return 0;
+
+	const auto format = img->tex.format();
+	if (is_compressed(format) || !is_unsigned(format))
+		return 0;
+
+	const auto comp = component_count(format);
+	if (comp != 1 && comp != 3 && comp != 4)
+		return 0;
+
+	artHandle_s* artHandle = (artHandle_s*)lua_newuserdata(L, sizeof(artHandle_s));
+	new(artHandle) artHandle_s();
+	artHandle->img = std::move(img);
+	lua_pushvalue(L, lua_upvalueindex(1));
+	lua_setmetatable(L, -2);
+	return 1;
+}
+SG_LUA_CPP_FUN_END()
+
+static artHandle_s* GetArtHandle(lua_State* L, ui_main_c* ui, const char* method)
+{
+	ui->LAssert(L, ui->IsUserData(L, 1, "uiarthandlemeta"), "artHandle:%s() must be used on an image handle", method);
+	artHandle_s* artHandle = (artHandle_s*)lua_touserdata(L, 1);
+	lua_remove(L, 1);
+	return artHandle;
+}
+
+static int l_artHandleGC(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	artHandle_s* artHandle = GetArtHandle(L, ui, "__gc");
+	artHandle->~artHandle_s();
+	return 0;
+}
+
+static int l_artHandleSize(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	artHandle_s* artHandle = GetArtHandle(L, ui, "Size");
+
+	const auto extent = artHandle->img ? artHandle->img->tex.extent() : gli::texture2d_array::extent_type{0, 0};
+	lua_pushinteger(L, extent.x);
+	lua_pushinteger(L, extent.y);
+	return 2;
+}
+
 // =============
 // Image Handles
 // =============
@@ -226,14 +390,14 @@ static int l_imgHandleGC(lua_State* L)
 	return 0;
 }
 
-static int l_imgHandleLoad(lua_State* L)
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoad)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	ui->LExpect(L, ui->renderer != NULL, "Renderer is not initialised");
 	imgHandle_s* imgHandle = GetImgHandle(L, ui, "Load", false);
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
-	ui->LAssert(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
+	ui->LExpect(L, n >= 1, "Usage: imgHandle:Load(fileName[, flag1[, flag2...]])");
+	ui->LExpect(L, lua_isstring(L, 1), "imgHandle:Load() argument 1: expected string, got %s", luaL_typename(L, 1));
 	const char* fileName = lua_tostring(L, 1);
 	char fullFileName[512];
 	if (strchr(fileName, ':') || !ui->scriptWorkDir) {
@@ -250,7 +414,7 @@ static int l_imgHandleLoad(lua_State* L)
 		}
 		const char* flag = lua_tostring(L, f);
 		if (!strcmp(flag, "ASYNC")) {
-			// Async texture loading removed
+			flags |= TF_ASYNC;
 		}
 		else if (!strcmp(flag, "CLAMP")) {
 			flags |= TF_CLAMP;
@@ -262,12 +426,13 @@ static int l_imgHandleLoad(lua_State* L)
 			flags |= TF_NEAREST;
 		}
 		else {
-			ui->LAssert(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
+			ui->LExpect(L, 0, "imgHandle:Load(): unrecognised flag '%s'", flag);
 		}
 	}
 	imgHandle->hnd = ui->renderer->RegisterShader(fullFileName, flags);
 	return 0;
 }
+SG_LUA_CPP_FUN_END()
 
 static int l_imgHandleUnload(lua_State* L)
 {
@@ -318,66 +483,219 @@ static int l_imgHandleImageSize(lua_State* L)
 	return 2;
 }
 
-// ===============
-// Data validation
-// ===============
-
-/*
-* ui_luaReader_c wraps the common validation of arguments or values from Lua in a class
-* that ensures a consistent assertion message and reduces the risk of mistakes in
-* parameter validation.
-*
-* As it has scoped RAII resources and uses ui->LExcept() it must only be used in functions
-* exposed to Lua through the SG_LUA_CPP_FUN_BEGIN/END scheme as that ensures proper cleanup
-* when unwinding.
-*
-* Example use site:
-* SG_LUA_CPP_FUN_BEGIN(DoTheThing)
-* {
-*   ui_main_c* ui = GetUIPtr(L);
-*   ui_luaReader_c reader(ui, L, "DoTheThing");
-*   ui->LExpect(L, lua_gettop(L) >= 2), "Usage: DoTheThing(table, number)");
-*   reader.ArgCheckTable(1); // short-hand to validate formal arguments to function
-*   reader.ArgCheckNumber(2); // -''-
-*   reader.ValCheckNumber(-1, "descriptive name"); // validates any value on the Lua stack, indicating what the value represents
-*   // Do the thing
-*   return 0;
-* }
-* SG_LUA_CPP_FUN_END()
-*/
-
-
-class ui_luaReader_c {
-public:
-	ui_luaReader_c(ui_main_c* ui, lua_State* L, std::string funName) : ui(ui), L(L), funName(funName) {}
-
-	// Always zero terminated as all regular strings are terminated in Lua.
-	std::string_view ArgToString(int k) {
-		ui->LExpect(L, lua_isstring(L, k), "%s() argument %d: expected string, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
-		return lua_tostring(L, k);
+namespace {
+	int ParseArtFlags(ui_main_c* ui, lua_State* L, int k, int n)
+	{
+		int flags = TF_NOMIPMAP;
+		for (int f = k; f <= n; f++) {
+			if (!lua_isstring(L, f)) {
+				continue;
+			}
+			const char* flag = lua_tostring(L, f);
+			if (!strcmp(flag, "CLAMP")) {
+				flags |= TF_CLAMP;
+			}
+			else if (!strcmp(flag, "MIPMAP")) {
+				flags &= ~TF_NOMIPMAP;
+			}
+			else if (!strcmp(flag, "NEAREST")) {
+				flags |= TF_NEAREST;
+			}
+			else {
+				ui->LExpect(L, 0, "imgHandle:LoadArtRectangle(): unrecognised flag '%s'", flag);
+			}
+		}
+		return flags;
 	}
 
-	void ArgCheckTable(int k) {
-		ui->LExpect(L, lua_istable(L, k), "%s() argument %d: expected table, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
+	r_shaderHnd_c* RegisterShaderFromImage(r_IRenderer& renderer, std::unique_ptr<image_c> img, int flags)
+	{
+		return renderer.RegisterShaderFromImage(std::move(img), flags);
+	}
+}
+
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtRectangle)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	imgHandle_s* imgHandle = GetImgHandle(L, ui, "LoadArtRectangle", false);
+
+	const int n = lua_gettop(L);
+	ui->LExpect(L, n >= 5, "Usage: imgHandle:LoadArtRectangle(art, x1, y1, x2, y2[, flag1[, flag2...]])");
+
+	ui_luaReader_c reader(ui, L, "imgHandle::LoadArtRectangle");
+	reader.ArgCheckNumber(2);
+	reader.ArgCheckNumber(3);
+	reader.ArgCheckNumber(4);
+	reader.ArgCheckNumber(5);
+	int x1 = (int)lua_tointeger(L, 2);
+	int y1 = (int)lua_tointeger(L, 3);
+	int x2 = (int)lua_tointeger(L, 4);
+	int y2 = (int)lua_tointeger(L, 5);
+
+	// Grab the art handle after extracting the parameters so that their error messages have the correct indices.
+	artHandle_s* artHandle = GetArtHandle(L, ui, "LoadArtRectangle");
+
+	if (x1 > x2)
+		std::swap(x1, x2);
+	if (y1 > y2)
+		std::swap(y1, y2);
+
+	auto* srcImg = artHandle->img.get();
+	const auto srcFormat = srcImg->tex.format();
+	auto extent = srcImg->tex.extent();
+	const int srcWidth = extent.x;
+	const int srcHeight = extent.y;
+	const int comp = (int)component_count(srcFormat);
+	ui->LExpect(L, x1 >= 0 && x2 <= srcWidth, "imgHandle:LoadArtRectangle(): X range %d to %d outside of the 0 to %d bounds", x1, x2, srcWidth);
+	ui->LExpect(L, y1 >= 0 && y2 <= srcHeight, "imgHandle:LoadArtRectangle(): Y range %d to %d outside of the 0 to %d bounds", y1, y2, srcHeight);
+
+	// Slice rectangle into temporary target image.
+	auto dstImg = std::make_unique<image_c>(ui->sys->con);
+	const int dstWidth = x2 - x1;
+	const int dstHeight = y2 - y1;
+
+	const int srcStride = srcWidth * comp;
+	const int dstStride = dstWidth * comp;
+	const int dstByteCount = dstHeight * dstStride;
+	dstImg->tex = gli::texture2d_array(srcFormat, glm::ivec2(dstWidth, dstHeight), 1, 1);
+
+	byte* srcPtr = srcImg->tex.data<byte>(0, 0, 0) + y1 * srcStride + x1 * comp;
+	byte* dstPtr = dstImg->tex.data<byte>(0, 0, 0);
+	for (int col = 0; col < (int)dstWidth; ++col) {
+		for (int row = 0; row < (int)dstHeight; ++row) {
+			memcpy(dstPtr, srcPtr, dstStride);
+			srcPtr += srcStride;
+			dstPtr += dstStride;
+		}
 	}
 
-	void ArgCheckNumber(int k) {
-		ui->LExpect(L, lua_isnumber(L, k), "%s() argument %d: expected number, got %s",
-			funName.c_str(), k, luaL_typename(L, k));
+	const int flags = ParseArtFlags(ui, L, 5, n);
+	delete imgHandle->hnd;
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, std::move(dstImg), flags);
+
+	return 0;
+}
+SG_LUA_CPP_FUN_END()
+
+SG_LUA_CPP_FUN_BEGIN(imgHandleLoadArtArcBand)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	imgHandle_s* imgHandle = GetImgHandle(L, ui, "LoadArtArcBand", false);
+
+	const int n = lua_gettop(L);
+	ui->LExpect(L, n >= 5, "Usage: imgHandle:LoadArtArcBand(art, xC, yC, rMin, rMax[, flag1[, flag2...]])");
+
+	ui_luaReader_c reader(ui, L, "imgHandle::LoadArtArcBand");
+	reader.ArgCheckNumber(2);
+	reader.ArgCheckNumber(3);
+	reader.ArgCheckNumber(4);
+	reader.ArgCheckNumber(5);
+	const int xC = (int)lua_tointeger(L, 2);
+	const int yC = (int)lua_tointeger(L, 3);
+	int rMin = (int)lua_tointeger(L, 4);
+	int rMax = (int)lua_tointeger(L, 5);
+
+	if (rMin > rMax)
+		std::swap(rMin, rMax);
+
+	const int x1 = xC - rMax;
+	const int y1 = yC - rMax;
+
+	// Grab the art handle after extracting the parameters so that their error messages have the correct indices.
+	artHandle_s* artHandle = GetArtHandle(L, ui, "LoadArtArcBand");
+
+	auto* srcImg = artHandle->img.get();
+	const auto srcFormat = srcImg->tex.format();
+	const auto srcExtent = srcImg->tex.extent();
+	const int srcWidth = srcExtent.x;
+	const int srcHeight = srcExtent.y;
+	const int comp = (int)component_count(srcFormat);
+	ui->LExpect(L, xC >= 0 && xC <= srcWidth, "imgHandle:LoadArtArcBand(): X origin %d outside of the 0 to %d bounds", xC, srcWidth);
+	ui->LExpect(L, yC >= 0 && yC <= srcHeight, "imgHandle:LoadArtArcBand(): Y origin %d outside of the 0 to %d bounds", yC, srcHeight);
+
+	ui->LExpect(L, x1 >= 0 && x1 <= srcWidth, "imgHandle:LoadArtArcBand(): X corner %d outside of the 0 to %d bounds", x1, srcWidth);
+	ui->LExpect(L, y1 >= 0 && y1 <= srcHeight, "imgHandle:LoadArtArcBand(): Y corner %d outside of the 0 to %d bounds", y1, srcHeight);
+
+
+	// Slice rectangle into temporary target image.
+	auto dstImg = std::make_unique<image_c>(ui->sys->con);
+	const int dstWidth = xC - x1;
+	const int dstHeight = yC - y1;
+
+	const int srcStride = srcWidth * comp;
+	const int dstStride = dstWidth * comp;
+	const int dstByteCount = dstHeight * dstStride;
+	dstImg->tex = gli::texture2d_array(srcFormat, glm::ivec2(dstWidth, dstHeight), 1, 1);
+
+	const byte* srcData = srcImg->tex.data<byte>(0, 0, 0);
+	byte* dstData = dstImg->tex.data<byte>(0, 0, 0);
+	memset(dstData, 0x00, dstByteCount);
+
+	// Copy all pixels whose center are between the two radii, inclusive.
+	{
+		// By doubling all coordinates, we can reference both pixel edges and pixel centers.
+		// Even numbers are between pixel samples, odd numbers are on pixel samples.
+		// This makes the distance test math more robust.
+		// As this is ad-hoc 31.1 bit fixed point math, we should technically shift down the result of
+		// the multiplications that go into the squares but as the same number of operations occur on both
+		// sides of the squared equalities, it's fine. Just something to keep in mind for future changes.
+		const int rMinSq = (rMin * 2) * (rMin * 2), rMaxSq = (rMax * 2) * (rMax * 2);
+		const int width = dstWidth * 2, height = dstHeight * 2;
+		for (int row = 1; row < height; row += 2)
+		{
+			const int dy = height - row;
+			// Find the first pixel center that is inside the outer radius
+			int colLo = -1;
+			for (int x = 1; x < width; x += 2) {
+				const int dx = width - x;
+				const int rSq = dx * dx + dy * dy;
+				if (rSq <= rMaxSq) {
+					colLo = x;
+					break;
+				}
+			}
+			
+			// If no pixel was found to be inside, the row does not contribute.
+			if (colLo == -1)
+				continue;
+
+			int colHi = width;
+			// Find the first pixel center that is inside the inner radius
+			for (int x = colLo; x < width; x += 2) {
+				const int dx = width - x;
+				const int rSq = dx * dx + dy * dy;
+				if (rSq < rMinSq) {
+					colHi = x;
+					break;
+				}
+			}
+
+			// We now have a half-open span of touched pixel centers (or the far border).
+			// Convert that to regular pixel coordinates and copy to the destination image.
+			const int xLo = colLo / 2;
+			const int xHi = colHi / 2;
+
+			if (xLo != xHi) {
+				const int y = row / 2;
+				const int spanByteSize = (xHi - xLo) * comp;
+				const int srcRow = y1 + y;
+				const int dstRow = y;
+				const int srcCol = x1 + xLo;
+				const int dstCol = xLo;
+				const byte* srcPtr = srcData + srcRow * srcStride + srcCol * comp;
+				byte* dstPtr = dstData + dstRow * dstStride + dstCol * comp;
+				memcpy(dstPtr, srcPtr, spanByteSize);
+			}
+		}
 	}
 
-	void ValCheckNumber(int k, char const* ctx) {
-		ui->LExpect(L, lua_isnumber(L, k), "%s() %s: expected number, got %s",
-			funName.c_str(), ctx, k, luaL_typename(L, k));
-	}
+	const int flags = ParseArtFlags(ui, L, 5, n);
+	delete imgHandle->hnd;
+	imgHandle->hnd = RegisterShaderFromImage(*ui->renderer, std::move(dstImg), flags);
 
-private:
-	ui_main_c* ui;
-	lua_State* L;
-	std::string funName;
-};
+	return 0;
+}
+SG_LUA_CPP_FUN_END()
 
 // =========
 // Rendering
@@ -539,30 +857,94 @@ static int l_DrawImage(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImage() called outside of OnFrame");
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 5, "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom])");
+	const char* usage = "Usage: DrawImage({imgHandle|nil}, left, top, width, height[, tcLeft, tcTop, tcRight, tcBottom][, stackIdx[, mask]])";
+	ui->LAssert(L, n >= 5, usage);
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImage() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
 	r_shaderHnd_c* hnd = NULL;
-	if (!lua_isnil(L, 1)) {
-		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
-		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImage(): image handle has no image loaded");
-		hnd = imgHandle->hnd;
+	glm::vec2 xys[2]{}, uvs[2]{};
+	int stackLayer = 0;
+	std::optional<int> maskLayer{};
+
+	// | n  |img| corners | uvs | stack | mask |
+	// | 5  | X | X       |	    |       |      |
+	// | 6  | X | X       |     | X     |      |
+	// | 7  | X | X       |     | X     | X    |
+	// | 9  | X | X       | X   |       |      |
+	// | 10 | X | X       | X   | X     |      |
+	// | 11 | X | X       | X   | X     | X    |
+	
+	enum ArgFlag : uint8_t { AF_IMG = 0x1, AF_XY = 0x2, AF_UV = 0x4, AF_STACK = 0x8, AF_MASK = 0x10 };
+	ArgFlag af{};
+	switch (n) {
+	case 11: af = (ArgFlag)(af | AF_MASK);
+	case 10: af = (ArgFlag)(af | AF_STACK);
+	case 9: af = (ArgFlag)(af | AF_IMG | AF_XY | AF_UV); break;
+	case 7: af = (ArgFlag)(af | AF_MASK);
+	case 6: af = (ArgFlag)(af | AF_STACK);
+	case 5: af = (ArgFlag)(af | AF_IMG | AF_XY); break;
+	default: ui->LAssert(L, false, usage);
 	}
-	float arg[8];
-	if (n > 5) {
-		ui->LAssert(L, n >= 9, "DrawImage(): incomplete set of texture coordinates provided");
-		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
+
+	int k = 1;
+	if (af & AF_IMG) {
+		if (!lua_isnil(L, k)) {
+			imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, k);
+			ui->LAssert(L, imgHandle->hnd != NULL, "DrawImage(): image handle has no image loaded");
+			hnd = imgHandle->hnd;
 		}
-		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
+		k += 1;
+	}
+	
+	if (af & AF_XY) {
+		for (int i = k; i < k + 4; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			const int idx = i - k;
+			xys[idx/2][idx%2] = (float)lua_tonumber(L, i);
+		}
+		k += 4;
+	}
+
+	if (af & AF_UV) {
+		for (int i = k; i < k + 4; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			int idx = i - k;
+			uvs[idx/2][idx%2] = (float)lua_tonumber(L, i);
+		}
+		k += 4;
 	}
 	else {
-		for (int i = 2; i <= 5; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
-		}
-		ui->renderer->DrawImage(hnd, arg[0], arg[1], arg[2], arg[3]);
+		uvs[0] = { 0, 0 };
+		uvs[1] = { 1, 1 };
 	}
+
+	std::optional<int> maxStackValue;
+	if (hnd)
+		maxStackValue = hnd->StackCount();
+
+	if (af & AF_STACK) {
+		ui->LAssert(L, lua_isinteger(L, k), "DrawImage() argument %d: expected integer, got %s", k, luaL_typename(L, k));
+		const int val = (int)lua_tointeger(L, k);
+		ui->LAssert(L, val > 0, "DrawImage() argument %d: expected positive integer, got %d", k, val);
+		if (maxStackValue.has_value())
+			ui->LAssert(L, val <= *maxStackValue, "DrawImage() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+		stackLayer = val - 1;
+		k += 1;
+	}
+
+	if (af & AF_MASK) {
+		ui->LAssert(L, lua_isnil(L, k) || lua_isinteger(L, k), "DrawImage() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		if (lua_isinteger(L, k)) {
+			const int val = (int)lua_tointeger(L, k);
+			ui->LAssert(L, val > 0, "DrawImage() argument %d: expected positive integer, got %d", k, val);
+			if (maxStackValue.has_value())
+				ui->LAssert(L, val <= *maxStackValue, "DrawImage() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+			maskLayer = val - 1;
+		}
+		k += 1;
+	}
+
+	ui->renderer->DrawImage(hnd, xys[0], xys[1], uvs[0], uvs[1], stackLayer, maskLayer);
+
 	return 0;
 }
 
@@ -572,30 +954,98 @@ static int l_DrawImageQuad(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "DrawImageQuad() called outside of OnFrame");
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 9, "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4])");
+	const char* usage = "Usage: DrawImageQuad({imgHandle|nil}, x1, y1, x2, y2, x3, y3, x4, y4[, s1, t1, s2, t2, s3, t3, s4, t4][, stackIdx[, mask]])";
+	ui->LAssert(L, n >= 9, usage);
 	ui->LAssert(L, lua_isnil(L, 1) || ui->IsUserData(L, 1, "uiimghandlemeta"), "DrawImageQuad() argument 1: expected image handle or nil, got %s", luaL_typename(L, 1));
+
 	r_shaderHnd_c* hnd = NULL;
-	if (!lua_isnil(L, 1)) {
-		imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, 1);
-		ui->LAssert(L, imgHandle->hnd != NULL, "DrawImageQuad(): image handle has no image loaded");
-		hnd = imgHandle->hnd;
+	glm::vec2 xys[4]{}, uvs[4]{};
+	int stackLayer = 0;
+	std::optional<int> maskLayer{};
+	
+	// | n  |img| corners | uvs | stack | mask |
+	// | 9  | X | X       |	    |       |      |
+	// | 10 | X | X       |     | X     |      |
+	// | 11 | X | X       |     | X     | X    |
+	// | 17 | X | X       | X   |       |      |
+	// | 18 | X | X       | X   | X     |      |
+	// | 19 | X | X       | X   | X     | X    |
+
+	enum ArgFlag : uint8_t { AF_IMG = 0x1, AF_XY = 0x2, AF_UV = 0x4, AF_STACK = 0x8, AF_MASK = 0x10 };
+	ArgFlag af{};
+	switch (n) {
+	case 19: af = (ArgFlag)(af | AF_MASK);
+	case 18: af = (ArgFlag)(af | AF_STACK);
+	case 17: af = (ArgFlag)(af | AF_IMG | AF_XY | AF_UV); break;
+	case 11: af = (ArgFlag)(af | AF_MASK);
+	case 10: af = (ArgFlag)(af | AF_STACK);
+	case 9: af = (ArgFlag)(af | AF_IMG | AF_XY); break;
+	default: ui->LAssert(L, false, usage);
 	}
-	float arg[16];
-	if (n > 9) {
-		ui->LAssert(L, n >= 17, "DrawImageQuad(): incomplete set of texture coordinates provided");
-		for (int i = 2; i <= 17; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
+
+	int k = 1;
+	if (af & AF_IMG) {
+		if (!lua_isnil(L, k)) {
+			imgHandle_s* imgHandle = (imgHandle_s*)lua_touserdata(L, k);
+			ui->LAssert(L, imgHandle->hnd != NULL, "DrawImageQuad(): image handle has no image loaded");
+			hnd = imgHandle->hnd;
 		}
-		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7], arg[8], arg[9], arg[10], arg[11], arg[12], arg[13], arg[14], arg[15]);
+		k += 1;
+	}
+
+	if (af & AF_XY) {
+		for (int i = k; i < k + 8; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			const int idx = i - k;
+			xys[idx / 2][idx % 2] = (float)lua_tonumber(L, i);
+		}
+		k += 8;
+	}
+
+	if (af & AF_UV) {
+		for (int i = k; i < k + 8; i++) {
+			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
+			int idx = i - k;
+			uvs[idx / 2][idx % 2] = (float)lua_tonumber(L, i);
+		}
+		k += 8;
 	}
 	else {
-		for (int i = 2; i <= 9; i++) {
-			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
-			arg[i - 2] = (float)lua_tonumber(L, i);
-		}
-		ui->renderer->DrawImageQuad(hnd, arg[0], arg[1], arg[2], arg[3], arg[4], arg[5], arg[6], arg[7]);
+		uvs[0] = { 0, 0 };
+		uvs[1] = { 1, 0 };
+		uvs[2] = { 1, 1 };
+		uvs[3] = { 0, 1 };
 	}
+
+	std::optional<int> maxStackValue;
+	if (hnd)
+		maxStackValue = hnd->StackCount();
+
+	if (af & AF_STACK) {
+		ui->LAssert(L, lua_isinteger(L, k), "DrawImageQuad() argument %d: expected integer, got %s", k, luaL_typename(L, k));
+		const int val = (int)lua_tointeger(L, k);
+		ui->LAssert(L, val > 0, "DrawImageQuad() argument %d: expected positive integer, got %d", k, val);
+		if (maxStackValue.has_value())
+			ui->LAssert(L, val <= *maxStackValue, "DrawImageQuad() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+		stackLayer = val - 1;
+		k += 1;
+	}
+
+	if (af & AF_MASK) {
+		ui->LAssert(L, lua_isnil(L, k) || lua_isinteger(L, k), "DrawImageQuad() argument %d: expected integer or nil, got %s", k, luaL_typename(L, k));
+		if (lua_isinteger(L, k)) {
+			const int val = (int)lua_tointeger(L, k);
+			ui->LAssert(L, val > 0, "DrawImageQuad() argument %d: expected positive integer, got %d", k, val);
+			if (maxStackValue.has_value())
+				ui->LAssert(L, val <= *maxStackValue, "DrawImageQuad() argument %d: expected valid stack index <= %d, got %d", k, *maxStackValue, val);
+			maskLayer = val - 1;
+		}
+		k += 1;
+	}
+
+
+	ui->renderer->DrawImageQuad(hnd, xys[0], xys[1], xys[2], xys[3], uvs[0], uvs[1], uvs[2], uvs[3], stackLayer, maskLayer);
+
 	return 0;
 }
 
@@ -1444,6 +1894,13 @@ static int l_Exit(lua_State* L)
 	return 0;
 }
 
+static int l_TakeScreenshot(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->sys->con->Execute("screenshot");
+	return 0;
+}
+
 // ==============================
 // Library and API Initialisation
 // ==============================
@@ -1453,6 +1910,7 @@ static int l_Exit(lua_State* L)
 
 int ui_main_c::InitAPI(lua_State* L)
 {
+	sol::state_view lua(L);
 	luaL_openlibs(L);
 
 	// Add "lua/" subdir for non-JIT Lua
@@ -1498,7 +1956,50 @@ int ui_main_c::InitAPI(lua_State* L)
 	lua_setfield(L, -2, "SetLoadingPriority");
 	lua_pushcfunction(L, l_imgHandleImageSize);
 	lua_setfield(L, -2, "ImageSize");
+	lua_pushcfunction(L, l_imgHandleLoadArtRectangle);
+	lua_setfield(L, -2, "LoadArtRectangle");
+	lua_pushcfunction(L, l_imgHandleLoadArtArcBand);
+	lua_setfield(L, -2, "LoadArtArcBand");
 	lua_setfield(L, LUA_REGISTRYINDEX, "uiimghandlemeta");
+
+	// Art handles
+	lua_newtable(L);		// Art handle metatable
+	lua_pushvalue(L, -1);	// Push art handle metatable
+	ADDFUNCCL(NewArtHandle, 1);
+	lua_pushvalue(L, -1);	// Push art handle metatable
+	lua_setfield(L, -2, "__index");
+	lua_pushcfunction(L, l_artHandleGC);
+	lua_setfield(L, -2, "__gc");
+	lua_pushcfunction(L, l_artHandleSize);
+	lua_setfield(L, -2, "Size");
+	lua_setfield(L, LUA_REGISTRYINDEX, "uiarthandlemeta");
+
+	sol::usertype<Texture_c> textureType = lua.new_usertype<Texture_c>("Texture",
+		sol::constructors<Texture_c()>());
+
+	textureType["Allocate"] = sol::overload(
+		sol::resolve<bool(gli::format,int,int,int,int)>(&Texture_c::Allocate),
+		sol::resolve<bool(std::string_view,int,int,int,int)>(&Texture_c::Allocate));
+	textureType["Load"] = &Texture_c::Load;
+	textureType["Save"] = &Texture_c::Save;
+	textureType["Info"] = &Texture_c::Info;
+	textureType["IsValid"] = &Texture_c::IsValid;
+	
+	//textureType["SetLayer"] = &Texture_c::SetLayer;
+	//textureType["CopyImage"] = &Texture_c::CopyImage;
+	//textureType["Transcode"] = &Texture_c::Transcode;
+	//textureType["GenerateMipmaps"] = &Texture_c::Transcode;
+
+	textureType["StackTextures"] = &Texture_c::StackTextures;
+
+	sol::usertype<TextureInfo_s> textureInfoType = lua.new_usertype<TextureInfo_s>("TextureInfo");
+
+	textureInfoType["formatId"] = &TextureInfo_s::formatId;
+	textureInfoType["formatStr"] = &TextureInfo_s::formatStr;
+	textureInfoType["width"] = &TextureInfo_s::width;
+	textureInfoType["height"] = &TextureInfo_s::height;
+	textureInfoType["layerCount"] = &TextureInfo_s::layerCount;
+	textureInfoType["mipCount"] = &TextureInfo_s::mipCount;
 
 	// Rendering
 	ADDFUNC(RenderInit);
@@ -1573,6 +2074,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(SpawnProcess);
 	ADDFUNC(OpenURL);
 	ADDFUNC(SetProfiling);
+	ADDFUNC(TakeScreenshot);
 	ADDFUNC(Restart);
 	ADDFUNC(Exit);
 	lua_getglobal(L, "os");

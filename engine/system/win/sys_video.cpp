@@ -98,6 +98,27 @@ void sys_IVideo::FreeHandle(sys_IVideo* hnd)
 	delete (sys_video_c*)hnd;
 }
 
+
+static std::string GetWineHostVersion()
+{
+#ifdef _WIN32
+	using WineHostVersionFun = void (const char** /*sysname*/, const char** /*release*/);
+	HMODULE mod = GetModuleHandleA("ntdll.dll");
+	if (!mod)
+		return "";
+	auto ptr = GetProcAddress(mod, "wine_get_host_version");
+	if (!ptr)
+		return "";
+	auto fun = (WineHostVersionFun*)ptr;
+	const char* sysname{};
+	const char* release{};
+	fun(&sysname, &release);
+	return sysname ? sysname : "";
+#else
+	return "";
+#endif
+}
+
 sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	: sys((sys_main_c*)sysHnd)
 {
@@ -107,6 +128,17 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 
 	strcpy(curTitle, CFG_TITLE);
 
+	int platformType = GLFW_ANGLE_PLATFORM_TYPE_NONE;
+#ifdef _WIN32
+	const std::string wineHost = GetWineHostVersion();
+	if (wineHost == "Linux")
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_OPENGL;
+	else if (wineHost == "Darwin")
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+	else // Native Windows
+		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+#endif
+	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, platformType);
 	glfwInit();
 }
 
@@ -447,7 +479,7 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 		glfwWindowHint(GLFW_MAXIMIZED, GLFW_FALSE); // Start restored in order to position the window before maximizing.
 		glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_ES_API);
 		glfwWindowHint(GLFW_CONTEXT_CREATION_API, GLFW_EGL_CONTEXT_API);
-		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+		glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 		glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 		glfwWindowHint(GLFW_DEPTH_BITS, 24);
 		//glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_COMPAT_PROFILE);

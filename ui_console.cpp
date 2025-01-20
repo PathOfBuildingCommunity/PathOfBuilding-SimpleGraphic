@@ -153,9 +153,9 @@ void ui_console_c::Render()
 
 	// Draw the background of the console
 	renderer->DrawColor(colorBlack);
-	renderer->DrawImage(NULL, 0, 0, uiw, backHeight);
+	renderer->DrawImage(NULL, { 0, 0 }, { uiw, backHeight });
 	renderer->DrawColor(0xFF007700);
-	renderer->DrawImage(NULL, 0, backHeight - fontSize / 2.0f, uiw, fontSize / 2.0f);
+	renderer->DrawImage(NULL, { 0, backHeight - fontSize / 2.0f }, { uiw, fontSize / 2.0f });
 
 	float basey = y - (float)fontSize;
 	float liney;
