@@ -75,13 +75,13 @@ jobs:
             ${{ github.workspace }}/build/Release/lcurl.pdb
 
       - name: Upload to release
-        if: ${{ github.event_name }} == 'release'
+        if: ${{ github.event_name == 'release' }}
         run: |
           tar -cvf SimpleGraphicDLLs-${{ matrix.triplet }}.tar ${{ env.INST_DIR }}/*.dll
           gh release upload ${{ github.event.release.tag_name }} SimpleGraphicDLLs-${{ matrix.triplet }}.tar
 
       - name: Notify PathOfBuilding repo
-        if: ${{ github.event_name }} == 'release'
+        if: ${{ github.event_name == 'release' }}
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.WIRES77_PAT }}
@@ -90,7 +90,7 @@ jobs:
           client-payload: '{"tag": "${{ github.event.release.tag_name }}", "release_link": "${{ github.event.release.html_url }}"}'
 
       - name: Notify PathOfBuilding-PoE2 repo
-        if: ${{ github.event_name }} == 'release'
+        if: ${{ github.event_name == 'release' }}
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.WIRES77_PAT }}
