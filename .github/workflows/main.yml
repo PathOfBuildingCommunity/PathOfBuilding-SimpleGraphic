@@ -18,6 +18,7 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/
       DEPS_DIR: ${{ github.workspace }}/vcpkg_installed/${{ matrix.triplet }}
       INST_DIR: ${{ github.workspace }}/install-prefix
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +77,7 @@ jobs:
       - name: Upload to release
         if: ${{ github.event_name }} == 'release'
         run: |
-          tar -cvf SimpleGraphic-${{ matrix.triplet }}.tar ${{ env.INST_DIR }}/*.dll
+          tar -cvf SimpleGraphicDLLs-${{ matrix.triplet }}.tar ${{ env.INST_DIR }}/*.dll
           gh release upload ${{ github.event.release.tag_name }} SimpleGraphicDLLs-${{ matrix.triplet }}.tar
 
       - name: Notify PathOfBuilding repo
