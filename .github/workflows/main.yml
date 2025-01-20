@@ -77,7 +77,7 @@ jobs:
       - name: Upload to release
         if: ${{ github.event_name == 'release' }}
         run: |
-          tar -cvf SimpleGraphicDLLs-${{ matrix.triplet }}.tar ${{ env.INST_DIR }}/*.dll
+          tar -cvf SimpleGraphicDLLs-${{ matrix.triplet }}.tar ${{ env.INST_DIR }}/*.dll -C ${{ env.INST_DIR }} .
           gh release upload ${{ github.event.release.tag_name }} SimpleGraphicDLLs-${{ matrix.triplet }}.tar
 
       - name: Notify PathOfBuilding repo
