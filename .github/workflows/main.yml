@@ -85,7 +85,7 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.WIRES77_PAT }}
-          repository: ${{ github.repository.owner }}/PathOfBuilding
+          repository: ${{ github.repository_owner }}/PathOfBuilding
           event-type: update-simple-graphic
           client-payload: '{"tag": "${{ github.event.release.tag_name }}", "release_link": "${{ github.event.release.html_url }}"}'
 
@@ -94,6 +94,6 @@ jobs:
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.WIRES77_PAT }}
-          repository: ${{ github.repository.owner }}/PathOfBuilding-PoE2
+          repository: ${{ github.repository_owner }}/PathOfBuilding-PoE2
           event-type: update-simple-graphic
           client-payload: '{"tag": "${{ github.event.release.tag_name }}", "release_link": "${{ github.event.release.html_url }}"}'
