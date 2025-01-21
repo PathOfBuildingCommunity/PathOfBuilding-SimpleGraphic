@@ -1,6 +1,7 @@
 name: Build DLL
 on: 
   push:
+  pull_request:
   release:
       types: [published]
 jobs:
