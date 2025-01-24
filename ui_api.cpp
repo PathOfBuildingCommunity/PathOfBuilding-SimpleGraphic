@@ -100,7 +100,7 @@
 ** ConPrintTable(table[, noRecurse])
 ** ConExecute("<cmd>")
 ** SpawnProcess("<cmdName>"[, "<args>"])
-** OpenURL("<url>")
+** err = OpenURL("<url>")
 ** SetProfiling(isEnabled)
 ** Restart()
 ** Exit(["<message>"])
@@ -1906,7 +1906,10 @@ static int l_OpenURL(lua_State* L)
 	int n = lua_gettop(L);
 	ui->LAssert(L, n >= 1, "Usage: OpenURL(url)");
 	ui->LAssert(L, lua_isstring(L, 1), "OpenURL() argument 1: expected string, got %s", luaL_typename(L, 1));
-	ui->sys->OpenURL(lua_tostring(L, 1));
+	if (auto errMsg = ui->sys->OpenURL(lua_tostring(L, 1))) {
+		lua_pushstring(L, errMsg->c_str());
+		return 1;
+	}
 	return 0;
 }
 

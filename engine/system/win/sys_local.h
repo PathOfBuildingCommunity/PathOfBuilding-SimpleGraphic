@@ -37,7 +37,7 @@ public:
 	char*	ClipboardPaste();
 	bool	SetWorkDir(std::filesystem::path const& newCwd = {});
 	void	SpawnProcess(std::filesystem::path cmdName, const char* argList);
-	void	OpenURL(const char* url);
+	std::optional<std::string> OpenURL(const char* url); // return value has failure reason
 	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
 	void	Restart();

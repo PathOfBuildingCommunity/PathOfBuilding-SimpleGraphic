@@ -434,23 +434,58 @@ void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList
 #endif
 }
 
-#if _WIN32 || __linux__
-void PlatformOpenURL(const char* url)
+std::string GetWineHostVersion()
 {
 #ifdef _WIN32
+	using WineHostVersionFun = void(const char** /*sysname*/, const char** /*release*/);
+	HMODULE mod = GetModuleHandleA("ntdll.dll");
+	if (!mod)
+		return "";
+	auto ptr = GetProcAddress(mod, "wine_get_host_version");
+	if (!ptr)
+		return "";
+	auto fun = (WineHostVersionFun*)ptr;
+	const char* sysname{};
+	const char* release{};
+	fun(&sysname, &release);
+	return sysname ? sysname : "";
+#else
+	return "";
+#endif
+}
+
+#if _WIN32 || __linux__
+const char* PlatformOpenURL(const char* url)
+{
+#ifdef _WIN32
+	const std::string wineHost = GetWineHostVersion();
+	/*
+	Wine has some loosely determined maximum length on how long of an URL
+	can be, so we pick a "safe" maximum and refuse to open anything longer.
+	*/
+	if ((wineHost == "Linux" || wineHost == "Darwin") && strlen(url) > 1500)
+		return AllocString("Did not open URL, length likely too long for the OS.");
 	ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
+	return nullptr;
 #else
 #warning LV: URL opening not implemented on this OS.
 	// TODO(LV): Implement URL opening for other OSes.
+	return AllocString("URL opening not implemented on this OS.");
 #endif
 }
 #else
-void PlatformOpenURL(const char* url);
+const char* PlatformOpenURL(const char* url);
 #endif
 
-void sys_main_c::OpenURL(const char* url)
+std::optional<std::string> sys_main_c::OpenURL(const char* url)
 {
-	PlatformOpenURL(url);
+	if (auto err = PlatformOpenURL(url))
+	{
+		std::string ret = err;
+		FreeString(err);
+		return ret;
+	}
+	return {};
 }
 
 // ==============================
