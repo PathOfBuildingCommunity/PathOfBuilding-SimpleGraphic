@@ -1588,12 +1588,20 @@ static int l_RemoveDir(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
-	ui->LAssert(L, n >= 1, "Usage: l_RemoveDir(path)");
+	ui->LAssert(L, n >= 1, "Usage: l_RemoveDir(path, recurse)");
 	ui->LAssert(L, lua_isstring(L, 1), "l_RemoveDir() argument 1: expected string, got %s", luaL_typename(L, 1));
 	char const* givenPath = lua_tostring(L, 1);
 	auto path = std::filesystem::u8path(givenPath);
+	bool recursive = false;
+	if (n > 1) {
+		ui->LAssert(L, lua_isboolean(L, 2), "l_RemoveDir() argument 2: expected boolean, got %s", luaL_typename(L, 2));
+		recursive = lua_toboolean(L, 2);
+	}
 	std::error_code ec;
-	if (!is_directory(path, ec) || ec || !remove(path, ec) || ec) {
+	if (!is_directory(path, ec) || ec
+		|| (recursive && !remove_all(path, ec)) || ec
+		|| (!recursive && !remove(path, ec)) || ec)
+	{
 		lua_pushnil(L);
 		lua_pushstring(L, strerror(ec.value()));
 		return 2;

@@ -250,7 +250,7 @@ bool targa_c::Load(std::filesystem::path const& fileName, std::optional<size_cal
 bool targa_c::Save(std::filesystem::path const& fileName)
 {
 	auto format = tex.format();
-	if (is_compressed(format) || !is_unsigned_integer(format))
+	if (is_compressed(format) || !is_unsigned(format))
 		return true;
 
 	int comp = (int)component_count(format);
@@ -319,7 +319,7 @@ bool jpeg_c::Save(std::filesystem::path const& fileName)
 {
 	// JPEG only supports RGB and grayscale images
 	auto format = tex.format();
-	if (is_compressed(format) || !is_unsigned_integer(format))
+	if (is_compressed(format) || !is_unsigned(format))
 		return true;
 
 	int comp = (int)component_count(format);
@@ -385,7 +385,7 @@ bool png_c::Load(std::filesystem::path const& fileName, std::optional<size_callb
 bool png_c::Save(std::filesystem::path const& fileName)
 {
 	auto format = tex.format();
-	if (is_compressed(format) || !is_unsigned_integer(format))
+	if (is_compressed(format) || !is_unsigned(format))
 		return true;
 
 	int comp = (int)component_count(format);
