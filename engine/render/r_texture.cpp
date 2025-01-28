@@ -294,7 +294,7 @@ static void T_ResampleImage(byte* in, dword in_w, dword in_h, int in_comp, byte*
 // OpenGL Texture Class
 // ====================
 
-r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
+r_tex_c::r_tex_c(r_ITexManager* manager, std::string_view fileName, int flags)
 {
 	Init(manager, fileName, flags);
 
@@ -307,7 +307,7 @@ r_tex_c::r_tex_c(r_ITexManager* manager, const char* fileName, int flags)
 
 r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags)
 {
-	Init(manager, NULL, flags);
+	Init(manager, {}, flags);
 
 	// Direct upload
 	img = BuildMipSet(std::move(img));
@@ -322,7 +322,7 @@ r_tex_c::~r_tex_c()
 	glDeleteTextures(1, &texId);
 }
 
-void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags)
+void r_tex_c::Init(r_ITexManager* i_manager, std::string_view i_fileName, int i_flags)
 {
 	manager = (t_manager_c*)i_manager;
 	renderer = manager->renderer;
@@ -331,7 +331,7 @@ void r_tex_c::Init(r_ITexManager* i_manager, const char* i_fileName, int i_flags
 	loadPri = 0;
 	texId = 0;
 	flags = i_flags;
-	fileName = i_fileName ? i_fileName : "";
+	fileName = i_fileName;
 	fileWidth = 0;
 	fileHeight = 0;
 }
@@ -482,15 +482,15 @@ void r_tex_c::LoadFile()
 	}
 
 	// Try to load image file using appropriate loader
-	std::string loadPath = fileName;
-	img = std::unique_ptr<image_c>(image_c::LoaderForFile(renderer->sys->con, loadPath.c_str()));
+	auto path = std::filesystem::u8path(fileName);
+	img = std::unique_ptr<image_c>(image_c::LoaderForFile(renderer->sys->con, path));
 	if (img) {
 		auto sizeCallback = [this](int width, int height) {
 			this->fileWidth = width;
 			this->fileHeight = height;
 			this->status = SIZE_KNOWN;
 		};
-		error = img->Load(loadPath.c_str(), sizeCallback);
+		error = img->Load(path, sizeCallback);
 		if ( !error ) {
 			stackLayers = img->tex.layers();
 			const bool is_async = !!(flags & TF_ASYNC);

@@ -136,68 +136,84 @@ find_c::find_c()
 find_c::~find_c()
 {}
 
-bool GlobMatch(const std::filesystem::path& glob, const std::filesystem::path& file)
+std::optional<std::string> BuildGlobPattern(std::filesystem::path const& glob)
 {
 	using namespace std::literals::string_view_literals;
-	auto globStr = glob.generic_string();
+	auto globStr = glob.generic_u8string();
+	auto globView = std::string_view(globStr);
 
 	// Deal with traditional "everything" wildcards.
-	if (glob == "*" || glob == "*.*") {
-		return true;
+	if (globView == "*" || globView == "*.*") {
+		return {};
 	}
 
+	auto u32Str = IndexUTF8ToUTF32(globStr);
+	auto& offsets = u32Str.sourceCodeUnitOffsets;
+
 	fmt::memory_buffer buf;
+	buf.reserve(globStr.size() * 3); // Decent estimate of final pattern size.
 
 	// If no wildcards are present, test file path verbatim.
 	// We use a regex rather than string comparisons to make it case-insensitive.
-	if (globStr.find_first_of("?*") == std::string::npos) {
-		buf.reserve(globStr.size() * 3); // Decent estimate of final pattern size.
-
-		for (char ch : globStr) {
-			fmt::format_to(fmt::appender(buf), "[{}]", ch);
+	if (u32Str.text.find_first_of(U"?*") == std::u32string::npos) {
+		for (size_t offIdx = 0; offIdx < offsets.size(); ++offIdx) {
+			int byteOffset = offsets[offIdx];
+			int nextOffset = (offIdx + 1 < offsets.size()) ? offsets[offIdx + 1] : globStr.size();
+			fmt::format_to(fmt::appender(buf), "[{}]", globView.substr(byteOffset, nextOffset - byteOffset));
 		}
 	}
 	else {
 		// Otherwise build a regular expression from the glob and use that to match files.
 		auto it = fmt::appender(buf);
-		for (char ch : glob.generic_string()) {
-			if (ch == '*') {
+		for (size_t offIdx = 0; offIdx < offsets.size(); ++offIdx) {
+			char32_t ch = u32Str.text[offIdx];
+			if (ch == U'*') {
 				it = fmt::format_to(it, ".*");
 			}
-			else if (ch == '?') {
+			else if (ch == U'?') {
 				*it++ = '.';
 			}
-			else if ("+[]{}+()|"sv.find(ch) != std::string_view::npos) {
+			else if (U".+[]{}+()|"sv.find(ch) != std::u32string::npos) {
 				// Escape metacharacters
-				it = fmt::format_to(it, "\\{}", ch);
+				it = fmt::format_to(it, "\\{}", (char)ch);
 			}
-			else if (std::isalnum((unsigned char)ch)) {
-				*it++ = ch;
+			else if (ch < 0x80 && std::isalnum((unsigned char)ch)) {
+				*it++ = (char)ch;
 			}
 			else {
-				it = fmt::format_to(it, "[{}]", ch);
+				// Emit as \x{10FFFF}.
+				it = fmt::format_to(it, "\\x{{{:X}}}", (uint32_t)ch);
 			}
 		}
 	}
+	return to_string(buf);
+}
 
+bool GlobMatch(std::optional<std::string> const& globPattern, std::filesystem::path const& file)
+{
+	if (!globPattern.has_value()) {
+		// Empty pattern is like "*" and "*.*".
+		return true;
+	}
 	// Assume case-insensitive comparisons are desired.
 	RE2::Options reOpts;
 	reOpts.set_case_sensitive(false);
-	RE2 reGlob{to_string(buf), reOpts};
+	RE2 reGlob{globPattern.value(), reOpts};
 
-	return RE2::FullMatch(file.generic_string(), reGlob);
+	auto fileStr = file.generic_u8string();
+	return RE2::FullMatch(fileStr, reGlob);
 }
 
-bool find_c::FindFirst(const char* fileSpec)
+bool find_c::FindFirst(std::filesystem::path const&& fileSpec)
 {
-	std::filesystem::path p(fileSpec);
-	glob = p.filename();
+	auto parent = fileSpec.parent_path();
+	globPattern = BuildGlobPattern(fileSpec.filename());
 
 	std::error_code ec;
-	for (iter = std::filesystem::directory_iterator(p.parent_path(), ec); iter != std::filesystem::directory_iterator{}; ++iter) {
+	for (iter = std::filesystem::directory_iterator(parent, ec); iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
-		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.string();
+		if (GlobMatch(globPattern, candFilename)) {
+			fileName = candFilename;
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -216,8 +232,8 @@ bool find_c::FindNext()
 
 	for (++iter; iter != std::filesystem::directory_iterator{}; ++iter) {
 		auto candFilename = iter->path().filename();
-		if (GlobMatch(glob, candFilename)) {
-			fileName = candFilename.string();
+		if (GlobMatch(globPattern, candFilename)) {
+			fileName = candFilename;
 			isDirectory = iter->is_directory();
 			fileSize = iter->file_size();
 			auto mod = iter->last_write_time();
@@ -373,35 +389,45 @@ char* sys_main_c::ClipboardPaste()
 	return AllocString(glfwGetClipboardString(nullptr));
 }
 
-bool sys_main_c::SetWorkDir(const char* newCwd)
+bool sys_main_c::SetWorkDir(std::filesystem::path const& newCwd)
 {
-	if (newCwd) {
-		return _chdir(newCwd) != 0;
+#ifdef _WIN32
+	auto changeDir = [](std::filesystem::path const& p) {
+		return _wchdir(p.c_str());
+	};
+#else
+	auto changeDir = [](std::filesystem::path const& p) {
+		return _chdir(p.c_str());
+	};
+#endif
+	if (newCwd.empty()) {
+		return changeDir(basePath) != 0;
 	} else {
-		return _chdir(basePath.c_str()) != 0;
+		return changeDir(newCwd) != 0;
 	}
 }
 
-void sys_main_c::SpawnProcess(const char* cmdName, const char* argList)
+void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList)
 {
 #ifdef _WIN32
-	char cmd[512];
-	strcpy(cmd, cmdName);
-	if ( !strchr(cmd, '.') ) {
-		strcat(cmd, ".exe");
+	if (!cmdName.has_extension()) {
+		cmdName.replace_extension(".exe");
 	}
-	SHELLEXECUTEINFOA sinfo;
-	memset(&sinfo, 0, sizeof(SHELLEXECUTEINFOA));
-	sinfo.cbSize       = sizeof(SHELLEXECUTEINFOA);
+	auto fileStr = cmdName.wstring();
+	auto wideArgs = WidenUTF8String(argList);
+	SHELLEXECUTEINFOW sinfo;
+	memset(&sinfo, 0, sizeof(sinfo));
+	sinfo.cbSize       = sizeof(sinfo);
 	sinfo.fMask        = SEE_MASK_NOCLOSEPROCESS;
-	sinfo.lpFile       = cmd;
-	sinfo.lpParameters = argList;
-	sinfo.lpVerb       = "open";
+	sinfo.lpFile       = fileStr.c_str();
+	sinfo.lpParameters = wideArgs;
+	sinfo.lpVerb       = L"open";
 	sinfo.nShow        = SW_SHOWMAXIMIZED;
-	if ( !ShellExecuteExA(&sinfo) ) {
-		sinfo.lpVerb = "runas";
-		ShellExecuteExA(&sinfo);
+	if ( !ShellExecuteExW(&sinfo) ) {
+		sinfo.lpVerb = L"runas";
+		ShellExecuteExW(&sinfo);
 	}
+	FreeWideString(wideArgs);
 #else
 #warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.
@@ -494,31 +520,31 @@ void sys_main_c::Restart()
 	exitFlag = true;
 }
 
-std::string FindBasePath()
+std::filesystem::path FindBasePath()
 {
+	std::filesystem::path progPath;
 #ifdef _WIN32
-	std::vector<char> basePath(512);
-	GetModuleFileNameA(NULL, basePath.data(), basePath.size());
-	*strrchr(basePath.data(), '\\') = 0;
-	return basePath.data();
+	std::vector<wchar_t> basePath(1u << 16);
+	GetModuleFileNameW(NULL, basePath.data(), basePath.size());
+	progPath = basePath.data();
 #elif __linux__
 	char basePath[PATH_MAX];
     ssize_t len = ::readlink("/proc/self/exe", basePath, sizeof(basePath));
     if (len == -1 || len == sizeof(basePath))
     	len = 0;
 	basePath[len] = '\0';
-	*strrchr(basePath, '/') = 0;
-	return basePath;
+	progPath = basePath;
 #elif __APPLE__ && __MACH__
 	pid_t pid = getpid();
 	char basePath[PROC_PIDPATHINFO_MAXSIZE]{};
 	proc_pidpath(pid, basePath, sizeof(basePath));
-	*strrchr(basePath, '/') = 0;
-	return basePath;
+	progPath = basePath;
 #endif
+	progPath = canonical(progPath);
+	return progPath.parent_path();
 }
 
-std::optional<std::string> FindUserPath(std::optional<std::string>& invalidPath)
+std::optional<std::filesystem::path> FindUserPath()
 {
 #ifdef _WIN32
     PWSTR osPath{};
@@ -526,36 +552,12 @@ std::optional<std::string> FindUserPath(std::optional<std::string>& invalidPath)
 	if (FAILED(hr)) {
 		// The path may be inaccessible due to malfunctioning cloud providers.
 		CoTaskMemFree(osPath);
-		invalidPath.reset();
 		return {};
 	}
 	std::wstring pathStr = osPath;
 	CoTaskMemFree(osPath);
 	std::filesystem::path path(pathStr);
-	try {
-    	return path.string();
-	}
-	catch (std::system_error) {
-		// The path could not be converted into the narrow representation, convert the path
-		// string lossily for use in an ASCII error message on the Lua side.
-		invalidPath.reset();
-		std::wstring pathStr = path.wstring();
-		char defGlyph = '?';
-		BOOL defGlyphUsed{};
-		DWORD convFlags = WC_COMPOSITECHECK | WC_NO_BEST_FIT_CHARS | WC_DEFAULTCHAR;
-		int cb = WideCharToMultiByte(CP_ACP, 0, pathStr.c_str(), -1, nullptr, 0, &defGlyph, &defGlyphUsed);
-		if (cb) {
-			std::vector<char> buf(cb);
-			WideCharToMultiByte(CP_ACP, 0, pathStr.c_str(), -1, buf.data(), cb, &defGlyph, &defGlyphUsed);
-			for (auto& ch : buf) {
-				if ((unsigned char)ch >= 0x80) {
-					ch = '?'; // Substitute characters that we can represent but can't draw.
-				}
-			}
-			invalidPath = buf.data();
-		}
-		return {};
-	}
+	return canonical(path);
 #else
     if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
         return data_home_path;
@@ -591,7 +593,7 @@ sys_main_c::sys_main_c()
 
 	// Set the local system information
 	basePath = FindBasePath();
-	userPath = FindUserPath(invalidUserPath);
+	userPath = FindUserPath();
 }
 
 bool sys_main_c::Run(int argc, char** argv)

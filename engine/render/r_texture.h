@@ -39,7 +39,7 @@ public:
 	GLenum target{};
 	size_t stackLayers = 1;
 
-	r_tex_c(class r_ITexManager* manager, const char* fileName, int flags);
+	r_tex_c(class r_ITexManager* manager, std::string_view fileName, int flags);
 	r_tex_c(class r_ITexManager* manager, std::unique_ptr<image_c> img, int flags);
 	~r_tex_c();
 
@@ -57,7 +57,7 @@ public:
 private:
 	class t_manager_c* manager;
 	class r_renderer_c* renderer;
-	void	Init(class r_ITexManager* manager, const char* fileName, int flags);
+	void	Init(class r_ITexManager* manager, std::string_view fileName, int flags);
 	void	Upload(image_c& img, int flags);
 	std::unique_ptr<image_c> BuildMipSet(std::unique_ptr<image_c> img);
 };
