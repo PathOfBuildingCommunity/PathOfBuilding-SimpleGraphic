@@ -98,27 +98,6 @@ void sys_IVideo::FreeHandle(sys_IVideo* hnd)
 	delete (sys_video_c*)hnd;
 }
 
-
-static std::string GetWineHostVersion()
-{
-#ifdef _WIN32
-	using WineHostVersionFun = void (const char** /*sysname*/, const char** /*release*/);
-	HMODULE mod = GetModuleHandleA("ntdll.dll");
-	if (!mod)
-		return "";
-	auto ptr = GetProcAddress(mod, "wine_get_host_version");
-	if (!ptr)
-		return "";
-	auto fun = (WineHostVersionFun*)ptr;
-	const char* sysname{};
-	const char* release{};
-	fun(&sysname, &release);
-	return sysname ? sysname : "";
-#else
-	return "";
-#endif
-}
-
 sys_video_c::sys_video_c(sys_IMain* sysHnd)
 	: sys((sys_main_c*)sysHnd)
 {
