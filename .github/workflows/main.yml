@@ -1,5 +1,9 @@
 name: Build DLL
-on: push
+on: 
+  push:
+  pull_request:
+  release:
+      types: [published]
 jobs:
   build_dll:
     strategy:
@@ -15,6 +19,7 @@ jobs:
       VCPKG_INSTALLED_DIR: ${{ github.workspace }}/vcpkg_installed/
       DEPS_DIR: ${{ github.workspace }}/vcpkg_installed/${{ matrix.triplet }}
       INST_DIR: ${{ github.workspace }}/install-prefix
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,3 +74,28 @@ jobs:
             ${{ env.DEPS_DIR }}/bin/*.pdb
             ${{ github.workspace }}/build/Release/lzip.pdb
             ${{ github.workspace }}/build/Release/lcurl.pdb
+
+      - name: Upload to release
+        if: ${{ github.event_name == 'release' }}
+        run: |
+          cd ${{ env.INST_DIR }}
+          tar -cvf SimpleGraphicDLLs-${{ matrix.triplet }}.tar *.dll
+          gh release upload ${{ github.event.release.tag_name }} SimpleGraphicDLLs-${{ matrix.triplet }}.tar
+
+      - name: Notify PathOfBuilding repo
+        if: ${{ github.event_name == 'release' }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.WIRES77_PAT }}
+          repository: ${{ github.repository_owner }}/PathOfBuilding
+          event-type: update-simple-graphic
+          client-payload: '{"tag": "${{ github.event.release.tag_name }}", "release_link": "${{ github.event.release.html_url }}"}'
+
+      - name: Notify PathOfBuilding-PoE2 repo
+        if: ${{ github.event_name == 'release' }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.WIRES77_PAT }}
+          repository: ${{ github.repository_owner }}/PathOfBuilding-PoE2
+          event-type: update-simple-graphic
+          client-payload: '{"tag": "${{ github.event.release.tag_name }}", "release_link": "${{ github.event.release.html_url }}"}'
