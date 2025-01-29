@@ -49,6 +49,7 @@ public:
 	conVar_c* vid_fullscreen;
 	conVar_c* vid_resizable;
 	conVar_c* vid_last;
+	conVar_c* vid_dpiScale;
 
 	void	C_Vid_Apply(IConsole* conHnd, args_c &args);
 	void	C_Vid_ModeList(IConsole* conHnd, args_c &args);
@@ -71,6 +72,7 @@ core_video_c::core_video_c(sys_IMain* sysHnd)
 	vid_fullscreen	= sys->con->Cvar_Add("vid_fullscreen", CV_ARCHIVE, CFG_VID_DEFFULLSCREEN);
 	vid_resizable	= sys->con->Cvar_Add("vid_resizable", CV_ARCHIVE|CV_CLAMP, CFG_VID_DEFRESIZABLE, 0, 3);
 	vid_last		= sys->con->Cvar_Add("vid_last", CV_ARCHIVE, "");
+	vid_dpiScale	= sys->con->Cvar_Add("vid_dpiScale", CV_ARCHIVE, "0");
 
 	Cmd_Add("vid_apply", 0, "", this, &core_video_c::C_Vid_Apply);
 	Cmd_Add("vid_modeList", 0, "", this, &core_video_c::C_Vid_ModeList);
@@ -107,6 +109,9 @@ void core_video_c::Apply(bool shown)
 	} else {
 		set.mode[0] = 0;
 		set.mode[1] = 0;
+	}
+	if (vid_dpiScale->floatVal > 0.0f) {
+		set.dpiScale = vid_dpiScale->floatVal;
 	}
 	set.minSize[0] = CFG_VID_MINWIDTH;
 	set.minSize[1] = CFG_VID_MINHEIGHT;
