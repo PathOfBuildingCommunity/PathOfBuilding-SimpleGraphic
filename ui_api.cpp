@@ -104,6 +104,7 @@
 ** SetProfiling(isEnabled)
 ** Restart()
 ** Exit(["<message>"])
+** SetForeground()
 */
 
 // Grab UI main pointer from the registry
@@ -1952,6 +1953,13 @@ static int l_TakeScreenshot(lua_State* L)
 	return 0;
 }
 
+static int l_SetForeground(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->sys->video->SetForeground();
+	return 0;
+}
+
 // ==============================
 // Library and API Initialisation
 // ==============================
@@ -2128,6 +2136,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(TakeScreenshot);
 	ADDFUNC(Restart);
 	ADDFUNC(Exit);
+	ADDFUNC(SetForeground);
 	lua_getglobal(L, "os");
 	lua_pushcfunction(L, l_Exit);
 	lua_setfield(L, -2, "exit");
