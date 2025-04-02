@@ -121,6 +121,21 @@ find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 
+add_library(cmp_core STATIC
+    dep/compressonator/cmp_core/source/cmp_core.cpp
+    dep/compressonator/cmp_core/source/cmp_core.h
+    dep/compressonator/cmp_core/shaders/bc3_encode_kernel.cpp
+    dep/compressonator/cmp_core/shaders/bc7_encode_kernel.cpp
+)
+
+target_include_directories(cmp_core PRIVATE
+    dep/compressonator/applications/_libs/cmp_math
+)
+
+target_include_directories(cmp_core PUBLIC
+    dep/compressonator/cmp_core/shaders
+    dep/compressonator/cmp_core/source
+)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -203,6 +218,7 @@ target_link_libraries(SimpleGraphic
     PRIVATE
     unofficial::angle::libEGL
     unofficial::angle::libGLESv2
+    cmp_core
     fmt::fmt
     glfw
     gli
