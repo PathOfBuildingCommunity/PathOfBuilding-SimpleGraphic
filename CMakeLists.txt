@@ -308,6 +308,40 @@ target_link_libraries(lua-utf8
 install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
+# luasocket module
+
+add_library(luasocket SHARED
+   "libs/luasocket/src/auxiliar.c"
+   "libs/luasocket/src/buffer.c"
+   "libs/luasocket/src/compat.c"
+   "libs/luasocket/src/except.c"
+   "libs/luasocket/src/inet.c"
+   "libs/luasocket/src/io.c"
+   "libs/luasocket/src/luasocket.c"
+   "libs/luasocket/src/options.c"
+   "libs/luasocket/src/select.c"
+   "libs/luasocket/src/tcp.c"
+   "libs/luasocket/src/timeout.c"
+   "libs/luasocket/src/udp.c"
+   "libs/luasocket/src/wsocket.c"
+)
+
+target_include_directories(luasocket
+    PRIVATE
+    ${LSOCKET_SOURCE_DIR}/src
+)
+
+target_link_libraries(luasocket
+    PRIVATE
+    LuaJIT::LuaJIT
+    wsock32
+    ws2_32
+)
+
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
+install(TARGETS luasocket RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
+
 # lzip module
 
 add_library(lzip SHARED libs/LZip/lzip.cpp)
