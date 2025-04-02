@@ -29,7 +29,6 @@ public:
 	// Interface
 	int		Apply(sys_vidSet_s* set);
 
-	void	SetActive(bool active);
 	void	SetForeground();
 	bool	IsActive();
 	void	FramebufferSizeChanged(int width, int height);
@@ -655,13 +654,6 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 
 	initialised = true;
 	return 0;
-}
-
-void sys_video_c::SetActive(bool active)
-{
-	if (initialised) {
-		glfwFocusWindow(wnd);
-	}
 }
 
 void sys_video_c::SetForeground()

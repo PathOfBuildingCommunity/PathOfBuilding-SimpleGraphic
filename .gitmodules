@@ -16,3 +16,6 @@
 [submodule "libs/luasocket"]
 	path = libs/luasocket
 	url = https://github.com/lunarmodules/luasocket.git
+[submodule "dep/compressonator"]
+	path = dep/compressonator
+	url = https://github.com/GPUOpen-Tools/compressonator
