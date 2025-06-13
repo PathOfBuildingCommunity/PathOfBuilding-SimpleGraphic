@@ -14,6 +14,6 @@ public:
 	static core_IConfig* GetHandle(sys_IMain* sysHnd);
 	static void FreeHandle(core_IConfig* hnd);
 	
-	virtual bool	LoadConfig(const char* cfgName) = 0;
-	virtual bool	SaveConfig(const char* cfgName) = 0;
+	virtual bool	LoadConfig(std::filesystem::path const& cfgName) = 0;
+	virtual bool	SaveConfig(std::filesystem::path const& cfgName) = 0;
 };

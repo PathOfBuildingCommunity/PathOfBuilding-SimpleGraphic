@@ -7,8 +7,8 @@
     {
       "kind": "filesystem",
       "path": "vcpkg-ports",
-      "baseline": "2024-03-26",
-      "packages": ["luajit"]
+      "baseline": "2025-01-19",
+      "packages": ["glfw3", "gli", "luajit"]
     }
   ]
 }

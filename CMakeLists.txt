@@ -36,12 +36,16 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/common/memtrak3.h"
     "engine/common/streams.cpp"
     "engine/common/streams.h"
+    "engine/core/core_compress.cpp"
+    "engine/core/core_compress.h"
     "engine/core/core_config.cpp"
     "engine/core/core_config.h"
     "engine/core/core_image.cpp"
     "engine/core/core_image.h"
     "engine/core/core_main.cpp"
     "engine/core/core_main.h"
+    "engine/core/core_tex_manipulation.cpp"
+    "engine/core/core_tex_manipulation.h"
     "engine/core/core_video.cpp"
     "engine/core/core_video.h"
     "engine/render/r_font.cpp"
@@ -107,10 +111,31 @@ find_package(unofficial-angle CONFIG REQUIRED)
 find_package(CURL CONFIG REQUIRED)
 find_package(fmt CONFIG REQUIRED)
 find_package(glfw3 CONFIG REQUIRED)
+find_package(gli CONFIG REQUIRED)
 find_package(LuaJIT REQUIRED)
+find_package(Microsoft.GSL CONFIG REQUIRED)
+find_package(PkgConfig REQUIRED)
 find_package(re2 CONFIG REQUIRED)
+find_package(sol2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
+find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
+
+add_library(cmp_core STATIC
+    dep/compressonator/cmp_core/source/cmp_core.cpp
+    dep/compressonator/cmp_core/source/cmp_core.h
+    dep/compressonator/cmp_core/shaders/bc3_encode_kernel.cpp
+    dep/compressonator/cmp_core/shaders/bc7_encode_kernel.cpp
+)
+
+target_include_directories(cmp_core PRIVATE
+    dep/compressonator/applications/_libs/cmp_math
+)
+
+target_include_directories(cmp_core PUBLIC
+    dep/compressonator/cmp_core/shaders
+    dep/compressonator/cmp_core/source
+)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -193,14 +218,19 @@ target_link_libraries(SimpleGraphic
     PRIVATE
     unofficial::angle::libEGL
     unofficial::angle::libGLESv2
+    cmp_core
     fmt::fmt
     glfw
+    gli
     glm::glm
     imgui
     LuaJIT::LuaJIT
+    Microsoft.GSL::GSL
     re2::re2
+    sol2
     Threads::Threads
     ZLIB::ZLIB
+    zstd::libzstd_shared
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
@@ -214,7 +244,7 @@ if (WIN32)
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
         find_file(ZLIB_DLL_DEBUG NAMES "zlibd1.dll"
             PATHS "${DEPS_DIR}" PATH_SUFFIXES "debug/bin" REQUIRED NO_DEFAULT_PATH)
-             
+
         install(FILES
             ${LuaJIT_DLL_DEBUG}
             ${ZLIB_DLL_DEBUG}
@@ -226,8 +256,7 @@ if (WIN32)
     find_file(LuaJIT_DLL_RELEASE NAMES "lua51.dll"
         PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
     find_file(ZLIB_DLL_RELEASE NAMES "zlib1.dll"
-        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH
-    )
+        PATHS "${DEPS_DIR}" PATH_SUFFIXES "bin" REQUIRED NO_DEFAULT_PATH)
 
     install(FILES
         ${LuaJIT_DLL_RELEASE}
@@ -258,6 +287,60 @@ target_link_libraries(lcurl
 install(TARGETS lcurl RUNTIME DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
+# luautf8 module
+
+add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
+
+target_compile_definitions(lua-utf8
+    PRIVATE
+    LUA_BUILD_AS_DLL
+)
+
+target_include_directories(lua-utf8
+    PRIVATE
+)
+
+target_link_libraries(lua-utf8
+    PRIVATE
+    LuaJIT::LuaJIT
+)
+
+install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
+
+# luasocket module
+
+add_library(luasocket SHARED
+   "libs/luasocket/src/auxiliar.c"
+   "libs/luasocket/src/buffer.c"
+   "libs/luasocket/src/compat.c"
+   "libs/luasocket/src/except.c"
+   "libs/luasocket/src/inet.c"
+   "libs/luasocket/src/io.c"
+   "libs/luasocket/src/luasocket.c"
+   "libs/luasocket/src/options.c"
+   "libs/luasocket/src/select.c"
+   "libs/luasocket/src/tcp.c"
+   "libs/luasocket/src/timeout.c"
+   "libs/luasocket/src/udp.c"
+   "libs/luasocket/src/wsocket.c"
+)
+
+target_include_directories(luasocket
+    PRIVATE
+    ${LSOCKET_SOURCE_DIR}/src
+)
+
+target_link_libraries(luasocket
+    PRIVATE
+    LuaJIT::LuaJIT
+    wsock32
+    ws2_32
+)
+
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
+install(TARGETS luasocket RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
 

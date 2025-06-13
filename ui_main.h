@@ -34,11 +34,12 @@ public:
 	dword	subScriptSize = 0;
 	ui_ISubScript** subScriptList = nullptr;
 
+	std::optional<sol::state> solState;
 	lua_State* L = nullptr;
-	char*	scriptName = nullptr;
-	char*	scriptCfg = nullptr;
-	char*	scriptPath = nullptr;
-	char*	scriptWorkDir = nullptr;
+	std::filesystem::path scriptName;
+	std::filesystem::path scriptCfg;
+	std::filesystem::path scriptPath;
+	std::filesystem::path scriptWorkDir;
 	int		scriptArgc = 0;
 	char**	scriptArgv = nullptr;
 	bool	restartFlag = false;
@@ -48,6 +49,7 @@ public:
 	int		cursorY = 0;
 	int		framesSinceWindowHidden = 0;
 	volatile bool	inLua = false;
+	int		ioOpenf = LUA_NOREF;
 
 	static int InitAPI(lua_State* L);
 
@@ -65,4 +67,6 @@ public:
 	void	CallKeyHandler(const char* hname, int key, bool dblclk);
 	const char* NameForKey(int key);
 	int		KeyForName(const char* name);
+
+	enum { REGISTRY_KEY = 1 };
 };

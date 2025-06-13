@@ -48,7 +48,6 @@ public:
 
 	virtual	int		Apply(sys_vidSet_s* set) = 0;	// Apply settings
 
-	virtual	void	SetActive(bool active) = 0;		// Respond to window activated status change
 	virtual void	SetForeground() = 0; // Activate the window if shown
 	virtual bool	IsActive() = 0; // Get activated status
 	virtual void	FramebufferSizeChanged(int width, int height) = 0; // Respond to framebuffer size change
