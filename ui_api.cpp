@@ -85,9 +85,9 @@
 ** compressed = Deflate(uncompressed)
 ** uncompressed = Inflate(compressed)
 ** msec = GetTime()
-** path = GetScriptPath()
-** path = GetRuntimePath()
-** path = GetUserPath() -- may return nil if the user path could not be determined
+** path[, pathACP[, err]] = GetScriptPath()
+** path[, pathACP[, err]] = GetRuntimePath()
+** path[, pathACP[, err]] = GetUserPath() -- may return nil if the user path could not be determined
 ** SetWorkDir("<path>")
 ** path = GetWorkDir()
 ** ssID = LaunchSubScript("<scriptText>", "<funcList>", "<subList>"[, ...])
@@ -1544,25 +1544,63 @@ static int l_GetScriptPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	lua_pushstring(L, ui->scriptPath.generic_u8string().c_str());
-	return 1;
+	try
+	{
+		lua_pushstring(L, ui->scriptPath.generic_string().c_str());
+		return 2;
+	}
+	catch (std::exception& e)
+	{
+		lua_pushnil(L);
+		lua_pushstring(L, e.what());
+		return 3;
+	}
 }
 
 static int l_GetRuntimePath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	lua_pushstring(L, ui->sys->basePath.generic_u8string().c_str());
-	return 1;
+	try
+	{
+		lua_pushstring(L, ui->sys->basePath.generic_string().c_str());
+		return 2;
+	}
+	catch (std::exception& e)
+	{
+		lua_pushnil(L);
+		lua_pushstring(L, e.what());
+		return 3;
+	}
 }
 
 static int l_GetUserPath(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	auto& userPath = ui->sys->userPath;
-	if (userPath) {
-		lua_pushstring(L, userPath->generic_u8string().c_str());
-		return 1;
+	if (!userPath) {
+		lua_pushnil(L);
+		lua_pushnil(L);
+		if (auto& reason = ui->sys->userPathReason)
+		{
+			lua_pushstring(L, reason->c_str());
+			return 3;
+		}
+		return 2;
 	}
-	return 0;
+
+	lua_pushstring(L, userPath->generic_u8string().c_str());
+	try
+	{
+		lua_pushstring(L, userPath->generic_string().c_str());
+		return 2;
+	}
+	catch (std::exception& e)
+	{
+		lua_pushnil(L);
+		lua_pushstring(L, e.what());
+		return 3;
+	}
 }
 
 static int l_MakeDir(lua_State* L)
