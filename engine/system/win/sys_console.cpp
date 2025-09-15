@@ -55,15 +55,6 @@ public:
 	void	ConPrintClear();
 };
 
-// utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
-template<class Facet>
-struct deletable_facet : Facet
-{
-	template<class... Args>
-	deletable_facet(Args&&... args) : Facet(std::forward<Args>(args)...) {}
-	~deletable_facet() {}
-};
-
 sys_IConsole* sys_IConsole::GetHandle(sys_IMain* sysHnd)
 {
 	return new sys_console_c(sysHnd);
@@ -238,12 +229,7 @@ void sys_console_c::SetVisible(bool show)
 			// Select all text and replace with full text
 			Edit_SetText(hwOut, L"");
 			char* buffer = sys->con->BuildBuffer();
-
-			// Convert char * to u32string
-			//WCHAR* w_char = WidenUTF8String(buffer);
 			std::u32string u32_text = IndexUTF8ToUTF32(buffer).text;
-	/*		std::wstring_convert<deletable_facet<std::codecvt<char32_t, WCHAR, std::mbstate_t>>, char32_t> converter;
-			std::u32string u32_text = converter.from_bytes(w_char);*/
 
 			Print(u32_text);
 			delete buffer;
@@ -272,10 +258,6 @@ bool sys_console_c::IsVisible()
 
 void sys_console_c::SetTitle(const char* title)
 {
-	//size_t requiredSize = mbstowcs(NULL, title, 0); // C4996
-	///* Add one to leave room for the null terminator */
-	//WCHAR* pwc = (wchar_t*)malloc((requiredSize + 1) * sizeof(wchar_t));
-	//mbstowcs(pwc, title, requiredSize + 1); // C4996
 	WCHAR* text = WidenUTF8String(title);
 	SetWindowText(hwMain, (text && *text)? text : CFG_SCON_TITLE);
 }
@@ -336,7 +318,7 @@ void sys_console_c::CopyToClipboard()
 		HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len + 1);
 		if ( !hg ) return;
 		WCHAR* cp = (WCHAR*)GlobalLock(hg);
-		GetWindowText(hwOut, cp, len + 1);
+		GetWindowTextW(hwOut, cp, len + 1);
 		GlobalUnlock(hg);
 		OpenClipboard(hwMain);
 		EmptyClipboard();
@@ -347,10 +329,7 @@ void sys_console_c::CopyToClipboard()
 
 void sys_console_c::ConPrintHook(const char* text)
 {
-	std::wstring_convert<deletable_facet<std::codecvt<char32_t, char, std::mbstate_t>>, char32_t> converter;
-
-	std::u32string u32_text = converter.from_bytes(text);
-	Print(u32_text);
+	Print(IndexUTF8ToUTF32(text).text);
 }
 
 void sys_console_c::ConPrintClear()
