@@ -9,7 +9,7 @@
 #define CFG_LOGFILE		"SimpleGraphic/SimpleGraphic.log"
 #define CFG_DATAPATH	"SimpleGraphic/"
 
-#define CFG_SCON_TITLE	"SimpleGraphic Console"
+#define CFG_SCON_TITLE	L"SimpleGraphic Console"
 #define CFG_SCON_TEXTCOL 0x00FFFFFF	// 255 255 255
 #define CFG_SCON_TEXTBG 0x001A3400	//   0  52  26
 #define CFG_SCON_WINBG 0x00000000	//   0   0   0

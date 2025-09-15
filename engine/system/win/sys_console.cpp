@@ -48,11 +48,20 @@ public:
 	void	RunMessages(HWND hwnd = nullptr);
 	void	ThreadProc();
 
-	void	Print(const char* text);
+	void	Print(std::u32string_view text);
 	void	CopyToClipboard();
 
 	void	ConPrintHook(const char* text);
 	void	ConPrintClear();
+};
+
+// utility wrapper to adapt locale-bound facets for wstring/wbuffer convert
+template<class Facet>
+struct deletable_facet : Facet
+{
+	template<class... Args>
+	deletable_facet(Args&&... args) : Facet(std::forward<Args>(args)...) {}
+	~deletable_facet() {}
 };
 
 sys_IConsole* sys_IConsole::GetHandle(sys_IMain* sysHnd)
@@ -118,7 +127,7 @@ void sys_console_c::ThreadProc()
 	if (RegisterClass(&conClass) == 0) exit(0);
 
 	// Create the system console window
-	hwMain = CreateWindowEx(
+	hwMain = CreateWindowExW(
 		0, CFG_SCON_TITLE " Class", CFG_SCON_TITLE, SCON_STYLE, 
 		wrec.left, wrec.top, wrec.right - wrec.left, wrec.bottom - wrec.top,
 		NULL, NULL, sys->hinst, NULL
@@ -126,8 +135,8 @@ void sys_console_c::ThreadProc()
 	SetWindowLongPtr(hwMain, GWLP_USERDATA, (LONG_PTR)this);
 
 	// Populate window
-	hwOut = CreateWindowEx(
-		WS_EX_CLIENTEDGE, "EDIT", "", WS_VISIBLE | WS_CHILD | WS_BORDER | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
+	hwOut = CreateWindowExW(
+		WS_EX_CLIENTEDGE, L"EDIT", L"", WS_VISIBLE | WS_CHILD | WS_BORDER | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
 		10, 10, SCON_WIDTH - 20, SCON_HEIGHT - 20, 
 		hwMain, NULL, sys->hinst, NULL
 	);
@@ -138,7 +147,7 @@ void sys_console_c::ThreadProc()
 		FW_LIGHT, FALSE, FALSE, FALSE, 
 		DEFAULT_CHARSET, 
 		OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, 
-		FIXED_PITCH|FF_MODERN, "Lucida Console"
+		FIXED_PITCH|FF_MODERN, L"Lucida Console"
 	);
 	SetWindowFont(hwOut, font, FALSE);
 	Edit_LimitText(hwOut, 0xFFFF);
@@ -173,7 +182,7 @@ void sys_console_c::ThreadProc()
 	isRunning = false;
 
 	// Flush windowless messages (Like WM_QUIT)
-	sys->RunMessages();
+	RunMessages();
 }
 
 sys_console_c::~sys_console_c()
@@ -227,9 +236,16 @@ void sys_console_c::SetVisible(bool show)
 			SetForegroundWindow(hwMain);
 
 			// Select all text and replace with full text
-			Edit_SetText(hwOut, "");
+			Edit_SetText(hwOut, L"");
 			char* buffer = sys->con->BuildBuffer();
-			Print(buffer);
+
+			// Convert char * to u32string
+			//WCHAR* w_char = WidenUTF8String(buffer);
+			std::u32string u32_text = IndexUTF8ToUTF32(buffer).text;
+	/*		std::wstring_convert<deletable_facet<std::codecvt<char32_t, WCHAR, std::mbstate_t>>, char32_t> converter;
+			std::u32string u32_text = converter.from_bytes(w_char);*/
+
+			Print(u32_text);
 			delete buffer;
 	
 			RunMessages(hwMain);
@@ -256,21 +272,27 @@ bool sys_console_c::IsVisible()
 
 void sys_console_c::SetTitle(const char* title)
 {
-	SetWindowText(hwMain, (title && *title)? title : CFG_SCON_TITLE);
+	//size_t requiredSize = mbstowcs(NULL, title, 0); // C4996
+	///* Add one to leave room for the null terminator */
+	//WCHAR* pwc = (wchar_t*)malloc((requiredSize + 1) * sizeof(wchar_t));
+	//mbstowcs(pwc, title, requiredSize + 1); // C4996
+	WCHAR* text = WidenUTF8String(title);
+	SetWindowText(hwMain, (text && *text)? text : CFG_SCON_TITLE);
 }
 
-void sys_console_c::Print(const char* text)
+void sys_console_c::Print(std::u32string_view string_view_text)
 {
 	if ( !shown ) {
 		return;
 	}
 
 	int escLen;
+	const char32_t* text = string_view_text.data();
 
 	// Find the required buffer length
 	int len = 0;
 	for (int b = 0; text[b]; b++) {
-		if (text[b] == '\n') {
+		if (text[b] == U'\n') {
 			// Newline takes 2 characters
 			len+= 2;
 		} else if (escLen = IsColorEscape(&text[b])) {
@@ -282,28 +304,29 @@ void sys_console_c::Print(const char* text)
 	}
 
 	// Parse into the buffer
-	char* winText = AllocStringLen(len);
-	char* p = winText;
+	char16_t* winText = new char16_t[len + 1];
+	char16_t* p = winText;
 	for (int b = 0; text[b]; b++) {
-		if (text[b] == '\n') {
+		if (text[b] == L'\n') {
 			// Append newline
-			*(p++) = '\r';
-			*(p++) = '\n';
+			*(p++) = L'\r';
+			*(p++) = L'\n';
 		} else if (escLen = IsColorEscape(&text[b])) {
 			// Skip colour escapes
 			b+= escLen - 1;
 		} else {
 			// Add character
-			*(p++) = text[b];
+			*(p++) = (char16_t)text[b];
 		}
 	}
+	winText[len] = 0;
 
 	// Append to the output
 	Edit_SetSel(hwOut, Edit_GetTextLength(hwOut), -1);
 	Edit_ReplaceSel(hwOut, winText);
 	Edit_Scroll(hwOut, 0xFFFF, 0);
 	RunMessages(hwMain);
-	delete winText;
+	delete[] winText;
 }
 
 void sys_console_c::CopyToClipboard()
@@ -312,7 +335,7 @@ void sys_console_c::CopyToClipboard()
 	if (len) {
 		HGLOBAL hg = GlobalAlloc(GMEM_MOVEABLE, len + 1);
 		if ( !hg ) return;
-		char* cp = (char*)GlobalLock(hg);
+		WCHAR* cp = (WCHAR*)GlobalLock(hg);
 		GetWindowText(hwOut, cp, len + 1);
 		GlobalUnlock(hg);
 		OpenClipboard(hwMain);
@@ -324,10 +347,13 @@ void sys_console_c::CopyToClipboard()
 
 void sys_console_c::ConPrintHook(const char* text)
 {
-	Print(text);
+	std::wstring_convert<deletable_facet<std::codecvt<char32_t, char, std::mbstate_t>>, char32_t> converter;
+
+	std::u32string u32_text = converter.from_bytes(text);
+	Print(u32_text);
 }
 
 void sys_console_c::ConPrintClear()
 {
-	Edit_SetText(hwOut, "");
+	Edit_SetText(hwOut, L"");
 }
