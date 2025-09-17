@@ -893,10 +893,11 @@ static int l_DrawImage(lua_State* L)
 	}
 	
 	if (af & AF_XY) {
+		const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 		for (int i = k; i < k + 4; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImage() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			const int idx = i - k;
-			xys[idx/2][idx%2] = (float)lua_tonumber(L, i);
+			xys[idx/2][idx%2] = (float)lua_tonumber(L, i) * dpiScale;
 		}
 		k += 4;
 	}
@@ -1061,9 +1062,15 @@ static int l_DrawString(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 6), "DrawString() argument 6: expected string, got %s", luaL_typename(L, 6));
 	static const char* alignMap[6] = { "LEFT", "CENTER", "RIGHT", "CENTER_X", "RIGHT_X", NULL };
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	ui->renderer->DrawString(
-		(float)lua_tonumber(L, 1), (float)lua_tonumber(L, 2), luaL_checkoption(L, 3, "LEFT", alignMap),
-		(int)lua_tointeger(L, 4), NULL, luaL_checkoption(L, 5, "FIXED", fontMap), lua_tostring(L, 6)
+		(float)lua_tonumber(L, 1) * dpiScale, 
+		(float)lua_tonumber(L, 2) * dpiScale, 
+		luaL_checkoption(L, 3, "LEFT", alignMap),
+		(int)lua_tointeger(L, 4) * dpiScale, 
+		NULL, 
+		luaL_checkoption(L, 5, "FIXED", fontMap), 
+		lua_tostring(L, 6)
 	);
 	return 0;
 }
@@ -1078,7 +1085,10 @@ static int l_DrawStringWidth(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 2), "DrawStringWidth() argument 2: expected string, got %s", luaL_typename(L, 2));
 	ui->LAssert(L, lua_isstring(L, 3), "DrawStringWidth() argument 3: expected string, got %s", luaL_typename(L, 3));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
-	lua_pushinteger(L, ui->renderer->DrawStringWidth((int)lua_tointeger(L, 1), luaL_checkoption(L, 2, "FIXED", fontMap), lua_tostring(L, 3)));
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
+	lua_pushinteger(L, ui->renderer->DrawStringWidth((int)lua_tointeger(L, 1) * dpiScale, 
+	luaL_checkoption(L, 2, "FIXED", fontMap), 
+	lua_tostring(L, 3)) / dpiScale);
 	return 1;
 }
 
