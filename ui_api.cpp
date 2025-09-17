@@ -792,12 +792,16 @@ static int l_SetViewport(lua_State* L)
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	ui->LAssert(L, ui->renderEnable, "SetViewport() called outside of OnFrame");
 	int n = lua_gettop(L);
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	if (n) {
 		ui->LAssert(L, n >= 4, "Usage: SetViewport([x, y, width, height])");
 		for (int i = 1; i <= 4; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "SetViewport() argument %d: expected number, got %s", i, luaL_typename(L, i));
 		}
-		ui->renderer->SetViewport((int)lua_tointeger(L, 1), (int)lua_tointeger(L, 2), (int)lua_tointeger(L, 3), (int)lua_tointeger(L, 4));
+		ui->renderer->SetViewport((int)(lua_tointeger(L, 1) * dpiScale), 
+		(int)(lua_tointeger(L, 2) * dpiScale), 
+		(int)(lua_tointeger(L, 3) * dpiScale), 
+		(int)(lua_tointeger(L, 4) * dpiScale));
 	}
 	else {
 		ui->renderer->SetViewport();
@@ -992,10 +996,11 @@ static int l_DrawImageQuad(lua_State* L)
 	}
 
 	if (af & AF_XY) {
+		const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 		for (int i = k; i < k + 8; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "DrawImageQuad() argument %d: expected number, got %s", i, luaL_typename(L, i));
 			const int idx = i - k;
-			xys[idx / 2][idx % 2] = (float)lua_tonumber(L, i);
+			xys[idx / 2][idx % 2] = (float)lua_tonumber(L, i) * dpiScale;
 		}
 		k += 8;
 	}
@@ -1386,8 +1391,9 @@ static int l_SetWindowTitle(lua_State* L)
 static int l_GetCursorPos(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
-	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorX));
-	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorY));
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
+	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorX) / dpiScale);
+	lua_pushinteger(L, ui->renderer->VirtualMap(ui->cursorY) / dpiScale);
 	return 2;
 }
 
@@ -1395,9 +1401,12 @@ static int l_SetCursorPos(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	int n = lua_gettop(L);
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	ui->LAssert(L, n >= 2, "Usage: SetCursorPos(x, y)");
 	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
+	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1) * dpiScale);
+	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2) * dpiScale);
 	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1));
 	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2));
 	ui->sys->video->SetRelativeCursor(x, y);
