@@ -1407,8 +1407,6 @@ static int l_SetCursorPos(lua_State* L)
 	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
 	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1) * dpiScale);
 	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2) * dpiScale);
-	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1));
-	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2));
 	ui->sys->video->SetRelativeCursor(x, y);
 	return 0;
 }
@@ -2163,4 +2161,5 @@ int ui_main_c::InitAPI(lua_State* L)
 
 	return 0;
 }
+
 
