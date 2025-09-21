@@ -54,8 +54,6 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/render/r_main.h"
     "engine/render/r_texture.cpp"
     "engine/render/r_texture.h"
-    # "engine/system/win/sys_console.cpp"
-    "engine/system/win/sys_console_unix.cpp"
     "engine/system/win/sys_local.h"
     "engine/system/win/sys_main.cpp"
     "engine/system/win/sys_opengl.cpp"
@@ -82,6 +80,16 @@ set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
 if (APPLE)
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_macos.mm"
+    )
+endif()
+
+if (WIN32)
+    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+        "engine/system/win/sys_console.cpp"
+    )
+else()
+    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+        "engine/system/win/sys_console_unix.cpp"
     )
 endif()
 

@@ -479,7 +479,7 @@ IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 			auto p0 = (uint32_t)b[0] & 0b111;
 			auto p1 = (uint32_t)b[1] & 0b11'1111;
 			auto p2 = (uint32_t)b[2] & 0b11'1111;
-			auto p3 = (uint32_t)b[2] & 0b11'1111;
+			auto p3 = (uint32_t)b[3] & 0b11'1111;
 			codepoint = p0 << 18 | p1 << 12 | p2 << 6 | p3;
 			byteIdx += 4;
 		}
