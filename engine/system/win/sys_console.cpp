@@ -281,7 +281,13 @@ void sys_console_c::Print(std::u32string_view string_view_text)
 			// Skip colour escapes
 			b+= escLen - 1;
 		} else {
-			len++;
+			if (text[b] > UINT16_MAX) {
+				// Higher codepoints will be separated into surrogate pairs
+				len += 2;
+			}
+			else {
+				len++;
+			}
 		}
 	}
 
@@ -298,7 +304,16 @@ void sys_console_c::Print(std::u32string_view string_view_text)
 			b+= escLen - 1;
 		} else {
 			// Add character
-			*(p++) = (char16_t)text[b];
+			if (text[b] > UINT16_MAX) { // Outside the BMP
+				char16_t high_surrogate = ((text[b] - 0x10000) / 0x400) + 0xD800;
+				char16_t low_surrogate = ((text[b] - 0x10000) % 0x400) + 0xDC00;
+				*(p++) = high_surrogate;
+				*(p++) = low_surrogate;
+			}
+			else {
+				*(p++) = (char16_t)text[b];
+			}
+			
 		}
 	}
 	winText[len] = 0;
