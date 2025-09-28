@@ -1093,7 +1093,7 @@ static int l_DrawStringWidth(lua_State* L)
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	lua_pushinteger(L, ui->renderer->DrawStringWidth((int)lua_tointeger(L, 1) * dpiScale, 
 	luaL_checkoption(L, 2, "FIXED", fontMap), 
-	lua_tostring(L, 3)) / dpiScale);
+	lua_tostring(L, 3)));
 	return 1;
 }
 
@@ -1102,6 +1102,7 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	ui_main_c* ui = GetUIPtr(L);
 	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
 	int n = lua_gettop(L);
+	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	ui->LAssert(L, n >= 5, "Usage: DrawStringCursorIndex(height, font, text, cursorX, cursorY)");
 	ui->LAssert(L, lua_isnumber(L, 1), "DrawStringCursorIndex() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->LAssert(L, lua_isstring(L, 2), "DrawStringCursorIndex() argument 2: expected string, got %s", luaL_typename(L, 2));
@@ -1109,7 +1110,10 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	ui->LAssert(L, lua_isnumber(L, 4), "DrawStringCursorIndex() argument 4: expected number, got %s", luaL_typename(L, 4));
 	ui->LAssert(L, lua_isnumber(L, 5), "DrawStringCursorIndex() argument 5: expected number, got %s", luaL_typename(L, 5));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
-	lua_pushinteger(L, ui->renderer->DrawStringCursorIndex((int)lua_tointeger(L, 1), luaL_checkoption(L, 2, "FIXED", fontMap), lua_tostring(L, 3), (int)lua_tointeger(L, 4), (int)lua_tointeger(L, 5)) + 1);
+	lua_pushinteger(L, ui->renderer->DrawStringCursorIndex((int)lua_tointeger(L, 1) * dpiScale,
+	luaL_checkoption(L, 2, "FIXED", fontMap),
+	lua_tostring(L, 3),
+	(int)lua_tointeger(L, 4) * dpiScale, (int)lua_tointeger(L, 5) * dpiScale) + 1);
 	return 1;
 }
 
@@ -1405,8 +1409,8 @@ static int l_SetCursorPos(lua_State* L)
 	ui->LAssert(L, n >= 2, "Usage: SetCursorPos(x, y)");
 	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
-	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1) / dpiScale);
-	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2) / dpiScale);
+	int x = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 1) * dpiScale);
+	int y = ui->renderer->VirtualUnmap((int)lua_tointeger(L, 2) * dpiScale);
 	ui->sys->video->SetRelativeCursor(x, y);
 	return 0;
 }
