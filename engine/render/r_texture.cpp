@@ -9,6 +9,7 @@
 #include <atomic>
 #include "r_local.h"
 
+#include "cmp_core.h"
 #include "stb_image_resize.h"
 #include <gli/gl.hpp>
 #include <gli/generate_mipmaps.hpp>
@@ -462,6 +463,93 @@ std::unique_ptr<image_c> r_tex_c::BuildMipSet(std::unique_ptr<image_c> img)
 	return img;
 }
 
+static gli::texture2d_array TranscodeTexture(gli::texture2d_array src, gli::format dstFormat, bool dropFinestMipIfPossible)
+{
+	// Very limited format support, only really sufficient as a fallback when BC7 isn't available.
+
+	// Source formats: BC7
+	const auto srcFormat = src.format();
+	if (src.format() != gli::FORMAT_RGBA_BP_UNORM_BLOCK16)
+		return src;
+
+	// Destination formats: BC3 or RGBA8
+	if (dstFormat != gli::FORMAT_RGBA_DXT5_UNORM_BLOCK16 && dstFormat != gli::FORMAT_RGBA8_UNORM_PACK8)
+		return src;
+
+	// To save VRAM and processing costs, there is the option to discard the finest mip level of the source if there's coarser levels available.
+	// If so, the transcoding will generate destination levels 0..n-1 from levels 1..n of the source.
+	size_t firstLevel = 0;
+	if (dropFinestMipIfPossible && src.levels() > 1)
+		firstLevel = 1;
+
+	const auto outExtent = src.extent(firstLevel);
+	const auto outLayers = src.layers();
+	const auto outLevels = src.levels() - firstLevel;
+
+	gli::texture2d_array dst(dstFormat, outExtent, outLayers, outLevels);
+
+	std::array<uint8_t, 64> rgba{};
+	for (size_t layer = 0; layer < outLayers; ++layer) {
+		for (size_t dstLevel = 0; dstLevel < outLevels; ++dstLevel) {
+			auto* dstData = (uint8_t*)dst.data(layer, 0, dstLevel);
+			const auto dstExtent = dst.extent(dstLevel);
+			const auto dstRowStride = dstExtent.x * 4;
+
+			const size_t srcLevel = dstLevel + firstLevel;
+			const auto* srcData = (const uint8_t*)src.data(layer, 0, srcLevel);
+
+			const auto srcBlockSize = gli::block_extent(srcFormat);
+			const auto srcBlocksPerRow = (dstExtent.y + srcBlockSize.y - 1) / srcBlockSize.y; // round up partial blocks
+			const auto srcBlocksPerColumn = (dstExtent.x + srcBlockSize.x - 1) / srcBlockSize.x; // -''-
+
+			for (size_t blockRow = 0; blockRow < srcBlocksPerRow; ++blockRow) {
+				const size_t rowBase = blockRow * srcBlockSize.y;
+				const size_t rowsLeft = (std::min)(4ull, dstExtent.y - rowBase);
+
+				for (size_t blockCol = 0; blockCol < srcBlocksPerColumn; ++blockCol) {
+					// Read source 4x4 texel block, no branching needed.
+					DecompressBlockBC7(srcData, rgba.data());
+
+					// Recompress or distribute the 4x4 RGBA block.
+					if (dstFormat == gli::FORMAT_RGBA_DXT5_UNORM_BLOCK16) {
+						// The block order in the level data for BC3 is the same as for BC7, so we can just append them as they appear.
+						CompressBlockBC3(rgba.data(), 16, dstData + blockCol * gli::block_size(dstFormat));
+
+						// Advance the storage write pointer as we go.
+						dstData += gli::block_size(dstFormat);
+					}
+					else if (dstFormat == gli::FORMAT_RGBA8_UNORM_PACK8) {
+						// Compressed blocks unconditionally have 4x4 texels each, even if the source extent isn't evenly divisible into blocks with padding on the right and bottom of the block.
+						// When copying these to RGBA storage which doesn't have this padding we need to ensure we don't go past the edges of the destination.
+
+						// Here we work off that dstData points at the top left pixel of the block row in the destination.
+						const size_t colBase = blockCol * srcBlockSize.x;
+						const size_t colsLeft = (std::min)(4ull, dstExtent.x - colBase);
+						const size_t colBytesLeft = colsLeft * 4;
+						for (size_t innerRow = 0; innerRow < rowsLeft; ++innerRow) {
+							auto* dstPtr = dstData + dstRowStride * innerRow + colBase * 4;
+							memcpy(dstPtr, rgba.data() + innerRow * 16, colBytesLeft);
+						}
+						// Note that dstData is advanced at the end of the source block row to make copy logic easier to follow.
+					}
+					srcData += gli::block_size(srcFormat);
+				}
+
+				// Advance the destination buffer only at the end of an source block row if writing to RGBA output.
+				if (!gli::is_compressed(dstFormat))
+					dstData += dstRowStride * rowsLeft;
+			}
+
+			const auto* srcEnd = srcData + src.size(srcLevel);
+			const auto* dstEnd = dstData + dst.size(dstLevel);
+			assert(srcData == srcEnd);
+			assert(dstData == dstEnd);
+		}
+	}
+
+	return dst;
+}
+
 void r_tex_c::LoadFile()
 {
 	if (_stricmp(fileName.c_str(), "@white") == 0) {
@@ -492,6 +580,11 @@ void r_tex_c::LoadFile()
 		};
 		error = img->Load(path, sizeCallback);
 		if ( !error ) {
+			const bool useTextureFormatFallback = !renderer->texBC7;
+			if (useTextureFormatFallback) {
+				if (img->tex.format() == gli::FORMAT_RGBA_BP_UNORM_BLOCK16)
+					img->tex = TranscodeTexture(img->tex, gli::FORMAT_RGBA8_UNORM_PACK8, true);
+			}
 			stackLayers = img->tex.layers();
 			const bool is_async = !!(flags & TF_ASYNC);
 			img = BuildMipSet(std::move(img));

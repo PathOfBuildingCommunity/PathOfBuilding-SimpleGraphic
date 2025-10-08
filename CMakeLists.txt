@@ -121,6 +121,21 @@ find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 
+add_library(cmp_core STATIC
+    dep/compressonator/cmp_core/source/cmp_core.cpp
+    dep/compressonator/cmp_core/source/cmp_core.h
+    dep/compressonator/cmp_core/shaders/bc3_encode_kernel.cpp
+    dep/compressonator/cmp_core/shaders/bc7_encode_kernel.cpp
+)
+
+target_include_directories(cmp_core PRIVATE
+    dep/compressonator/applications/_libs/cmp_math
+)
+
+target_include_directories(cmp_core PUBLIC
+    dep/compressonator/cmp_core/shaders
+    dep/compressonator/cmp_core/source
+)
 
 add_library(imgui STATIC
     dep/imgui/imconfig.h
@@ -203,6 +218,7 @@ target_link_libraries(SimpleGraphic
     PRIVATE
     unofficial::angle::libEGL
     unofficial::angle::libGLESv2
+    cmp_core
     fmt::fmt
     glfw
     gli
@@ -291,6 +307,40 @@ target_link_libraries(lua-utf8
 
 install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
+
+# luasocket module
+
+add_library(luasocket SHARED
+   "libs/luasocket/src/auxiliar.c"
+   "libs/luasocket/src/buffer.c"
+   "libs/luasocket/src/compat.c"
+   "libs/luasocket/src/except.c"
+   "libs/luasocket/src/inet.c"
+   "libs/luasocket/src/io.c"
+   "libs/luasocket/src/luasocket.c"
+   "libs/luasocket/src/options.c"
+   "libs/luasocket/src/select.c"
+   "libs/luasocket/src/tcp.c"
+   "libs/luasocket/src/timeout.c"
+   "libs/luasocket/src/udp.c"
+   "libs/luasocket/src/wsocket.c"
+)
+
+target_include_directories(luasocket
+    PRIVATE
+    ${LSOCKET_SOURCE_DIR}/src
+)
+
+target_link_libraries(luasocket
+    PRIVATE
+    LuaJIT::LuaJIT
+    wsock32
+    ws2_32
+)
+
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
+install(TARGETS luasocket RUNTIME DESTINATION ".")
+install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
 

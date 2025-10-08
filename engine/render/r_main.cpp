@@ -920,6 +920,15 @@ void r_renderer_c::Init(r_featureFlag_e features)
 		glCompressedTexImage2D = NULL;
 	}
 
+	if (strstr(st_ext, "GL_EXT_texture_compression_bptc")) {
+		sys->con->Printf("using GL_EXT_texture_compression_bptc\n");
+		texBC7 = true;
+	}
+	else {
+		sys->con->Printf("GL_EXT_texture_compression_bptc not supported\n");
+		texBC7 = false;
+	}
+
 	if (strstr(st_ext, "GL_EXT_debug_marker")) {
 		sys->con->Printf("using GL_EXT_debug_marker\n");
 		glInsertEventMarkerEXT = (PFNGLINSERTEVENTMARKEREXTPROC)openGL->GetProc("glInsertEventMarkerEXT");

@@ -564,9 +564,9 @@ std::filesystem::path FindBasePath()
 	progPath = basePath.data();
 #elif __linux__
 	char basePath[PATH_MAX];
-    ssize_t len = ::readlink("/proc/self/exe", basePath, sizeof(basePath));
-    if (len == -1 || len == sizeof(basePath))
-    	len = 0;
+	ssize_t len = ::readlink("/proc/self/exe", basePath, sizeof(basePath));
+	if (len == -1 || len == sizeof(basePath))
+		len = 0;
 	basePath[len] = '\0';
 	progPath = basePath;
 #elif __APPLE__ && __MACH__
@@ -575,34 +575,34 @@ std::filesystem::path FindBasePath()
 	proc_pidpath(pid, basePath, sizeof(basePath));
 	progPath = basePath;
 #endif
-	progPath = canonical(progPath);
+	progPath = weakly_canonical(progPath);
 	return progPath.parent_path();
 }
 
-std::optional<std::filesystem::path> FindUserPath()
+std::tuple<std::optional<std::filesystem::path>, std::optional<std::string>> FindUserPath()
 {
 #ifdef _WIN32
-    PWSTR osPath{};
-    HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &osPath);
+	PWSTR osPath{};
+	HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &osPath);
 	if (FAILED(hr)) {
 		// The path may be inaccessible due to malfunctioning cloud providers.
 		CoTaskMemFree(osPath);
-		return {};
+		return { {}, "Could not obtain Documents path from Windows" };
 	}
 	std::wstring pathStr = osPath;
 	CoTaskMemFree(osPath);
 	std::filesystem::path path(pathStr);
-	return canonical(path);
+	return { weakly_canonical(path), {} };
 #else
-    if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
-        return data_home_path;
-    }
-    if (char const* home_path = getenv("HOME")) {
-        return std::filesystem::path(home_path) / ".local/share";
-    }
-    uid_t uid = getuid();
-    struct passwd *pw = getpwuid(uid);
-    return std::filesystem::path(pw->pw_dir) / ".local/share";
+	if (char const* data_home_path = getenv("XDG_DATA_HOME")) {
+		return { data_home_path, {} };
+	}
+	if (char const* home_path = getenv("HOME")) {
+		return { std::filesystem::path(home_path) / ".local/share", {} };
+	}
+	uid_t uid = getuid();
+	struct passwd *pw = getpwuid(uid);
+	return { std::filesystem::path(pw->pw_dir) / ".local/share", {} };
 #endif
 }
 
@@ -628,7 +628,7 @@ sys_main_c::sys_main_c()
 
 	// Set the local system information
 	basePath = FindBasePath();
-	userPath = FindUserPath();
+	std::tie(userPath, userPathReason) = FindUserPath();
 }
 
 bool sys_main_c::Run(int argc, char** argv)

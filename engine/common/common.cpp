@@ -484,7 +484,7 @@ IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 			byteIdx += 4;
 		}
 		else {
-			codepoints.push_back(0xFFFDu);
+			codepoint = 0xFFFDu;
 			byteIdx += 1;
 		}
 		codepoints.push_back(codepoint);

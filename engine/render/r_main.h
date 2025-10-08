@@ -120,6 +120,7 @@ public:
 
 	bool	texNonPOT = false;			// Non power-of-2 textures supported?
 	dword	texMaxDim = 0;				// Maximum texture dimension
+	bool	texBC7 = true;				// BC7 textures supported?
 
 	PFNGLCOMPRESSEDTEXIMAGE2DPROC	glCompressedTexImage2D = nullptr;
 	PFNGLINSERTEVENTMARKEREXTPROC	glInsertEventMarkerEXT = nullptr;
