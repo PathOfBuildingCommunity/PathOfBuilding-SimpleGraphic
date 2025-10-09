@@ -218,11 +218,6 @@ target_link_libraries(SimpleGraphic
     zstd::libzstd_shared
 )
 
-target_sources(SimpleGraphic
-    PRIVATE
-    SimpleGraphic.rc
-)
-
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
 
