@@ -1,9 +1,9 @@
 {
     "versions": [
       {
-        "version-date": "2025-04-07",
+        "version-date": "2025-07-24",
         "port-version": 1,
-        "path": "$/ports/luajit/2025-04-07_1"
+        "path": "$/ports/luajit/2025-07-24_1"
       },
       {
         "version-date": "2023-04-16",
