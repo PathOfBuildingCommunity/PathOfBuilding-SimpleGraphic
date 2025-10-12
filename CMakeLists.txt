@@ -62,6 +62,7 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/system/sys_main.h"
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
+    "SimpleGraphic.rc"
     "win/entry.cpp"
     "ui.h"
     "ui_api.cpp"
