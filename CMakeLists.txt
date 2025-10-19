@@ -62,7 +62,6 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/system/sys_main.h"
     "engine/system/sys_opengl.h"
     "engine/system/sys_video.h"
-    "SimpleGraphic.rc"
     "win/entry.cpp"
     "ui.h"
     "ui_api.cpp"
@@ -87,6 +86,7 @@ endif()
 if (WIN32)
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
+        "SimpleGraphic.rc"
     )
 else()
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
