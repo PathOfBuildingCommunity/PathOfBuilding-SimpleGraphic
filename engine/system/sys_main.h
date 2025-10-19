@@ -69,6 +69,7 @@ public:
 	int			processorCount = 0;
 	std::filesystem::path basePath;
 	std::optional<std::filesystem::path> userPath;
+	std::optional<std::string> userPathReason;
 
 	virtual int		GetTime() = 0;
 	virtual void	Sleep(int msec) = 0;
