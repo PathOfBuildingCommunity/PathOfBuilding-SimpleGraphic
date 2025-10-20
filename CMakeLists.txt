@@ -86,6 +86,7 @@ endif()
 if (WIN32)
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
+        "SimpleGraphic.rc"
     )
 else()
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
