@@ -1863,9 +1863,23 @@ int r_renderer_c::VirtualScreenHeight() {
 
 float r_renderer_c::VirtualScreenScaleFactor() {
 	if (apiDpiAware) {
+		if (dpiScaleOverridePercent > 0) {
+			return (float)dpiScaleOverridePercent / 100.0f;
+		}
 		return sys->video->vid.dpiScale;
 	}
 	return 1.0f;
+}
+
+void r_renderer_c::SetDpiScaleOverridePercent(int percent) {
+	if (percent < 0) {
+		percent = 0;
+	}
+	dpiScaleOverridePercent = percent;
+}
+
+int r_renderer_c::DpiScaleOverridePercent() const {
+	return dpiScaleOverridePercent;
 }
 
 int r_renderer_c::VirtualMap(int properValue) {

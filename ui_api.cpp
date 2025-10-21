@@ -1132,6 +1132,26 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	return 1;
 }
 
+static int l_SetDPIScaleOverridePercent(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: SetDPIScaleOverridePercent(percent)");
+	ui->LAssert(L, lua_isnumber(L, 1), "SetDPIScaleOverridePercent() argument 1: expected number, got %s", luaL_typename(L, 1));
+	int percent = (int)lua_tointeger(L, 1);
+	ui->renderer->SetDpiScaleOverridePercent(percent);
+	return 0;
+}
+
+static int l_GetDPIScaleOverridePercent(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+	lua_pushinteger(L, ui->renderer->DpiScaleOverridePercent());
+	return 1;
+}
+
 static int l_StripEscapes(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2146,6 +2166,8 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(SetViewport);
 	ADDFUNC(SetBlendMode);
 	ADDFUNC(SetDrawColor);
+	ADDFUNC(SetDPIScaleOverridePercent);
+	ADDFUNC(GetDPIScaleOverridePercent);
 	ADDFUNC(DrawImage);
 	ADDFUNC(DrawImageQuad);
 	ADDFUNC(DrawString);

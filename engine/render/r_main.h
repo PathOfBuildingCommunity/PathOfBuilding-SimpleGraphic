@@ -99,6 +99,8 @@ public:
 	int		VirtualScreenWidth();
 	int		VirtualScreenHeight();
 	float	VirtualScreenScaleFactor();
+	void	SetDpiScaleOverridePercent(int percent);
+	int		DpiScaleOverridePercent() const;
 	int		VirtualMap(int properValue);
 	int		VirtualUnmap(int mappedValue);
 
@@ -126,7 +128,7 @@ public:
 	PFNGLINSERTEVENTMARKEREXTPROC	glInsertEventMarkerEXT = nullptr;
 	PFNGLPUSHGROUPMARKEREXTPROC		glPushGroupMarkerEXT = nullptr;
 	PFNGLPOPGROUPMARKEREXTPROC		glPopGroupMarkerEXT = nullptr;
-	
+
 	conVar_c*	r_compress = nullptr;
 	conVar_c*	r_screenshotFormat = nullptr;
 	conVar_c*	r_layerDebug = nullptr;
@@ -173,6 +175,7 @@ public:
 	};
 
 	bool apiDpiAware{};
+	int dpiScaleOverridePercent = 0;
 	RenderTarget rttMain[2];
 	int	presentRtt = 0;
 
