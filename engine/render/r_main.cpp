@@ -1852,11 +1852,13 @@ int r_renderer_c::DrawStringCursorIndex(int height, int font, const char* str, i
 // ==============
 
 int r_renderer_c::VirtualScreenWidth() {
-	return VirtualMap(sys->video->vid.size[0]);
+	int const properWidth = apiDpiAware ? sys->video->vid.fbSize[0] : sys->video->vid.size[0];
+	return VirtualMap(properWidth);
 }
 
 int r_renderer_c::VirtualScreenHeight() {
-	return VirtualMap(sys->video->vid.size[1]);
+	int const properHeight = apiDpiAware ? sys->video->vid.fbSize[1] : sys->video->vid.size[1];
+	return VirtualMap(properHeight);
 }
 
 float r_renderer_c::VirtualScreenScaleFactor() {
