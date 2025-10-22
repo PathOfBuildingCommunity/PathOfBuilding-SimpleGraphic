@@ -1089,6 +1089,9 @@ void r_renderer_c::Init(r_featureFlag_e features)
 	fonts[F_FIXED] = new r_font_c(this, "Bitstream Vera Sans Mono");
 	fonts[F_VAR] = new r_font_c(this, "Liberation Sans");
 	fonts[F_VAR_BOLD] = new r_font_c(this, "Liberation Sans Bold");
+	fonts[F_FONTIN_SC] = new r_font_c(this, "Fontin SmallCaps");
+	fonts[F_FONTIN_SC_ITALIC] = new r_font_c(this, "Fontin SmallCaps Italic");
+	fonts[F_FONTIN_ITALIC] = new r_font_c(this, "Fontin Italic");
 
 	sys->con->Printf("Renderer initialised in %d msec.\n", timer.Get());
 }
