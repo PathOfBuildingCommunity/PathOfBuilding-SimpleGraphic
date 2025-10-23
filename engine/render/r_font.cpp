@@ -178,7 +178,7 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 			++idx;
 		}
 	}
-	return (int)width;
+	return static_cast<int>(width);
 }
 
 int r_font_c::StringWidth(int height, std::u32string_view str)

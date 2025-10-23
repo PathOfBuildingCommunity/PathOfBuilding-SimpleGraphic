@@ -1883,14 +1883,14 @@ int r_renderer_c::VirtualMap(int properValue) {
 	if (apiDpiAware) {
 		return properValue;
 	}
-	return (int)(properValue / sys->video->vid.dpiScale);
+	return static_cast<int>(properValue / sys->video->vid.dpiScale);
 }
 
 int r_renderer_c::VirtualUnmap(int mappedValue) {
 	if (apiDpiAware) {
 		return mappedValue;
 	}
-	return (int)(mappedValue * sys->video->vid.dpiScale);
+	return static_cast<int>(mappedValue * sys->video->vid.dpiScale);
 }
 
 // =====
