@@ -365,6 +365,9 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 		}
 	}
 
+	// Snap the starting x position to the pixel grid so the leading glyph isn't blurred.
+	x = std::round(x);
+
 	r_tex_c* curTex{};
 
 	auto drawCodepoint = [this, &curTex, &x, y](f_fontHeight_s* fh, int height, float scale, int yShift, char32_t cp) {
