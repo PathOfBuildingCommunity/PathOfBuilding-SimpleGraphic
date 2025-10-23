@@ -1864,7 +1864,7 @@ int r_renderer_c::VirtualScreenHeight() {
 float r_renderer_c::VirtualScreenScaleFactor() {
 	if (apiDpiAware) {
 		if (dpiScaleOverridePercent > 0) {
-			return (float)dpiScaleOverridePercent / 100.0f;
+			return dpiScaleOverridePercent / 100.0f;
 		}
 		return sys->video->vid.dpiScale;
 	}
@@ -1872,9 +1872,6 @@ float r_renderer_c::VirtualScreenScaleFactor() {
 }
 
 void r_renderer_c::SetDpiScaleOverridePercent(int percent) {
-	if (percent < 0) {
-		percent = 0;
-	}
 	dpiScaleOverridePercent = percent;
 }
 

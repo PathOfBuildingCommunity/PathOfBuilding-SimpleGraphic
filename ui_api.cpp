@@ -1069,8 +1069,8 @@ static int l_DrawString(lua_State* L)
 	static const char* alignMap[6] = { "LEFT", "CENTER", "RIGHT", "CENTER_X", "RIGHT_X", NULL };
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
-	const float left = (float)lua_tonumber(L, 1) * dpiScale;
-	const float top = (float)lua_tonumber(L, 2) * dpiScale;
+	const float left = lua_tonumber(L, 1) * dpiScale;
+	const float top = lua_tonumber(L, 2) * dpiScale;
 	const int scaledHeight = (int)std::lround((double)lua_tointeger(L, 4) * (double)dpiScale);
 	ui->renderer->DrawString(
 		left,
@@ -1095,8 +1095,8 @@ static int l_DrawStringWidth(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 3), "DrawStringWidth() argument 3: expected string, got %s", luaL_typename(L, 3));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
-	const double logicalHeight = lua_tonumber(L, 1);
-	const int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
+	const lua_Number logicalHeight = lua_tonumber(L, 1);
+	int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
 	double const physicalWidth = (double)ui->renderer->DrawStringWidth(
 		scaledHeight,
 		luaL_checkoption(L, 2, "FIXED", fontMap),
@@ -1118,9 +1118,9 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	ui->LAssert(L, lua_isnumber(L, 4), "DrawStringCursorIndex() argument 4: expected number, got %s", luaL_typename(L, 4));
 	ui->LAssert(L, lua_isnumber(L, 5), "DrawStringCursorIndex() argument 5: expected number, got %s", luaL_typename(L, 5));
 	static const char* fontMap[4] = { "FIXED", "VAR", "VAR BOLD", NULL };
-	const double logicalHeight = lua_tonumber(L, 1);
-	const double logicalCursorX = lua_tonumber(L, 4);
-	const double logicalCursorY = lua_tonumber(L, 5);
+	const lua_Number logicalHeight = lua_tonumber(L, 1);
+	const lua_Number logicalCursorX = lua_tonumber(L, 4);
+	const lua_Number logicalCursorY = lua_tonumber(L, 5);
 	const int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
 	const int scaledCursorX = (int)std::lround(logicalCursorX * dpiScale);
 	const int scaledCursorY = (int)std::lround(logicalCursorY * dpiScale);
@@ -1431,8 +1431,8 @@ static int l_GetCursorPos(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
-	lua_pushinteger(L, (lua_Integer)std::lround((double)ui->renderer->VirtualMap(ui->cursorX) / (double)dpiScale));
-	lua_pushinteger(L, (lua_Integer)std::lround((double)ui->renderer->VirtualMap(ui->cursorY) / (double)dpiScale));
+	lua_pushinteger(L, (lua_Integer)std::lround(ui->renderer->VirtualMap(ui->cursorX) / dpiScale));
+	lua_pushinteger(L, (lua_Integer)std::lround(ui->renderer->VirtualMap(ui->cursorY) / dpiScale));
 	return 2;
 }
 
@@ -1444,8 +1444,8 @@ static int l_SetCursorPos(lua_State* L)
 	ui->LAssert(L, n >= 2, "Usage: SetCursorPos(x, y)");
 	ui->LAssert(L, lua_isnumber(L, 1), "SetCursorPos() argument 1: expected number, got %s", luaL_typename(L, 1));
 	ui->LAssert(L, lua_isnumber(L, 2), "SetCursorPos() argument 2: expected number, got %s", luaL_typename(L, 2));
-	const int scaledX = (int)std::lround((double)lua_tointeger(L, 1) * (double)dpiScale);
-	const int scaledY = (int)std::lround((double)lua_tointeger(L, 2) * (double)dpiScale);
+	const int scaledX = (int)std::lround(lua_tonumber(L, 1) * dpiScale);
+	const int scaledY = (int)std::lround(lua_tonumber(L, 2) * dpiScale);
 	int x = ui->renderer->VirtualUnmap(scaledX);
 	int y = ui->renderer->VirtualUnmap(scaledY);
 	ui->sys->video->SetRelativeCursor(x, y);
