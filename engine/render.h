@@ -102,6 +102,8 @@ public:
 	virtual int		VirtualScreenWidth() = 0;
 	virtual int		VirtualScreenHeight() = 0;
 	virtual float	VirtualScreenScaleFactor() = 0;
+	virtual void	SetDpiScaleOverridePercent(int percent) = 0;
+	virtual int		DpiScaleOverridePercent() const = 0;
 	virtual int		VirtualMap(int properValue) = 0;
 	virtual int		VirtualUnmap(int mappedValue) = 0;
 	
