@@ -26,6 +26,13 @@ jobs:
         with:
           submodules: "recursive"
 
+      - name: Append short commit sha to CFG_VERSION_NUM in config.h
+        shell: powershell
+        run: |
+          $file = 'config.h'
+          $short=$(git rev-parse --short HEAD)
+          (Get-Content $file -Raw) -replace '(#define\s+CFG_VERSION_NUM\s+"[^"]*)(")', "`$1-$short`$2" | Set-Content $file
+
       - name: run-vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -45,7 +52,15 @@ jobs:
 
       - name: Build DLL
         run: "cmake --build build --config Release -t INSTALL"
-        
+
+      - name: Show DLL resources
+        run: |
+          $dll = "install-prefix\SimpleGraphic.dll"
+          Write-Host "DLL path: $dll"
+          if (Test-Path $dll) {
+            Write-Host "VersionInfo:"; (Get-Item $dll).VersionInfo | Format-List
+          } else { Write-Host "DLL not found" }
+
       - name: Archive DLL
         uses: actions/upload-artifact@v4
         with:
