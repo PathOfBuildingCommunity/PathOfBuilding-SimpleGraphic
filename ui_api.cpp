@@ -6,6 +6,7 @@
 
 #include "ui_local.h"
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <zlib.h>
@@ -799,10 +800,11 @@ static int l_SetViewport(lua_State* L)
 		for (int i = 1; i <= 4; i++) {
 			ui->LAssert(L, lua_isnumber(L, i), "SetViewport() argument %d: expected number, got %s", i, luaL_typename(L, i));
 		}
-		ui->renderer->SetViewport((int)(lua_tointeger(L, 1) * dpiScale), 
-		(int)(lua_tointeger(L, 2) * dpiScale), 
-		(int)(lua_tointeger(L, 3) * dpiScale), 
-		(int)(lua_tointeger(L, 4) * dpiScale));
+		int vpX = (int)std::lround(lua_tonumber(L, 1) * dpiScale);
+		int vpY = (int)std::lround(lua_tonumber(L, 2) * dpiScale);
+		int vpWidth = (int)std::ceil(lua_tonumber(L, 3) * dpiScale);
+		int vpHeight = (int)std::ceil(lua_tonumber(L, 4) * dpiScale);
+		ui->renderer->SetViewport(vpX, vpY, vpWidth, vpHeight);
 	}
 	else {
 		ui->renderer->SetViewport();
@@ -1071,14 +1073,21 @@ static int l_DrawString(lua_State* L)
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	const float left = lua_tonumber(L, 1) * dpiScale;
 	const float top = lua_tonumber(L, 2) * dpiScale;
-	const int scaledHeight = (int)std::lround((double)lua_tointeger(L, 4) * (double)dpiScale);
+	const lua_Number logicalHeight = lua_tonumber(L, 4);
+	int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
+	if (scaledHeight <= 1) {
+		scaledHeight = std::max(1, scaledHeight);
+	}
+	else {
+		scaledHeight = (scaledHeight + 1) & ~1;
+	}
 	ui->renderer->DrawString(
 		left,
 		top,
 		luaL_checkoption(L, 3, "LEFT", alignMap),
 		scaledHeight,
-		NULL, 
-		luaL_checkoption(L, 5, "FIXED", fontMap), 
+		NULL,
+		luaL_checkoption(L, 5, "FIXED", fontMap),
 		lua_tostring(L, 6)
 	);
 	return 0;
@@ -1097,7 +1106,13 @@ static int l_DrawStringWidth(lua_State* L)
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	const lua_Number logicalHeight = lua_tonumber(L, 1);
 	int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
-	double const physicalWidth = (double)ui->renderer->DrawStringWidth(
+	if (scaledHeight <= 1) {
+		scaledHeight = std::max(1, scaledHeight);
+	}
+	else {
+		scaledHeight = (scaledHeight + 1) & ~1;
+	}
+	double const physicalWidth = ui->renderer->DrawStringWidth(
 		scaledHeight,
 		luaL_checkoption(L, 2, "FIXED", fontMap),
 		lua_tostring(L, 3));
@@ -1121,7 +1136,13 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	const lua_Number logicalHeight = lua_tonumber(L, 1);
 	const lua_Number logicalCursorX = lua_tonumber(L, 4);
 	const lua_Number logicalCursorY = lua_tonumber(L, 5);
-	const int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
+	int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
+	if (scaledHeight <= 1) {
+		scaledHeight = std::max(1, scaledHeight);
+	}
+	else {
+		scaledHeight = (scaledHeight + 1) & ~1;
+	}
 	const int scaledCursorX = (int)std::lround(logicalCursorX * dpiScale);
 	const int scaledCursorY = (int)std::lround(logicalCursorY * dpiScale);
 	lua_pushinteger(L, ui->renderer->DrawStringCursorIndex(
