@@ -17,6 +17,7 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#include "webp/decode.h"
 
 #include <algorithm>
 #include <filesystem>
@@ -126,6 +127,9 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& f
 	} else if (*(dword*)dat == 0x20534444) {
 		// D D S 0x20
 		return new dds_c(conHnd);
+	} else if (*(dword*)dat == 0x46464952) {
+		// R I F F
+		return new webp_c(conHnd);
 	} else if ((dat[1] == 0 && (dat[2] == 2 || dat[2] == 3 || dat[2] == 10 || dat[2] == 11)) || (dat[1] == 1 && (dat[2] == 1 || dat[2] == 9))) {
 		// Detect all valid image types (whether supported or not)
 		return new targa_c(conHnd);
@@ -478,6 +482,38 @@ bool dds_c::Load(std::filesystem::path const& fileName, std::optional<size_callb
 }
 
 bool dds_c::Save(std::filesystem::path const& fileName)
+{
+	// Nope.
+	return true;
+}
+
+// =========
+// WEBP Image
+// =========
+
+bool webp_c::Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback)
+{
+	// Open file
+	fileInputStream_c in;
+	if (in.FileOpen(fileName, true))
+		return true;
+
+	std::vector<byte> fileData(in.GetLen());
+	if (in.Read(fileData.data(), fileData.size()))
+		return true;
+
+	int width;
+	int height;
+
+	WebPGetInfo(fileData.data(), fileData.size(), &width, &height);
+
+	auto data = WebPDecodeRGBA(fileData.data(), fileData.size(), &width, &height);
+	bool success = CopyRaw(IMGTYPE_RGBA, width, height, data);
+
+	return success;
+}
+
+bool webp_c::Save(std::filesystem::path const& fileName)
 {
 	// Nope.
 	return true;

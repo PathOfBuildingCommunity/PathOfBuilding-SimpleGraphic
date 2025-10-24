@@ -8,7 +8,7 @@ if (APPLE)
 endif ()
 
 if (MSVC)
-    add_compile_options("/Zi")
+    add_compile_options("/Zi" "/W4")
     add_link_options("/DEBUG:FULL")
 endif ()
 
@@ -129,6 +129,7 @@ find_package(sol2 CONFIG REQUIRED)
 find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
+find_package(WebP)
 
 add_library(cmp_core STATIC
     dep/compressonator/cmp_core/source/cmp_core.cpp
