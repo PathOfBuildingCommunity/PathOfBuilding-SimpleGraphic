@@ -239,6 +239,7 @@ target_link_libraries(SimpleGraphic
     re2::re2
     sol2
     Threads::Threads
+    WebP::webpdecoder
     ZLIB::ZLIB
     zstd::libzstd_shared
 )
