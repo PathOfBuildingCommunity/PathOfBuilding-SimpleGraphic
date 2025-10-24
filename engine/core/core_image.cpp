@@ -108,6 +108,8 @@ image_c* image_c::LoaderForFile(IConsole* conHnd, std::filesystem::path const& f
 	}
 	if (fileName.extension() == ".dds")
 		return new dds_c(conHnd);
+	if (fileName.extension() == ".webp")
+		return new webp_c(conHnd);
 
 	// Attempt to detect image file type from first 4 bytes of file
 	byte dat[4];
@@ -505,12 +507,15 @@ bool webp_c::Load(std::filesystem::path const& fileName, std::optional<size_call
 	int width;
 	int height;
 
-	WebPGetInfo(fileData.data(), fileData.size(), &width, &height);
+	bool valid = WebPGetInfo(fileData.data(), fileData.size(), &width, &height);
+	if (!valid)
+		return true;
 
 	auto data = WebPDecodeRGBA(fileData.data(), fileData.size(), &width, &height);
 	bool success = CopyRaw(IMGTYPE_RGBA, width, height, data);
+	WebPFree(data);
 
-	return success;
+	return !success;
 }
 
 bool webp_c::Save(std::filesystem::path const& fileName)
