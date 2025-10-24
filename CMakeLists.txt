@@ -8,7 +8,7 @@ if (APPLE)
 endif ()
 
 if (MSVC)
-    add_compile_options("/Zi" "/W4")
+    add_compile_options("/Zi")
     add_link_options("/DEBUG:FULL")
 endif ()
 
