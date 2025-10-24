@@ -6,7 +6,6 @@
 
 #include "ui_local.h"
 
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <zlib.h>
@@ -1076,7 +1075,7 @@ static int l_DrawString(lua_State* L)
 	const lua_Number logicalHeight = lua_tonumber(L, 4);
 	int scaledHeight = (int)std::lround(logicalHeight * dpiScale);
 	if (scaledHeight <= 1) {
-		scaledHeight = std::max(1, scaledHeight);
+		scaledHeight = 1;
 	}
 	else {
 		scaledHeight = (scaledHeight + 1) & ~1;
@@ -1107,7 +1106,7 @@ static int l_DrawStringWidth(lua_State* L)
 	const lua_Number logicalHeight = lua_tonumber(L, 1);
 	int scaledHeight = static_cast<int>(std::lround(logicalHeight * dpiScale));
 	if (scaledHeight <= 1) {
-		scaledHeight = std::max(1, scaledHeight);
+		scaledHeight = 1;
 	}
 	else {
 		scaledHeight = (scaledHeight + 1) & ~1;
@@ -1138,7 +1137,7 @@ static int l_DrawStringCursorIndex(lua_State* L)
 	const lua_Number logicalCursorY = lua_tonumber(L, 5);
 	int scaledHeight = static_cast<int>(std::lround(logicalHeight * dpiScale));
 	if (scaledHeight <= 1) {
-		scaledHeight = std::max(1, scaledHeight);
+		scaledHeight = 1;
 	}
 	else {
 		scaledHeight = (scaledHeight + 1) & ~1;
