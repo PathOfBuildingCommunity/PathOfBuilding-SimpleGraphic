@@ -10,6 +10,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <cmath>
 
 // =======
 // Classes
@@ -144,12 +145,12 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 	int heightIdx = (int)(std::find(fontHeights, fontHeights + numFontHeight, fh) - fontHeights);
 	auto tofuFont = FindSmallerFontHeight(height, heightIdx, tofuSizeReduction);
 
-	auto measureCodepoint = [](f_fontHeight_s* fh, char32_t cp) {
-		auto& glyph = fh->Glyph((char)(unsigned char)cp);
+	auto measureCodepoint = [](f_fontHeight_s* glyphFh, char32_t cp) {
+		auto& glyph = glyphFh->Glyph((char)(unsigned char)cp);
 		return glyph.width + glyph.spLeft + glyph.spRight;
 	};
 
-	int width = 0;
+	float width = 0.0f;
 	for (size_t idx = 0; idx < str.size();) {
 		auto ch = str[idx];
 		int escLen = IsColorEscape(str.substr(idx));
@@ -158,23 +159,26 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 		}
 		else if (ch >= (unsigned)fh->numGlyph) {
 			auto tofu = BuildTofuString(ch);
-			for (auto ch : tofu) {
-				width += measureCodepoint(tofuFont.fh, ch);
+			for (auto cp : tofu) {
+				width += measureCodepoint(tofuFont.fh, cp);
+				width = std::ceil(width);
 			}
 			++idx;
 		}
 		else if (ch == U'\t') {
 			auto& glyph = fh->Glyph(' ');
 			int spWidth = glyph.width + glyph.spLeft + glyph.spRight;
-			width += (int)(spWidth * 4 * scale);
+			width += spWidth * 4 * scale;
+			width = std::ceil(width);
 			++idx;
 		}
 		else {
-			width += (int)(measureCodepoint(fh, ch) * scale);
+			width += measureCodepoint(fh, ch) * scale;
+			width = std::ceil(width);
 			++idx;
 		}
 	}
-	return width;
+	return static_cast<int>(width);
 }
 
 int r_font_c::StringWidth(int height, std::u32string_view str)
@@ -187,7 +191,7 @@ int r_font_c::StringWidth(int height, std::u32string_view str)
 		auto lineEnd = std::find(I, str.end(), U'\n');
 		if (I != lineEnd) {
 			std::u32string_view line(&*I, std::distance(I, lineEnd));
-			int lw = (int)StringWidthInternal(fh, line, height, scale);
+			int lw = StringWidthInternal(fh, line, height, scale);
 			max = (std::max)(max, lw);
 		}
 		if (lineEnd == str.end()) {
@@ -203,12 +207,12 @@ size_t r_font_c::StringCursorInternal(f_fontHeight_s* fh, std::u32string_view st
 	int heightIdx = (int)(std::find(fontHeights, fontHeights + numFontHeight, fh) - fontHeights);
 	auto tofuFont = FindSmallerFontHeight(height, heightIdx, tofuSizeReduction);
 
-	auto measureCodepoint = [](f_fontHeight_s* fh, char32_t cp) {
-		auto& glyph = fh->Glyph((char)(unsigned char)cp);
+	auto measureCodepoint = [](f_fontHeight_s* glyphFh, char32_t cp) {
+		auto& glyph = glyphFh->Glyph((char)(unsigned char)cp);
 		return glyph.width + glyph.spLeft + glyph.spRight;
 	};
 
-	int x = 0;
+	float x = 0.0f;
 	auto I = str.begin();
 	auto lineEnd = std::find(I, str.end(), U'\n');
 	while (I != lineEnd) {
@@ -219,32 +223,34 @@ size_t r_font_c::StringCursorInternal(f_fontHeight_s* fh, std::u32string_view st
 		}
 		else if (*I >= (unsigned)fh->numGlyph) {
 			auto tofu = BuildTofuString(*I);
-			int tofuWidth = 0;
-			for (auto ch : tofu) {
-				tofuWidth += measureCodepoint(tofuFont.fh, ch);
+			for (auto cp : tofu) {
+				x += measureCodepoint(tofuFont.fh, cp);
+				x = std::ceil(x);
+				if (curX <= x) {
+					return std::distance(str.begin(), I);
+				}
 			}
-			int halfWidth = (int)(tofuWidth / 2.0f);
-			x += halfWidth;
-			if (curX <= x) {
-				break;
-			}
-			x += tofuWidth - halfWidth;
 			++I;
 		}
 		else if (*I == U'\t') {
 			auto& glyph = fh->Glyph(' ');
-			int spWidth = glyph.width + glyph.spLeft + glyph.spRight;
-			int fullWidth = (int)(spWidth * 4 * scale);
-			int halfWidth = (int)(fullWidth / 2.0f);
+			float fullWidth = (glyph.width + glyph.spLeft + glyph.spRight) * 4.0f * scale;
+			float halfWidth = std::ceil(fullWidth / 2.0f);
 			x += halfWidth;
+			x = std::ceil(x);
 			if (curX <= x) {
 				break;
 			}
 			x += fullWidth - halfWidth;
+			x = std::ceil(x);
+			if (curX <= x) {
+				break;
+			}
 			++I;
 		}
 		else {
-			x += (int)(measureCodepoint(fh, *I) * scale);
+			x += measureCodepoint(fh, *I) * scale;
+			x = std::ceil(x);
 			if (curX <= x) {
 				break;
 			}
@@ -339,10 +345,10 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 
 	// Calculate the string position
 	float x = pos[X];
-	float y = pos[Y];
+	float y = std::floor(pos[Y]);
 	if (align != F_LEFT) {
 		// Calculate the real width of the string
-		float width = (float)StringWidthInternal(fh, str, height, scale);
+		float width = StringWidthInternal(fh, str, height, scale);
 		switch (align) {
 		case F_CENTRE:
 			x = floor((renderer->VirtualScreenWidth() - width) / 2.0f + pos[X]);
@@ -358,6 +364,9 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 			break;
 		}
 	}
+
+	// Snap the starting x position to the pixel grid so the leading glyph isn't blurred.
+	x = std::round(x);
 
 	r_tex_c* curTex{};
 
