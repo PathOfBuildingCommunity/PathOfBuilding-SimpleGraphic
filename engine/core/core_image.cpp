@@ -511,6 +511,8 @@ bool webp_c::Load(std::filesystem::path const& fileName, std::optional<size_call
 	if (!valid)
 		return true;
 
+	if (sizeCallback)
+		(*sizeCallback)(width, height);
 	auto data = WebPDecodeRGBA(fileData.data(), fileData.size(), &width, &height);
 	bool success = CopyRaw(IMGTYPE_RGBA, width, height, data);
 	WebPFree(data);
