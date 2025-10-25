@@ -33,6 +33,7 @@
 #include <map>
 #include <set>
 #include <thread>
+#include <vector>
 
 #include <fmt/core.h>
 
@@ -431,6 +432,61 @@ void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList
 #else
 #warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.
+#endif
+}
+
+void sys_main_c::SpawnProcessHidden(std::filesystem::path cmdName, const char* argList)
+{
+#ifdef _WIN32
+	if (!cmdName.has_extension()) {
+		cmdName.replace_extension(".exe");
+	}
+	auto fileStr = cmdName.wstring();
+	const char* safeArgs = argList ? argList : "";
+	wchar_t* wideArgs = (*safeArgs != '\0') ? WidenUTF8String(safeArgs) : nullptr;
+	std::wstring commandLine = L"\"" + fileStr + L"\"";
+	if (wideArgs) {
+		commandLine.push_back(L' ');
+		commandLine.append(wideArgs);
+	}
+	std::vector<wchar_t> commandBuffer(commandLine.begin(), commandLine.end());
+	commandBuffer.push_back(L'\0');
+	std::wstring workingDir;
+	if (cmdName.has_parent_path()) {
+		workingDir = cmdName.parent_path().wstring();
+	}
+	STARTUPINFOW si{};
+	PROCESS_INFORMATION pi{};
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	BOOL created = CreateProcessW(
+		nullptr,
+		commandBuffer.data(),
+		nullptr,
+		nullptr,
+		FALSE,
+		CREATE_NO_WINDOW,
+		nullptr,
+		workingDir.empty() ? nullptr : workingDir.data(),
+		&si,
+		&pi
+	);
+	if (wideArgs) {
+		FreeWideString(wideArgs);
+	}
+	if (!created) {
+		DWORD err = GetLastError();
+		if (con) {
+			con->Printf("^1CreateProcessW failed with code %lu, falling back to ShellExecute.^0\n", static_cast<unsigned long>(err));
+		}
+		SpawnProcess(cmdName, argList);
+		return;
+	}
+	CloseHandle(pi.hThread);
+	CloseHandle(pi.hProcess);
+#else
+	SpawnProcess(cmdName, argList);
 #endif
 }
 

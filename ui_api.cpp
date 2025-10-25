@@ -101,6 +101,7 @@
 ** ConPrintTable(table[, noRecurse])
 ** ConExecute("<cmd>")
 ** SpawnProcess("<cmdName>"[, "<args>"])
+** SpawnProcessHidden("<cmdName>"[, "<args>"])
 ** err = OpenURL("<url>")
 ** SetProfiling(isEnabled)
 ** Restart()
@@ -2017,6 +2018,18 @@ static int l_SpawnProcess(lua_State* L)
 	return 0;
 }
 
+static int l_SpawnProcessHidden(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: SpawnProcessHidden(cmdName[, args])");
+	ui->LAssert(L, lua_isstring(L, 1), "SpawnProcessHidden() argument 1: expected string, got %s", luaL_typename(L, 1));
+	auto cmdPath = std::filesystem::u8path(lua_tostring(L, 1));
+	auto args = lua_tostring(L, 2);
+	ui->sys->SpawnProcessHidden(cmdPath, args);
+	return 0;
+}
+
 static int l_OpenURL(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2249,6 +2262,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(ConClear);
 	ADDFUNC(print);
 	ADDFUNC(SpawnProcess);
+	ADDFUNC(SpawnProcessHidden);
 	ADDFUNC(OpenURL);
 	ADDFUNC(SetProfiling);
 	ADDFUNC(TakeScreenshot);
