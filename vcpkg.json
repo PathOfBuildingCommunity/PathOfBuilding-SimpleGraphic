@@ -7,6 +7,7 @@
     "fmt",
     "glfw3",
     "gli",
+    "libwebp",
     "luajit",
     "ms-gsl",
     "pkgconf",

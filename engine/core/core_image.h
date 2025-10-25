@@ -118,3 +118,11 @@ public:
 	bool Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback = {}) override;
 	bool Save(std::filesystem::path const& fileName) override;
 };
+
+// WEBP Image
+class webp_c : public image_c {
+public:
+	webp_c(IConsole* conHnd) : image_c(conHnd) {}
+	bool Load(std::filesystem::path const& fileName, std::optional<size_callback_t> sizeCallback = {}) override;
+	bool Save(std::filesystem::path const& fileName) override;
+};
