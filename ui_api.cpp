@@ -10,6 +10,7 @@
 #include <fstream>
 #include <zlib.h>
 #include <cmath>
+#include <vector>
 
 #include "core/core_tex_manipulation.h"
 
@@ -101,6 +102,7 @@
 ** ConPrintTable(table[, noRecurse])
 ** ConExecute("<cmd>")
 ** SpawnProcess("<cmdName>"[, "<args>"])
+** count = GetProcessCount({"<image1>", ...})
 ** err = OpenURL("<url>")
 ** SetProfiling(isEnabled)
 ** Restart()
@@ -2017,6 +2019,26 @@ static int l_SpawnProcess(lua_State* L)
 	return 0;
 }
 
+static int l_GetProcessCount(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, lua_gettop(L) >= 1, "Usage: GetProcessCount(names)");
+	ui->LAssert(L, lua_istable(L, 1), "GetProcessCount() argument 1: expected table, got %s", luaL_typename(L, 1));
+	std::vector<std::wstring> names;
+	size_t len = lua_rawlen(L, 1);
+	names.reserve(len);
+	for (size_t i = 1; i <= len; ++i) {
+		lua_rawgeti(L, 1, static_cast<int>(i));
+		ui->LAssert(L, lua_isstring(L, -1), "GetProcessCount() table values must be strings, got %s", luaL_typename(L, -1));
+		auto name = lua_tostring(L, -1);
+		names.emplace_back(std::filesystem::u8path(name).wstring());
+		lua_pop(L, 1);
+	}
+	int count = ui->sys->GetProcessCount(names);
+	lua_pushinteger(L, count);
+	return 1;
+}
+
 static int l_OpenURL(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2249,6 +2271,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(ConClear);
 	ADDFUNC(print);
 	ADDFUNC(SpawnProcess);
+	ADDFUNC(GetProcessCount);
 	ADDFUNC(OpenURL);
 	ADDFUNC(SetProfiling);
 	ADDFUNC(TakeScreenshot);

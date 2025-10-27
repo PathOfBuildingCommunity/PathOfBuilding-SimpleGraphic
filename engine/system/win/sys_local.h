@@ -37,6 +37,7 @@ public:
 	char*	ClipboardPaste();
 	bool	SetWorkDir(std::filesystem::path const& newCwd = {});
 	void	SpawnProcess(std::filesystem::path cmdName, const char* argList);
+	int		GetProcessCount(const std::vector<std::wstring>& imageNames);
 	std::optional<std::string> OpenURL(const char* url); // return value has failure reason
 	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
