@@ -1,6 +1,6 @@
 {
   "name": "path-of-building-simplegraphic",
-  "version": "2.4",
+  "version": "2.5",
   "dependencies": [
     "angle",
     "curl",
