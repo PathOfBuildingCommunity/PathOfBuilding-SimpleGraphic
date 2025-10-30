@@ -31,6 +31,7 @@ enum r_fonts_e {
 	F_VAR_BOLD,			// Normal: Liberation Sans Bold
 	F_FONTIN_SC,		// Normal: Fontin Small Caps
 	F_FONTIN_SC_ITALIC,	// Normal: Fontin Small Caps Italic
+	F_FONTIN,			// Normal: Fontin
 	F_FONTIN_ITALIC,	// Normal: Fontin Italic
 	F_NUMFONTS
 };
