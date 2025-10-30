@@ -26,9 +26,12 @@ enum r_fontAlign_e {
 
 // Fonts
 enum r_fonts_e {
-	F_FIXED,	// Monospaced: Bitsteam Vera Sans Mono
-	F_VAR,		// Normal: Liberation Sans
-	F_VAR_BOLD,	// Normal: Liberation Sans Bold
+	F_FIXED,			// Monospaced: Bitsteam Vera Sans Mono
+	F_VAR,				// Normal: Liberation Sans
+	F_VAR_BOLD,			// Normal: Liberation Sans Bold
+	F_FONTIN_SC,		// Normal: Fontin Small Caps
+	F_FONTIN_SC_ITALIC,	// Normal: Fontin Small Caps Italic
+	F_FONTIN_ITALIC,	// Normal: Fontin Italic
 	F_NUMFONTS
 };
 
