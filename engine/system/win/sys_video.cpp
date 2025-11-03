@@ -668,9 +668,13 @@ bool sys_video_c::IsActive()
 	return glfwGetWindowAttrib(wnd, GLFW_FOCUSED);
 }
 
-void sys_video_c::FramebufferSizeChanged(int width, int height) {
-	vid.fbSize[0] = width;
-	vid.fbSize[1] = height;
+void sys_video_c::FramebufferSizeChanged(int width, int height)
+{
+	// Avoid persisting an invalid window size from being minimized.
+	if (!glfwGetWindowAttrib(wnd, GLFW_ICONIFIED)) {
+		vid.fbSize[0] = width;
+		vid.fbSize[1] = height;
+	}
 }
 
 void sys_video_c::SizeChanged(int width, int height, bool max)
