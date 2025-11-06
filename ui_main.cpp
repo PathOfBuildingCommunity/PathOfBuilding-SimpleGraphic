@@ -150,7 +150,23 @@ void ui_main_c::PCall(int narg, int nret)
 {
 	sys->SetWorkDir(scriptWorkDir);
 	inLua = true;
+	hasActiveCoroutine = false;
 	int err = lua_pcall(L, narg, nret, 1);
+	lua_getglobal(L, "coroutine");
+	lua_getfield(L, -1, "_list");
+	lua_pcall(L, 0, 1, 0);
+
+	if (lua_istable(L, -1)) {
+		lua_pushnil(L);
+		while (lua_next(L, -2)) {
+			lua_State* co = lua_tothread(L, -2);
+			if (co && lua_status(co) == LUA_YIELD) {
+				hasActiveCoroutine = true;
+			}
+			lua_pop(L, 1);
+		}
+	}
+	lua_pop(L, 1);
 	inLua = false;
 	sys->SetWorkDir();
 	if (err && !didExit) {
@@ -354,13 +370,23 @@ void ui_main_c::ScriptInit()
 
 void ui_main_c::Frame()
 {
+	// Check for any subscripts we need to run
+	bool hasSubscript = false;
+	for (dword i = 0; i < subScriptSize; i++) {
+		if (subScriptList[i]) {
+			hasSubscript = true;
+			break;
+		}
+	}
+	// Always runs 10 frames after finishing the boot process
 	if (!sys->video->IsVisible() || sys->conWin->IsVisible() || restartFlag || didExit) {
 		framesSinceWindowHidden = 0;
 	}
 	else if (framesSinceWindowHidden <= 10) {
 		framesSinceWindowHidden++;
 	}
-	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow()) {
+	// Otherwise only runs frames if the mouse is on screen, there is an active coroutine, or there is an active subscript
+	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow() && !hasActiveCoroutine && !hasSubscript) {
 		sys->Sleep(100);
 		return;
 	}	
