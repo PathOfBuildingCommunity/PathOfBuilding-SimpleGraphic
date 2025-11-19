@@ -166,7 +166,7 @@ void ui_main_c::PCall(int narg, int nret)
 			lua_pop(L, 1);
 		}
 	}
-	lua_pop(L, 1);
+	lua_pop(L, 2);
 	inLua = false;
 	sys->SetWorkDir();
 	if (err && !didExit) {
