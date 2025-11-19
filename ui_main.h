@@ -49,6 +49,7 @@ public:
 	int		cursorY = 0;
 	int		framesSinceWindowHidden = 0;
 	volatile bool	inLua = false;
+	bool	hasActiveCoroutine = false;
 	int		ioOpenf = LUA_NOREF;
 
 	static int InitAPI(lua_State* L);
