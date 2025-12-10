@@ -52,6 +52,8 @@ public:
 	bool	hasActiveCoroutine = false;
 	int		ioOpenf = LUA_NOREF;
 
+	float lastColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+
 	static int InitAPI(lua_State* L);
 
 	void	RenderInit(r_featureFlag_e features);

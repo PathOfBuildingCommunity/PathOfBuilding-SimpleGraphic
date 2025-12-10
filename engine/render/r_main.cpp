@@ -1749,6 +1749,14 @@ void r_renderer_c::DrawColor(dword col)
 	drawColor[3] = (col >> 24) / 255.0f;
 }
 
+void r_renderer_c::GetDrawColor(col4_t color)
+{
+	color[0] = drawColor[0];
+	color[1] = drawColor[1];
+	color[2] = drawColor[2];
+	color[3] = drawColor[3];
+}
+
 void r_renderer_c::DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1, glm::vec2 uv2, int stackLayer, std::optional<int> maskLayer)
 {
 	DrawImageQuad(hnd,
