@@ -96,6 +96,7 @@ public:
 	virtual void	SetBlendMode(int mode) = 0;
 	virtual void	DrawColor(const col4_t col = NULL) = 0;
 	virtual void	DrawColor(dword col) = 0;
+	virtual void	GetDrawColor(col4_t color) = 0;
 	virtual void	DrawImage(r_shaderHnd_c* hnd, glm::vec2 pos, glm::vec2 extent, glm::vec2 uv1 = { 0, 0 }, glm::vec2 uv2 = { 1, 1 }, int stackLayer = 0, std::optional<int> maskLayer = {}) = 0;
 	virtual void	DrawImageQuad(r_shaderHnd_c* hnd, glm::vec2 p0, glm::vec2 p1, glm::vec2 p2, glm::vec2 p3, glm::vec2 uv0 = { 0, 0 }, glm::vec2 uv1 = { 1, 0 }, glm::vec2 uv2 = { 1, 1 }, glm::vec2 uv3 = { 0, 1 }, int stackLayer = 0, std::optional<int> maskLayer = {}) = 0;
 	virtual void	DrawString(float x, float y, int align, int height, const col4_t col, int font, const char* str) = 0;
