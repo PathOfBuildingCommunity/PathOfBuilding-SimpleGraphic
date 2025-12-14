@@ -851,7 +851,29 @@ static int l_SetDrawColor(lua_State* L)
 		}
 	}
 	ui->renderer->DrawColor(color);
+		
+	// Store last applied color from renderer
+	col4_t finalColor;
+	ui->renderer->GetDrawColor(finalColor);
+	ui->lastColor[0] = finalColor[0];
+	ui->lastColor[1] = finalColor[1];
+	ui->lastColor[2] = finalColor[2];
+	ui->lastColor[3] = finalColor[3];
+		
 	return 0;
+}
+
+static int l_GetDrawColor(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	ui->LAssert(L, ui->renderer != NULL, "Renderer is not initialised");
+
+	lua_pushnumber(L, ui->lastColor[0]);
+	lua_pushnumber(L, ui->lastColor[1]);
+	lua_pushnumber(L, ui->lastColor[2]);
+	lua_pushnumber(L, ui->lastColor[3]);
+
+	return 4; // returning r,g,b,a
 }
 
 static int l_DrawImage(lua_State* L)
@@ -1068,7 +1090,7 @@ static int l_DrawString(lua_State* L)
 	ui->LAssert(L, lua_isstring(L, 5), "DrawString() argument 5: expected string, got %s", luaL_typename(L, 5));
 	ui->LAssert(L, lua_isstring(L, 6), "DrawString() argument 6: expected string, got %s", luaL_typename(L, 6));
 	static const char* alignMap[6] = { "LEFT", "CENTER", "RIGHT", "CENTER_X", "RIGHT_X", NULL };
-	static const char* fontMap[8] = { "FIXED", "VAR", "VAR BOLD", "FONTIN SC", "FONTIN SC ITALIC", "FONTIN", "FONTIN ITALIC", NULL};
+	static const char* fontMap[8] = { "FIXED", "VAR", "VAR BOLD", "FONTIN SC", "FONTIN SC ITALIC", "FONTIN", "FONTIN ITALIC", NULL };
 	const float dpiScale = ui->renderer->VirtualScreenScaleFactor();
 	const float left = lua_tonumber(L, 1) * dpiScale;
 	const float top = lua_tonumber(L, 2) * dpiScale;
@@ -1089,6 +1111,15 @@ static int l_DrawString(lua_State* L)
 		luaL_checkoption(L, 5, "FIXED", fontMap),
 		lua_tostring(L, 6)
 	);
+
+	// Get the final color from the renderer after DrawString processes color codes
+	col4_t finalColor;
+	ui->renderer->GetDrawColor(finalColor);
+	ui->lastColor[0] = finalColor[0];
+	ui->lastColor[1] = finalColor[1];
+	ui->lastColor[2] = finalColor[2];
+	ui->lastColor[3] = finalColor[3];
+
 	return 0;
 }
 
@@ -2186,6 +2217,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(SetViewport);
 	ADDFUNC(SetBlendMode);
 	ADDFUNC(SetDrawColor);
+	ADDFUNC(GetDrawColor);
 	ADDFUNC(SetDPIScaleOverridePercent);
 	ADDFUNC(GetDPIScaleOverridePercent);
 	ADDFUNC(DrawImage);
