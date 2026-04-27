@@ -1,0 +1,5 @@
+{
+  "name": "pthread-stubs",
+  "version": "0.4",
+  "description": "Provides weak aliases for pthread functions (native glibc pthreads used on Linux)"
+}

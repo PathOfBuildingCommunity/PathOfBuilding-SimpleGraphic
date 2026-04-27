@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <fmt/chrono.h>
 #include <future>
@@ -19,6 +20,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include <thread>
 #include <vector>
 
 #include <imgui_impl_glfw.h>
@@ -1084,7 +1086,7 @@ void r_renderer_c::Init(r_featureFlag_e features)
 	ImGui::SetCurrentContext(imguiCtx);
 
 	ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)sys->video->GetWindowHandle(), true);
-	ImGui_ImplOpenGL3_Init("#version 100");
+	ImGui_ImplOpenGL3_Init(nullptr);
 
 	fonts[F_FIXED] = new r_font_c(this, "Bitstream Vera Sans Mono");
 	fonts[F_VAR] = new r_font_c(this, "Liberation Sans");
@@ -1640,7 +1642,7 @@ void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& heigh
 	if (hnd)
 	{
 		while (hnd->sh->tex->status < r_tex_c::SIZE_KNOWN) {
-			Sleep(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;

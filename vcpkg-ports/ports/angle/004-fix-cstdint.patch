@@ -1,0 +1,10 @@
+--- a/src/image_util/AstcDecompressor.h
++++ b/src/image_util/AstcDecompressor.h
+@@ -13,6 +13,7 @@
+
+ #include <memory>
+ #include <string>
++#include <cstdint>
+
+ namespace angle
+ {

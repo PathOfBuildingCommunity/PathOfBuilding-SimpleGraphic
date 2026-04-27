@@ -6,6 +6,7 @@
 
 #include "r_local.h"
 
+#include <algorithm>
 #include <fmt/format.h>
 #include <iostream>
 #include <fstream>

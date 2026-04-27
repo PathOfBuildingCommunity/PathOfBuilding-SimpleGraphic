@@ -18,6 +18,7 @@
 #elif __linux__
 #include <unistd.h>
 #include <limits.h>
+#include <spawn.h>
 #elif __APPLE__ && __MACH__
 #include <libproc.h>
 #endif
@@ -25,14 +26,15 @@
 #ifndef _WIN32
 #include <sys/types.h>
 #include <pwd.h>
-#include <uuid/uuid.h>
 #endif
 
 #include <GLFW/glfw3.h>
 #include <filesystem>
 #include <map>
 #include <set>
+#include <sstream>
 #include <thread>
+#include <vector>
 
 #include <fmt/core.h>
 
@@ -429,8 +431,22 @@ void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList
 	}
 	FreeWideString(wideArgs);
 #else
-#warning LV: Subprocesses not implemented on this OS.
-	// TODO(LV): Implement subprocesses for other OSes.
+	std::vector<std::string> args;
+	args.push_back(cmdName.string());
+	// Split argList on spaces (simple split, sufficient for PoB's usage)
+	if (argList && argList[0]) {
+		std::istringstream iss(argList);
+		std::string token;
+		while (iss >> token) args.push_back(token);
+	}
+	pid_t pid = fork();
+	if (pid == 0) {
+		std::vector<char*> argv;
+		for (auto& a : args) argv.push_back(const_cast<char*>(a.c_str()));
+		argv.push_back(nullptr);
+		execvp(argv[0], argv.data());
+		_exit(1);
+	}
 #endif
 }
 
@@ -468,9 +484,12 @@ const char* PlatformOpenURL(const char* url)
 	ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWDEFAULT);
 	return nullptr;
 #else
-#warning LV: URL opening not implemented on this OS.
-	// TODO(LV): Implement URL opening for other OSes.
-	return AllocString("URL opening not implemented on this OS.");
+	std::string cmd = std::string("xdg-open ") + url + " &";
+	int ret = system(cmd.c_str());
+	if (ret != 0) {
+		return AllocString("xdg-open failed to open URL.");
+	}
+	return nullptr;
 #endif
 }
 #else
@@ -563,6 +582,11 @@ std::filesystem::path FindBasePath()
 	GetModuleFileNameW(NULL, basePath.data(), basePath.size());
 	progPath = basePath.data();
 #elif __linux__
+	if (const char* sgBasePath = ::getenv("SG_BASE_PATH")) {
+		progPath = sgBasePath;
+		progPath = weakly_canonical(progPath);
+		return progPath;
+	}
 	char basePath[PATH_MAX];
 	ssize_t len = ::readlink("/proc/self/exe", basePath, sizeof(basePath));
 	if (len == -1 || len == sizeof(basePath))
@@ -710,7 +734,7 @@ bool sys_main_c::Run(int argc, char** argv)
 	}
 #else
 	catch (std::exception& e) {
-		Error("Exception: ", e.what());
+		Error("Exception: %s", e.what());
 	}
 #endif
 

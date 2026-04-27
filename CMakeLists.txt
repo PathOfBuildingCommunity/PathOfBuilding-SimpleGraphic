@@ -137,6 +137,7 @@ add_library(cmp_core STATIC
     dep/compressonator/cmp_core/shaders/bc3_encode_kernel.cpp
     dep/compressonator/cmp_core/shaders/bc7_encode_kernel.cpp
 )
+set_target_properties(cmp_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(cmp_core PRIVATE
     dep/compressonator/applications/_libs/cmp_math
@@ -168,9 +169,13 @@ add_library(imgui STATIC
     dep/imgui/misc/cpp/imgui_stdlib.h
 )
 
-target_compile_definitions(imgui PUBLIC
-    "IMGUI_IMPL_OPENGL_ES2"
-)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    # On Linux: use system GLES3 via EGL (same context as engine/glad), not ANGLE.
+    # IMGUI_IMPL_OPENGL_ES3 uses <GLES3/gl3.h> declarations resolved through glad at link time.
+    target_compile_definitions(imgui PUBLIC "IMGUI_IMPL_OPENGL_ES3")
+else()
+    target_compile_definitions(imgui PUBLIC "IMGUI_IMPL_OPENGL_ES2")
+endif()
 
 target_include_directories(imgui PUBLIC
     dep/imgui
@@ -178,10 +183,12 @@ target_include_directories(imgui PUBLIC
     dep/imgui/misc/cpp
 )
 
-target_link_libraries(imgui PUBLIC
-    unofficial::angle::libGLESv2
-    glfw
-)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_link_libraries(imgui PUBLIC glfw GLESv2)
+else()
+    target_link_libraries(imgui PUBLIC unofficial::angle::libGLESv2 glfw)
+endif()
+set_target_properties(imgui PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_include_directories(SimpleGraphic
     PRIVATE
@@ -193,6 +200,10 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_options(SimpleGraphic
         PRIVATE
         "-export-dynamic"
+    )
+    target_compile_options(SimpleGraphic
+        PRIVATE
+        "-Wno-template-body"
     )
 endif ()
 
@@ -240,11 +251,11 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    $<IF:$<TARGET_EXISTS:zstd::libzstd_shared>,zstd::libzstd_shared,zstd::libzstd_static>
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
-install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+install(TARGETS SimpleGraphic RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -282,11 +293,19 @@ endif ()
 set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
 add_library(lcurl SHARED ${LCURL_SOURCES})
+if (NOT WIN32)
+    set_target_properties(lcurl PROPERTIES PREFIX "")
+endif()
 
 target_include_directories(lcurl
     PRIVATE
     ${LCURL_SOURCE_DIR}/src
 )
+
+if (NOT WIN32)
+    # LuaJIT 2.1 already provides luaL_setfuncs; l52util.c also defines it as a Lua 5.1 compat shim
+    target_link_options(lcurl PRIVATE "-Wl,--allow-multiple-definition")
+endif()
 
 target_link_libraries(lcurl
     PRIVATE
@@ -294,17 +313,27 @@ target_link_libraries(lcurl
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lcurl RUNTIME DESTINATION ".")
+install(TARGETS lcurl RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 # luautf8 module
 
 add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
+if (NOT WIN32)
+    set_target_properties(lua-utf8 PROPERTIES OUTPUT_NAME "lua-utf8" PREFIX "")
+endif()
 
-target_compile_definitions(lua-utf8
-    PRIVATE
-    LUA_BUILD_AS_DLL
-)
+if (WIN32)
+    target_compile_definitions(lua-utf8
+        PRIVATE
+        LUA_BUILD_AS_DLL
+    )
+else()
+    target_compile_options(lua-utf8
+        PRIVATE
+        "-include" "limits.h"
+    )
+endif()
 
 target_include_directories(lua-utf8
     PRIVATE
@@ -315,10 +344,17 @@ target_link_libraries(lua-utf8
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(TARGETS lua-utf8 RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # luasocket module
+
+set(LUASOCKET_PLATFORM_SOURCES)
+if (WIN32)
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/wsocket.c")
+else()
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/usocket.c")
+endif()
 
 add_library(luasocket SHARED
    "libs/luasocket/src/auxiliar.c"
@@ -333,7 +369,7 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
+   ${LUASOCKET_PLATFORM_SOURCES}
 )
 
 target_include_directories(luasocket
@@ -341,20 +377,27 @@ target_include_directories(luasocket
     ${LSOCKET_SOURCE_DIR}/src
 )
 
+set(LUASOCKET_PLATFORM_LIBS)
+if (WIN32)
+    set(LUASOCKET_PLATFORM_LIBS wsock32 ws2_32)
+endif()
+
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
+    ${LUASOCKET_PLATFORM_LIBS}
 )
 
-set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
-install(TARGETS luasocket RUNTIME DESTINATION ".")
+set_target_properties(luasocket PROPERTIES OUTPUT_NAME "socket" PREFIX "")
+install(TARGETS luasocket RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
 
 add_library(lzip SHARED libs/LZip/lzip.cpp)
+if (NOT WIN32)
+    set_target_properties(lzip PROPERTIES PREFIX "")
+endif()
 
 target_include_directories(lzip
     PRIVATE
@@ -366,5 +409,12 @@ target_link_libraries(lzip
     ZLIB::ZLIB
 )
 
-install(TARGETS lzip RUNTIME DESTINATION ".")
+install(TARGETS lzip RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
+# Linux launcher
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    add_executable(PathOfBuilding linux/launcher.c)
+    target_link_libraries(PathOfBuilding PRIVATE ${CMAKE_DL_LIBS})
+    install(TARGETS PathOfBuilding RUNTIME DESTINATION ".")
+endif()

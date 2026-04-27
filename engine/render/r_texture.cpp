@@ -4,7 +4,9 @@
 // Module: Render Texture
 //
 
+#include <algorithm>
 #include <mutex>
+#include <thread>
 #include <vector>
 #include <atomic>
 #include "r_local.h"
@@ -504,7 +506,7 @@ static gli::texture2d_array TranscodeTexture(gli::texture2d_array src, gli::form
 
 			for (size_t blockRow = 0; blockRow < srcBlocksPerRow; ++blockRow) {
 				const size_t rowBase = blockRow * srcBlockSize.y;
-				const size_t rowsLeft = (std::min)(4ull, dstExtent.y - rowBase);
+				const size_t rowsLeft = (std::min)(size_t{4}, dstExtent.y - rowBase);
 
 				for (size_t blockCol = 0; blockCol < srcBlocksPerColumn; ++blockCol) {
 					// Read source 4x4 texel block, no branching needed.
@@ -524,7 +526,7 @@ static gli::texture2d_array TranscodeTexture(gli::texture2d_array src, gli::form
 
 						// Here we work off that dstData points at the top left pixel of the block row in the destination.
 						const size_t colBase = blockCol * srcBlockSize.x;
-						const size_t colsLeft = (std::min)(4ull, dstExtent.x - colBase);
+						const size_t colsLeft = (std::min)(size_t{4}, dstExtent.x - colBase);
 						const size_t colBytesLeft = colsLeft * 4;
 						for (size_t innerRow = 0; innerRow < rowsLeft; ++innerRow) {
 							auto* dstPtr = dstData + dstRowStride * innerRow + colBase * 4;

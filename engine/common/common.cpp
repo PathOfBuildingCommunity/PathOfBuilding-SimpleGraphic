@@ -437,6 +437,8 @@ char* NarrowUTF8String(const wchar_t* str)
 	return NarrowCodepageString(str, CP_UTF8);
 }
 
+#endif
+
 IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 {
 	IndexedUTF32String ret{};
@@ -501,4 +503,3 @@ IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 	return ret;
 }
 
-#endif

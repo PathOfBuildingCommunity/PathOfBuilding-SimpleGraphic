@@ -1,0 +1,5 @@
+{
+  "name": "openssl",
+  "version": "3.5.4",
+  "description": "System OpenSSL wrapper (uses /usr/include/openssl and /usr/lib64/libssl)"
+}

@@ -13,6 +13,7 @@ vcpkg_from_github(
         msvcbuild.patch
         003-do-not-set-macosx-deployment-target.patch
         pob-wide-crt.patch
+        006-fix-getenvcopy-linux.patch
         ${extra_patches}
 )
 
@@ -62,6 +63,10 @@ else()
         set(strip_options " -x")
     elseif(VCPKG_TARGET_IS_LINUX)
         vcpkg_list(APPEND make_options "TARGET_SYS=Linux")
+        # Enable GC64 mode so LuaJIT works when statically linked into a dlopen'd shared library.
+        # Without GC64, LuaJIT requires all GC memory within 4GB of its code, which fails at
+        # high virtual addresses common when a .so is loaded via dlopen.
+        vcpkg_list(APPEND make_options "XCFLAGS=-DLUAJIT_ENABLE_GC64")
     elseif(VCPKG_TARGET_IS_WINDOWS)
         vcpkg_list(APPEND make_options "TARGET_SYS=Windows")
         set(strip_options " --strip-unneeded")
@@ -76,6 +81,7 @@ else()
     endif()
 
     file(COPY "${CMAKE_CURRENT_LIST_DIR}/configure" DESTINATION "${SOURCE_PATH}")
+    file(CHMOD "${SOURCE_PATH}/configure" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
     vcpkg_configure_make(SOURCE_PATH "${SOURCE_PATH}"
         COPY_SOURCE
         OPTIONS
@@ -91,6 +97,26 @@ else()
             "TARGET_AR=${VCPKG_DETECTED_CMAKE_AR} rcus"
             "TARGET_STRIP=${VCPKG_DETECTED_CMAKE_STRIP}${strip_options}"
     )
+
+    # The install step creates a circular symlink bin/luajit -> luajit because
+    # INSTALL_TNAME and INSTALL_TSYMNAME are both "luajit". Fix it by replacing
+    # the broken symlink with the real binary from the build tree.
+    foreach(BUILDTYPE "release" "debug")
+        if(BUILDTYPE STREQUAL "release")
+            set(BUILD_SUBDIR "x64-linux-rel")
+            set(DEST_DIR "${CURRENT_PACKAGES_DIR}/bin")
+        else()
+            set(BUILD_SUBDIR "x64-linux-dbg")
+            set(DEST_DIR "${CURRENT_PACKAGES_DIR}/debug/bin")
+        endif()
+        set(REAL_BIN "${CURRENT_BUILDTREES_DIR}/${BUILD_SUBDIR}/src/luajit")
+        set(DEST_BIN "${DEST_DIR}/luajit")
+        if(EXISTS "${REAL_BIN}")
+            file(REMOVE "${DEST_BIN}")
+            file(COPY "${REAL_BIN}" DESTINATION "${DEST_DIR}")
+            file(CHMOD "${DEST_BIN}" PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+        endif()
+    endforeach()
 endif()
 
 file(REMOVE_RECURSE
