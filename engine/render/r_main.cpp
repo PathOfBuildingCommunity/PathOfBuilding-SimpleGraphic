@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <thread>
 #include <filesystem>
 #include <fmt/chrono.h>
 #include <future>
@@ -1640,7 +1642,7 @@ void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& heigh
 	if (hnd)
 	{
 		while (hnd->sh->tex->status < r_tex_c::SIZE_KNOWN) {
-			Sleep(1);
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		}
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;

@@ -322,6 +322,9 @@ bool ui_subscript_c::Start()
 	// Add libraries and APIs
 	lua_gc(L, LUA_GCSTOP, 0);
 	luaL_openlibs(L);
+
+	ui_main_c::AppendLocalLuaSubdir(L);
+
 	lua_getglobal(L, "os");
 	lua_pushcfunction(L, l_os_exit);
 	lua_setfield(L, -2, "exit");

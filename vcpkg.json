@@ -2,7 +2,8 @@
   "name": "path-of-building-simplegraphic",
   "version": "2.5",
   "dependencies": [
-    "angle",
+    { "name": "angle", "features": [ "metal" ], "platform": "osx" },
+    { "name": "angle", "platform": "!osx" },
     "curl",
     "fmt",
     "glfw3",

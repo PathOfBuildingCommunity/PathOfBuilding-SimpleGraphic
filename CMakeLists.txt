@@ -78,18 +78,18 @@ set(SIMPLEGRAPHIC_SOURCES
 
 set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
 if (APPLE)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_macos.mm"
     )
 endif()
 
 if (WIN32)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
         "SimpleGraphic.rc"
     )
 else()
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console_unix.cpp"
     )
 endif()
@@ -130,6 +130,12 @@ find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(WebP)
+
+if (TARGET zstd::libzstd_shared)
+    set(ZSTD_LIBRARY zstd::libzstd_shared)
+else ()
+    set(ZSTD_LIBRARY zstd::libzstd_static)
+endif ()
 
 add_library(cmp_core STATIC
     dep/compressonator/cmp_core/source/cmp_core.cpp
@@ -240,7 +246,7 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    ${ZSTD_LIBRARY}
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
@@ -277,6 +283,35 @@ if (WIN32)
 endif ()
 
 
+find_package(Git QUIET)
+if (NOT GIT_EXECUTABLE)
+    set(GIT_EXECUTABLE git)
+endif ()
+
+function(apply_submodule_patch SUBMODULE_DIR PATCH_FILE)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} -C ${SUBMODULE_DIR} apply --ignore-whitespace --reverse --check ${PATCH_FILE}
+        RESULT_VARIABLE _patch_in_place
+        OUTPUT_QUIET ERROR_QUIET
+    )
+    if (NOT _patch_in_place EQUAL 0)
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} -C ${SUBMODULE_DIR} apply --ignore-whitespace ${PATCH_FILE}
+            RESULT_VARIABLE _patch_result
+        )
+        if (NOT _patch_result EQUAL 0)
+            message(FATAL_ERROR "Failed to apply ${PATCH_FILE}")
+        endif ()
+        message(STATUS "Applied patch: ${PATCH_FILE}")
+    endif ()
+endfunction()
+
+apply_submodule_patch(
+    ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3
+    ${CMAKE_CURRENT_SOURCE_DIR}/patches/Lua-cURLv3-skip-luaL_setfuncs-on-luajit.patch
+)
+
+
 # lcurl module
 
 set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
@@ -301,10 +336,12 @@ install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
 
-target_compile_definitions(lua-utf8
-    PRIVATE
-    LUA_BUILD_AS_DLL
-)
+if (WIN32)
+    target_compile_definitions(lua-utf8
+        PRIVATE
+        LUA_BUILD_AS_DLL
+    )
+endif ()
 
 target_include_directories(lua-utf8
     PRIVATE
@@ -333,8 +370,13 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
 )
+
+if (WIN32)
+    target_sources(luasocket PRIVATE "libs/luasocket/src/wsocket.c")
+else ()
+    target_sources(luasocket PRIVATE "libs/luasocket/src/usocket.c")
+endif ()
 
 target_include_directories(luasocket
     PRIVATE
@@ -344,9 +386,11 @@ target_include_directories(luasocket
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
 )
+
+if (WIN32)
+    target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
+endif ()
 
 set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
 install(TARGETS luasocket RUNTIME DESTINATION ".")

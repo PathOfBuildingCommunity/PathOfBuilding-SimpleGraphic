@@ -184,6 +184,18 @@ void ui_main_c::DoError(const char* msg, const char* error)
 	didExit = true;
 }
 
+void ui_main_c::AppendLocalLuaSubdir(lua_State* L)
+{
+	lua_getglobal(L, "package");
+	lua_getfield(L, -1, "path");
+	std::string old_path = lua_tostring(L, -1);
+	lua_pop(L, 1);
+	old_path += ";lua/?.lua";
+	lua_pushstring(L, old_path.c_str());
+	lua_setfield(L, -2, "path");
+	lua_pop(L, 1);
+}
+
 // From lua.c
 static int traceback (lua_State *L) {
   if (!lua_isstring(L, 1))  /* 'message' not a string? */
