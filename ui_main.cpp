@@ -385,8 +385,9 @@ void ui_main_c::Frame()
 	else if (framesSinceWindowHidden <= 10) {
 		framesSinceWindowHidden++;
 	}
-	// Otherwise only runs frames if the mouse is on screen, there is an active coroutine, or there is an active subscript
-	else if (!sys->video->IsActive() && !sys->video->IsCursorOverWindow() && !hasActiveCoroutine && !hasSubscript) {
+	// Otherwise only runs frames if the mouse is on screen, there is an active coroutine, there is an active subscript,
+	// or the script has opted in to continuous frames via SetForceFrames(true)
+	else if (!forceFrames && !sys->video->IsActive() && !sys->video->IsCursorOverWindow() && !hasActiveCoroutine && !hasSubscript) {
 		sys->Sleep(100);
 		return;
 	}	

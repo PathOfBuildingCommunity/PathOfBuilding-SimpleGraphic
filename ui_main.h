@@ -50,6 +50,7 @@ public:
 	int		framesSinceWindowHidden = 0;
 	volatile bool	inLua = false;
 	bool	hasActiveCoroutine = false;
+	bool	forceFrames = false;
 	int		ioOpenf = LUA_NOREF;
 
 	float lastColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};

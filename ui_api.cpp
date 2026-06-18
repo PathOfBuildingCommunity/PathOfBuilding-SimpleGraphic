@@ -67,6 +67,7 @@
 ** index = DrawStringCursorIndex(height, font{"FIXED"|"VAR"|"VAR BOLD"|"FONTIN SC"|"FONTIN SC ITALIC"|"FONTIN"|"FONTIN ITALIC"}, "<text>", cursorX, cursorY)
 ** str = StripEscapes("<string>")
 ** count = GetAsyncCount()
+** SetForceFrames(enabled)
 **
 ** searchHandle = NewFileSearch("<spec>"[, findDirectories])
 ** found = searchHandle:NextFile()
@@ -1531,6 +1532,20 @@ static int l_SetWindowTitle(lua_State* L)
 	return 0;
 }
 
+// By default, when the window is inactive and idle (not focused, cursor not over
+// it, no running coroutine or subscript) the frame loop sleeps and skips the
+// script frame to save CPU. SetForceFrames(true) opts out of that so the script
+// keeps receiving OnFrame while in the background; SetForceFrames(false) restores
+// the default power-saving behaviour.
+static int l_SetForceFrames(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: SetForceFrames(enabled)");
+	ui->forceFrames = lua_toboolean(L, 1) != 0;
+	return 0;
+}
+
 static int l_GetCursorPos(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2280,6 +2295,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(DrawStringCursorIndex);
 	ADDFUNC(StripEscapes);
 	ADDFUNC(GetAsyncCount);
+	ADDFUNC(SetForceFrames);
 	ADDFUNC(RenderInit);
 
 	// Search handles
