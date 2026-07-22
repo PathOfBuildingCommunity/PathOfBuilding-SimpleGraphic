@@ -15,6 +15,7 @@
 #ifdef _WIN32
 #include <eh.h>
 #include <Shlobj.h>
+#include <TlHelp32.h>
 #elif __linux__
 #include <unistd.h>
 #include <limits.h>
@@ -35,6 +36,9 @@
 #include <thread>
 
 #include <fmt/core.h>
+#include <algorithm>
+#include <cwctype>
+#include <unordered_set>
 
 // ======
 // Locals
@@ -431,6 +435,47 @@ void sys_main_c::SpawnProcess(std::filesystem::path cmdName, const char* argList
 #else
 #warning LV: Subprocesses not implemented on this OS.
 	// TODO(LV): Implement subprocesses for other OSes.
+#endif
+}
+
+int sys_main_c::GetProcessCount(const std::vector<std::wstring>& imageNames)
+{
+#ifdef _WIN32
+	if (imageNames.empty()) {
+		return 0;
+	}
+	std::unordered_set<std::wstring> lookup;
+	lookup.reserve(imageNames.size());
+	for (const auto& name : imageNames) {
+		std::wstring lowered = name;
+		std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](wchar_t c) {
+			return std::towlower(c);
+		});
+		lookup.insert(std::move(lowered));
+	}
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+	if (snapshot == INVALID_HANDLE_VALUE) {
+		return -1;
+	}
+	PROCESSENTRY32W entry{};
+	entry.dwSize = sizeof(entry);
+	int count = 0;
+	if (Process32FirstW(snapshot, &entry)) {
+		do {
+			std::wstring exe(entry.szExeFile);
+			std::transform(exe.begin(), exe.end(), exe.begin(), [](wchar_t c) {
+				return std::towlower(c);
+			});
+			if (lookup.find(exe) != lookup.end()) {
+				++count;
+			}
+		} while (Process32NextW(snapshot, &entry));
+	}
+	CloseHandle(snapshot);
+	return count;
+#else
+	(void)imageNames;
+	return -1;
 #endif
 }
 
