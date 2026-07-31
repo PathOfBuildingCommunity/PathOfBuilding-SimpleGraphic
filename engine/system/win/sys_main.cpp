@@ -576,7 +576,13 @@ std::filesystem::path FindBasePath()
 	progPath = basePath;
 #endif
 	progPath = weakly_canonical(progPath);
-	return progPath.parent_path();
+	auto dirPath = progPath.parent_path();
+#if __APPLE__ && __MACH__
+	if (dirPath.filename() == "MacOS" && dirPath.parent_path().filename() == "Contents") {
+		dirPath = dirPath.parent_path() / "Resources";
+	}
+#endif
+	return dirPath;
 }
 
 std::tuple<std::optional<std::filesystem::path>, std::optional<std::string>> FindUserPath()

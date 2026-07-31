@@ -1,0 +1,9 @@
+diff --git a/src/Makefile b/src/Makefile
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -323,4 +323,4 @@
+ ifeq (Darwin,$(TARGET_SYS))
+   TARGET_STRIP+= -x
+-  TARGET_XCFLAGS+= -DLUAJIT_UNWIND_EXTERNAL
++  TARGET_XCFLAGS+= -DLUAJIT_UNWIND_INTERNAL
+   TARGET_XSHLDFLAGS= -dynamiclib -undefined dynamic_lookup -fPIC
