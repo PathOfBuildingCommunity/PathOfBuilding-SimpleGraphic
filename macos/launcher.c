@@ -2,12 +2,19 @@
 #include <libgen.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 extern int RunLuaFileAsWin(int argc, char **argv);
 
 int main(int argc, char **argv)
 {
+	char restartMarker[128];
+	snprintf(restartMarker, sizeof(restartMarker),
+		"/tmp/org.pathofbuilding.simplegraphic-smoke-restart-%d", getpid());
+	unlink(restartMarker);
+	setenv("SIMPLEGRAPHIC_SMOKE_RESTART_MARKER", restartMarker, 1);
+
 	char executablePath[4096];
 	uint32_t size = sizeof(executablePath);
 	if (_NSGetExecutablePath(executablePath, &size) == 0) {

@@ -23,20 +23,32 @@ while IFS= read -r file_path; do
 	fi
 
 	minos=$(vtool -show-build "$file_path" | awk '/minos/ { print $2; exit }')
-	case "$minos" in
-		13|13.*) ;;
-		*) echo "unexpected deployment target: $minos" >&2; status=1 ;;
-	esac
-
-	if otool -L "$file_path" | awk 'NR > 1 { print $1 }' | grep -Evq '^(@rpath/|@loader_path/|@executable_path/|/System/|/usr/lib/)'; then
-		echo "absolute non-system dependency found" >&2
-		otool -L "$file_path" >&2
+	if ! awk -v minos="$minos" 'BEGIN { exit !(minos + 0 <= 13) }'; then
+		echo "unexpected deployment target: $minos" >&2
 		status=1
 	fi
+
+	install_name=$(otool -D "$file_path" 2>/dev/null | awk 'NR == 2 { print $1 }')
+	while IFS= read -r dependency; do
+		if [ "$dependency" = "$install_name" ]; then
+			continue
+		fi
+		case "$dependency" in
+			@rpath/*)
+				if [ ! -e "$bundle/Contents/Frameworks/${dependency#@rpath/}" ]; then
+					echo "unresolved dependency: $dependency" >&2
+					status=1
+				fi
+				;;
+			/System/*|/usr/lib/*) ;;
+			*) echo "non-relocatable dependency: $dependency" >&2; status=1 ;;
+		esac
+	done <<EOF
+$(otool -L "$file_path" | awk 'NR > 1 { print $1 }')
+EOF
 done <<EOF
 $(find "$bundle" -type f -print)
 EOF
 
-codesign --force --deep --sign - "$bundle"
 codesign --verify --deep --strict --verbose=2 "$bundle"
 exit "$status"

@@ -470,6 +470,8 @@ if (APPLE)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:lzip>"
             "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lzip.so"
+        COMMAND /usr/bin/codesign --force --deep --sign -
+            "$<TARGET_BUNDLE_DIR:SimpleGraphicSmoke>"
         VERBATIM
     )
 endif ()
