@@ -23,7 +23,7 @@ while IFS= read -r file_path; do
 	fi
 
 	minos=$(vtool -show-build "$file_path" | awk '/minos/ { print $2; exit }')
-	if ! awk -v minos="$minos" 'BEGIN { exit !(minos + 0 <= 13) }'; then
+	if [ -z "$minos" ] || ! awk -v minos="$minos" 'BEGIN { exit !(minos + 0 <= 13) }'; then
 		echo "unexpected deployment target: $minos" >&2
 		status=1
 	fi

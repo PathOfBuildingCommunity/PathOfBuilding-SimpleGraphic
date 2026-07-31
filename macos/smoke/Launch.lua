@@ -14,7 +14,15 @@ SetWindowTitle("SimpleGraphic macOS smoke")
 ConExecute("set vid_mode 8")
 ConExecute("set vid_resizable 3")
 
-function smoke:OnInit()
+function smoke:Fail(message)
+	local failureMarker = assert(io.open(restartMarker .. "-failed", "w"))
+	failureMarker:write(message)
+	failureMarker:close()
+	ConPrintf("SMOKE FAILED: %s\n", message)
+	Exit()
+end
+
+function smoke:RunChecks()
 	RenderInit("DPI_AWARE")
 	SetClearColor(0.04, 0.08, 0.12, 1)
 
@@ -41,13 +49,20 @@ function smoke:OnInit()
 	ConPrintf("SMOKE: main-state modules, compression, paths, and localhost socket passed.\n")
 end
 
+function smoke:OnInit()
+	local passed, errorMessage = pcall(self.RunChecks, self)
+	if not passed then
+		self:Fail(errorMessage)
+	end
+end
+
 function smoke:OnSubError(_, errorMessage)
-	Exit("SMOKE FAILED: subscript error: " .. errorMessage)
+	self:Fail("subscript error: " .. errorMessage)
 end
 
 function smoke:OnSubFinished(_, passed)
 	if passed ~= true then
-		Exit("SMOKE FAILED: subscript returned without success")
+		self:Fail("subscript returned without success")
 		return
 	end
 	self.subscriptPassed = true
@@ -62,6 +77,9 @@ function smoke:OnFrame()
 	if self.frames >= 120 and self.subscriptPassed then
 		ConPrintf("SMOKE: ANGLE frame loop passed at %dx%d scale %.2f.\n", width, height, GetScreenScale())
 		if self.restarted then
+			local successMarker = assert(io.open(restartMarker .. "-passed", "w"))
+			successMarker:write("passed")
+			successMarker:close()
 			ConPrintf("SMOKE: restart loop passed; exiting cleanly.\n")
 			Exit()
 		else

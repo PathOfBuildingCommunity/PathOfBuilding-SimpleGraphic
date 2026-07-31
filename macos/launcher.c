@@ -10,9 +10,15 @@ extern int RunLuaFileAsWin(int argc, char **argv);
 int main(int argc, char **argv)
 {
 	char restartMarker[128];
+	char failureMarker[144];
+	char successMarker[144];
 	snprintf(restartMarker, sizeof(restartMarker),
 		"/tmp/org.pathofbuilding.simplegraphic-smoke-restart-%d", getpid());
+	snprintf(failureMarker, sizeof(failureMarker), "%s-failed", restartMarker);
+	snprintf(successMarker, sizeof(successMarker), "%s-passed", restartMarker);
 	unlink(restartMarker);
+	unlink(failureMarker);
+	unlink(successMarker);
 	setenv("SIMPLEGRAPHIC_SMOKE_RESTART_MARKER", restartMarker, 1);
 
 	char executablePath[4096];
@@ -30,5 +36,9 @@ int main(int argc, char **argv)
 		return RunLuaFileAsWin(argc - 1, argv + 1);
 	}
 	char *defaultArgs[] = { "Launch.lua" };
-	return RunLuaFileAsWin(1, defaultArgs);
+	int result = RunLuaFileAsWin(1, defaultArgs);
+	int passed = access(successMarker, F_OK) == 0;
+	unlink(failureMarker);
+	unlink(successMarker);
+	return result == 0 && passed ? 0 : 1;
 }

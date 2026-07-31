@@ -47,6 +47,7 @@ macOS 13, absolute non-system dependencies, and invalid ad-hoc signatures.
 
 The smoke app proves the native host and packaging seam. It does not yet prove
 bitmap fonts, PNG/WebP and DDS/BC fixture rendering, screenshots, clipboard,
-URL opening, HTTPS trust, or full Path of Building startup. It also still needs
-a run on physical Apple Silicon macOS 13 and a green Windows CI build before it
-is ready to hand off to Path of Building integration.
+URL opening, HTTPS trust, Retina 1x/2x cursor hit-testing, or full Path of
+Building startup. It also still needs a run on physical Apple Silicon macOS 13
+and a green Windows CI build before it is ready to hand off to Path of Building
+integration.

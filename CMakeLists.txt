@@ -291,29 +291,24 @@ if (WIN32)
 endif ()
 
 if (APPLE)
-    find_package(Git REQUIRED)
+    find_program(PATCH_EXECUTABLE patch REQUIRED)
+    set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/Lua-cURLv3)
+    file(REMOVE_RECURSE ${LCURL_SOURCE_DIR})
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3/src
+        DESTINATION ${LCURL_SOURCE_DIR})
     execute_process(
-        COMMAND ${GIT_EXECUTABLE} -C ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3
-            apply --ignore-whitespace --reverse --check
+        COMMAND ${PATCH_EXECUTABLE} -l -p1 -i
             ${CMAKE_CURRENT_SOURCE_DIR}/patches/Lua-cURLv3-skip-luaL_setfuncs-on-luajit.patch
-        RESULT_VARIABLE LCURL_PATCHED
-        OUTPUT_QUIET
-        ERROR_QUIET
+        WORKING_DIRECTORY ${LCURL_SOURCE_DIR}
+        COMMAND_ERROR_IS_FATAL ANY
     )
-    if (NOT LCURL_PATCHED EQUAL 0)
-        execute_process(
-            COMMAND ${GIT_EXECUTABLE} -C ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3
-                apply --ignore-whitespace
-                ${CMAKE_CURRENT_SOURCE_DIR}/patches/Lua-cURLv3-skip-luaL_setfuncs-on-luajit.patch
-            COMMAND_ERROR_IS_FATAL ANY
-        )
-    endif ()
+else ()
+    set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 endif ()
 
 
 # lcurl module
 
-set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
 add_library(lcurl SHARED ${LCURL_SOURCES})
 
@@ -431,6 +426,12 @@ if (APPLE)
     )
     target_link_libraries(SimpleGraphicSmoke PRIVATE SimpleGraphic)
     add_dependencies(SimpleGraphicSmoke lcurl lua-utf8 luasocket lzip)
+    set_property(TARGET SimpleGraphicSmoke APPEND PROPERTY LINK_DEPENDS
+        "$<TARGET_FILE:lcurl>"
+        "$<TARGET_FILE:lua-utf8>"
+        "$<TARGET_FILE:luasocket>"
+        "$<TARGET_FILE:lzip>"
+    )
     set_target_properties(SimpleGraphicSmoke PROPERTIES
         BUILD_WITH_INSTALL_RPATH TRUE
         INSTALL_RPATH "@executable_path/../Frameworks"
