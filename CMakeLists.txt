@@ -322,6 +322,18 @@ set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
 add_library(lcurl SHARED ${LCURL_SOURCES})
 
+if (NOT WIN32)
+    # When linking LuaJIT statically, Lua-cURLv3's local Lua 5.2-compat
+    # luaL_setfuncs shim collides with the one LuaJIT itself exports.
+    # Rename the local shim (and its internal callers) instead of patching
+    # the submodule; drop once https://github.com/Lua-cURL/Lua-cURLv3/pull/197
+    # is merged and the submodule is bumped.
+    target_compile_definitions(lcurl
+        PRIVATE
+        "luaL_setfuncs=lcurl_compat_setfuncs"
+    )
+endif ()
+
 target_include_directories(lcurl
     PRIVATE
     ${LCURL_SOURCE_DIR}/src
@@ -344,6 +356,15 @@ if (WIN32)
     target_compile_definitions(lua-utf8
         PRIVATE
         LUA_BUILD_AS_DLL
+    )
+else ()
+    # lutf8lib.c uses INT_MAX without including <limits.h>; force-include it
+    # instead of patching the submodule; drop once
+    # https://github.com/starwing/luautf8/pull/62 is merged and the submodule
+    # is bumped.
+    target_compile_options(lua-utf8
+        PRIVATE
+        -include limits.h
     )
 endif ()
 
