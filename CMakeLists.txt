@@ -14,7 +14,9 @@ endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
-set(VCPKG_OVERLAY_TRIPLETS "${PROJECT_SOURCE_DIR}/triplets")
+if (APPLE)
+    set(VCPKG_OVERLAY_TRIPLETS "${PROJECT_SOURCE_DIR}/triplets")
+endif ()
 
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
@@ -231,12 +233,26 @@ if (APPLE)
     file(GLOB ANGLE_DYLIBS
         "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*EGL*.dylib"
         "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*GLESv2*.dylib")
+    set(ANGLE_EGL_NAME "")
+    set(ANGLE_GLES_NAME "")
+    foreach (angle_dylib IN LISTS ANGLE_DYLIBS)
+        get_filename_component(angle_dylib_name "${angle_dylib}" NAME)
+        if (angle_dylib_name MATCHES "EGL")
+            set(ANGLE_EGL_NAME "${angle_dylib_name}")
+        elseif (angle_dylib_name MATCHES "GLESv2")
+            set(ANGLE_GLES_NAME "${angle_dylib_name}")
+        endif ()
+    endforeach ()
+    if (NOT ANGLE_EGL_NAME OR NOT ANGLE_GLES_NAME)
+        message(FATAL_ERROR "Shared ANGLE dylibs not found in ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib (got: '${ANGLE_DYLIBS}'); expected dynamic ANGLE via triplets/arm64-osx.cmake")
+    endif ()
     install(FILES ${ANGLE_DYLIBS} DESTINATION ".")
     # GLFW loads EGL at runtime by these canonical names (egl_context.c), so
-    # alias the ANGLE dylibs, whose install names stay @rpath/liblib*_angle.
+    # alias the ANGLE dylibs, whose install names stay @rpath-based.
     install(CODE "
-        file(CREATE_LINK liblibEGL_angle.dylib \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" SYMBOLIC)
-        file(CREATE_LINK liblibGLESv2_angle.dylib \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\" SYMBOLIC)
+        file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\")
+        file(CREATE_LINK ${ANGLE_EGL_NAME} \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" SYMBOLIC)
+        file(CREATE_LINK ${ANGLE_GLES_NAME} \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\" SYMBOLIC)
     ")
 endif ()
 
