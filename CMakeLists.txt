@@ -84,12 +84,12 @@ if (APPLE)
 endif()
 
 if (WIN32)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list(APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
         "SimpleGraphic.rc"
     )
 else()
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list(APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console_unix.cpp"
     )
 endif()
@@ -224,6 +224,13 @@ if (APPLE)
     )
 endif ()
 
+# Static triplets (e.g. arm64-osx) only provide the static zstd target
+if (TARGET zstd::libzstd_shared)
+    set(ZSTD_TARGET zstd::libzstd_shared)
+else ()
+    set(ZSTD_TARGET zstd::libzstd)
+endif ()
+
 target_link_libraries(SimpleGraphic
     PRIVATE
     unofficial::angle::libEGL
@@ -240,11 +247,11 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    ${ZSTD_TARGET}
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
-install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+install(TARGETS SimpleGraphic RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -294,17 +301,19 @@ target_link_libraries(lcurl
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lcurl RUNTIME DESTINATION ".")
+install(TARGETS lcurl RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 # luautf8 module
 
 add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
 
-target_compile_definitions(lua-utf8
-    PRIVATE
-    LUA_BUILD_AS_DLL
-)
+if (WIN32)
+    target_compile_definitions(lua-utf8
+        PRIVATE
+        LUA_BUILD_AS_DLL
+    )
+endif ()
 
 target_include_directories(lua-utf8
     PRIVATE
@@ -315,10 +324,16 @@ target_link_libraries(lua-utf8
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(TARGETS lua-utf8 RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # luasocket module
+
+if (WIN32)
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/wsocket.c")
+else ()
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/usocket.c")
+endif ()
 
 add_library(luasocket SHARED
    "libs/luasocket/src/auxiliar.c"
@@ -333,7 +348,7 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
+   ${LUASOCKET_PLATFORM_SOURCES}
 )
 
 target_include_directories(luasocket
@@ -344,12 +359,14 @@ target_include_directories(luasocket
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
 )
 
-set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
-install(TARGETS luasocket RUNTIME DESTINATION ".")
+if (WIN32)
+    target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
+endif ()
+
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" )
+install(TARGETS luasocket RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
@@ -366,5 +383,9 @@ target_link_libraries(lzip
     ZLIB::ZLIB
 )
 
-install(TARGETS lzip RUNTIME DESTINATION ".")
+install(TARGETS lzip RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
+if (NOT WIN32)
+    set_target_properties(lcurl lua-utf8 luasocket lzip PROPERTIES PREFIX "" SUFFIX ".so")
+endif ()

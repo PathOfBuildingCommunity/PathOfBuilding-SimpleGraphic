@@ -29,6 +29,7 @@
 #include "base64.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 /* ---- Base64 Encoding/Decoding Table --- */
 /* Padding character string starts at offset 64. */
@@ -47,7 +48,7 @@ static const unsigned char decodetable[] =
   29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
   48, 49, 50, 51 };
 /*
- * Base64Decode() née Curl_base64_decode()
+ * Base64Decode() nï¿½e Curl_base64_decode()
  *
  * Given a base64 NUL-terminated string at src, decode it and return a
  * pointer in *outptr to a newly allocated memory area holding decoded
@@ -235,7 +236,7 @@ static bool base64_encode(const char* table64,
 }
 
 /*
- * Base64Encode() née Curl_base64_encode()
+ * Base64Encode() nï¿½e Curl_base64_encode()
  *
  * Given a pointer to an input buffer and an input size, encode it and
  * return a pointer in *outptr to a newly allocated memory area holding
@@ -256,7 +257,7 @@ bool Base64Encode(const char* inputbuff, size_t insize,
 }
 
 /*
- * Base64UrlEncode() née Curl_base64url_encode()
+ * Base64UrlEncode() nï¿½e Curl_base64url_encode()
  *
  * Given a pointer to an input buffer and an input size, encode it and
  * return a pointer in *outptr to a newly allocated memory area holding

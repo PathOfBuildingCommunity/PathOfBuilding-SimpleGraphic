@@ -6,6 +6,8 @@
 
 #include "common.h"
 
+#include <cstdint>
+
 // ===================
 // Argument List Class
 // ===================
@@ -437,6 +439,12 @@ char* NarrowUTF8String(const wchar_t* str)
 	return NarrowCodepageString(str, CP_UTF8);
 }
 
+#endif
+
+// IndexUTF8ToUTF32 has no platform-specific dependencies (pure UTF-8 decoding);
+// it was previously nested inside the #ifdef _WIN32 block above, which left it
+// undefined (and unlinkable) on non-Windows platforms despite being called from
+// cross-platform code (r_main.cpp, r_font.cpp, sys_console.cpp).
 IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 {
 	IndexedUTF32String ret{};
@@ -500,5 +508,3 @@ IndexedUTF32String IndexUTF8ToUTF32(std::string_view input)
 	ret.text = std::u32string(codepoints.begin(), codepoints.end());
 	return ret;
 }
-
-#endif
