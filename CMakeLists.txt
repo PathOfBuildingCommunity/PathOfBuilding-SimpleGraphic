@@ -389,3 +389,17 @@ install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
 if (NOT WIN32)
     set_target_properties(lcurl lua-utf8 luasocket lzip PROPERTIES PREFIX "" SUFFIX ".so")
 endif ()
+
+# macOS launcher (counterpart of the Windows frontend executable)
+if (APPLE)
+    add_executable(pob macos/main.mm)
+    target_link_libraries(pob PRIVATE SimpleGraphic "-framework Foundation" "-framework CoreServices")
+    if (DEFINED POB_DEFAULT_SCRIPT)
+        target_compile_definitions(pob PRIVATE "POB_DEFAULT_SCRIPT=\"${POB_DEFAULT_SCRIPT}\"")
+    endif ()
+    set_target_properties(pob PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@executable_path"
+    )
+    install(TARGETS pob RUNTIME DESTINATION ".")
+endif ()
