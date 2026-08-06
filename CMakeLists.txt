@@ -14,6 +14,8 @@ endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
+set(VCPKG_OVERLAY_TRIPLETS "${PROJECT_SOURCE_DIR}/triplets")
+
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
@@ -222,6 +224,20 @@ if (APPLE)
         ${CORE_FOUNDATION_LIBRARY}
         ${APPLICATION_SERVICES_LIBRARY}
     )
+    set_target_properties(SimpleGraphic PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@loader_path"
+    )
+    file(GLOB ANGLE_DYLIBS
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*EGL*.dylib"
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*GLESv2*.dylib")
+    install(FILES ${ANGLE_DYLIBS} DESTINATION ".")
+    # GLFW loads EGL at runtime by these canonical names (egl_context.c), so
+    # alias the ANGLE dylibs, whose install names stay @rpath/liblib*_angle.
+    install(CODE "
+        file(CREATE_LINK liblibEGL_angle.dylib \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" SYMBOLIC)
+        file(CREATE_LINK liblibGLESv2_angle.dylib \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\" SYMBOLIC)
+    ")
 endif ()
 
 # Static triplets (e.g. arm64-osx) only provide the static zstd target
