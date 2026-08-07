@@ -115,6 +115,8 @@ sys_video_c::sys_video_c(sys_IMain* sysHnd)
 		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
 	else // Native Windows
 		platformType = GLFW_ANGLE_PLATFORM_TYPE_D3D11;
+#elif defined(__APPLE__)
+	platformType = GLFW_ANGLE_PLATFORM_TYPE_METAL;
 #endif
 	glfwInitHint(GLFW_ANGLE_PLATFORM_TYPE, platformType);
 	glfwInit();
@@ -489,7 +491,9 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 				return;
 			}
 			auto video = (sys_video_c*)sys->video;
-			video->lastCursorPos = CursorPos{ (int)x, (int)y };
+			double sx = video->vid.size[0] > 0 ? (double)video->vid.fbSize[0] / video->vid.size[0] : 1.0;
+			double sy = video->vid.size[1] > 0 ? (double)video->vid.fbSize[1] / video->vid.size[1] : 1.0;
+			video->lastCursorPos = CursorPos{ (int)(x * sx), (int)(y * sy) };
 			});
 		glfwSetWindowCloseCallback(wnd, [](GLFWwindow* wnd) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
@@ -737,14 +741,18 @@ void sys_video_c::GetRelativeCursor(int& x, int& y)
 	if (!initialised) return;
 	double xpos, ypos;
 	glfwGetCursorPos(wnd, &xpos, &ypos);
-	x = (int)floor(xpos);
-	y = (int)floor(ypos);
+	double sx = vid.size[0] > 0 ? (double)vid.fbSize[0] / vid.size[0] : 1.0;
+	double sy = vid.size[1] > 0 ? (double)vid.fbSize[1] / vid.size[1] : 1.0;
+	x = (int)floor(xpos * sx);
+	y = (int)floor(ypos * sy);
 }
 
 void sys_video_c::SetRelativeCursor(int x, int y)
 {
 	if (!initialised) return;
-	glfwSetCursorPos(wnd, (double)x, (double)y);
+	double sx = vid.fbSize[0] > 0 ? (double)vid.size[0] / vid.fbSize[0] : 1.0;
+	double sy = vid.fbSize[1] > 0 ? (double)vid.size[1] / vid.fbSize[1] : 1.0;
+	glfwSetCursorPos(wnd, x * sx, y * sy);
 }
 
 bool sys_video_c::IsCursorOverWindow()
