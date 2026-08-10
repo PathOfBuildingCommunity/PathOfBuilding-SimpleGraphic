@@ -310,8 +310,9 @@ r_tex_c::r_tex_c(r_ITexManager* manager, std::unique_ptr<image_c> img, int flags
 {
 	Init(manager, {}, flags);
 
-	// Direct upload
-	img = BuildMipSet(std::move(img));
+	// Direct upload. Note the result has to land in the member `img`, which is
+	// what PerformUpload reads — assigning to the parameter left it null.
+	this->img = BuildMipSet(std::move(img));
 	PerformUpload(this);
 }
 
