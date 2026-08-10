@@ -33,7 +33,8 @@ bool g_installed = false;
 NSRect g_caretRect = NSMakeRect(0.0, 0.0, 1.0, 16.0);
 NSWindow* g_window = nil;
 
-// Length of the current composition in UTF-16 units, as AppKit counts them.
+// The composition currently being edited, and its length in UTF-16 units.
+NSString* g_markedString = nil;
 NSUInteger g_markedLength = 0;
 
 IMP g_origSetMarkedText = nullptr;
@@ -67,6 +68,8 @@ void SwizzledSetMarkedText(id self, SEL _cmd, id string, NSRange selectedRange, 
     }
     NSString* text = [string isKindOfClass:[NSAttributedString class]] ? [(NSAttributedString*)string string]
                                                                        : (NSString*)string;
+    [g_markedString release];
+    g_markedString = text ? [text copy] : nil;
     g_markedLength = text ? [text length] : 0;
     ReportPreedit(text, selectedRange);
 }
@@ -77,6 +80,8 @@ void SwizzledUnmarkText(id self, SEL _cmd)
         ((void (*)(id, SEL))g_origUnmarkText)(self, _cmd);
     }
     // Composition finished or was cancelled; nothing is pending any more.
+    [g_markedString release];
+    g_markedString = nil;
     g_markedLength = 0;
     ReportPreedit(@"", NSMakeRange(0, 0));
 }
@@ -107,6 +112,23 @@ NSRange SwizzledMarkedRange(id self, SEL _cmd)
         return NSMakeRange(NSNotFound, 0);
     }
     return NSMakeRange(0, g_markedLength);
+}
+
+NSAttributedString* SwizzledAttributedSubstring(id self, SEL _cmd, NSRange range, NSRangePointer actualRange)
+{
+    // GLFW answers nil here, leaving the input method without any context for
+    // the text it is composing.
+    if (!g_markedString || [g_markedString length] == 0) {
+        return nil;
+    }
+    NSRange clamped = NSIntersectionRange(range, NSMakeRange(0, [g_markedString length]));
+    if (clamped.length == 0) {
+        return nil;
+    }
+    if (actualRange) {
+        *actualRange = clamped;
+    }
+    return [[[NSAttributedString alloc] initWithString:[g_markedString substringWithRange:clamped]] autorelease];
 }
 
 NSRange SwizzledSelectedRange(id self, SEL _cmd)
@@ -164,7 +186,14 @@ bool IME_Available()
 
 void IME_SetCaretRect(int x, int y, int width, int height)
 {
-    g_caretRect = NSMakeRect((CGFloat)x, (CGFloat)y, (CGFloat)(width > 0 ? width : 1), (CGFloat)(height > 0 ? height : 16));
+    NSRect updated = NSMakeRect((CGFloat)x, (CGFloat)y, (CGFloat)(width > 0 ? width : 1), (CGFloat)(height > 0 ? height : 16));
+    if (!NSEqualRects(updated, g_caretRect)) {
+        g_caretRect = updated;
+        // The system caches where it thinks the caret is and only re-asks when
+        // told the coordinates went stale. Without this the candidate window
+        // opens wherever it last believed the caret to be.
+        [[NSTextInputContext currentInputContext] invalidateCharacterCoordinates];
+    }
 }
 
 void IME_Install(GLFWwindow* window, ime_preeditFn_t fn, void* userData)
@@ -206,6 +235,8 @@ void IME_Install(GLFWwindow* window, ime_preeditFn_t fn, void* userData)
     g_origKeyDown = replace(@selector(keyDown:), (IMP)SwizzledKeyDown, "v@:@");
     replace(@selector(markedRange), (IMP)SwizzledMarkedRange, "{_NSRange=QQ}@:");
     replace(@selector(selectedRange), (IMP)SwizzledSelectedRange, "{_NSRange=QQ}@:");
+    replace(@selector(attributedSubstringForProposedRange:actualRange:),
+            (IMP)SwizzledAttributedSubstring, "@@:{_NSRange=QQ}^{_NSRange}");
     g_origInsertText = replace(@selector(insertText:replacementRange:),
                                (IMP)SwizzledInsertText, "v@:@{_NSRange=QQ}");
 
