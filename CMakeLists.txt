@@ -49,6 +49,7 @@ set(SIMPLEGRAPHIC_SOURCES
     "engine/core/core_video.cpp"
     "engine/core/core_video.h"
     "engine/render/r_dynfont.h"
+    "engine/system/win/sys_ime.h"
     "engine/render/r_font.cpp"
     "engine/render/r_font.h"
     "engine/render/r_main.cpp"
@@ -81,6 +82,7 @@ set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
 if (APPLE)
     set (SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_macos.mm"
+        "engine/system/win/sys_ime_macos.mm"
         "engine/render/r_dynfont.mm"
     )
 endif()

@@ -93,6 +93,8 @@ public:
 	virtual void	SetDrawSubLayer(int subLayer) = 0;
 	virtual int		GetDrawLayer() = 0;
 	virtual void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0) = 0;
+	// Origin of the viewport currently being drawn into, in window space.
+	virtual void	GetViewportOrigin(int& x, int& y) = 0;
 	virtual void	SetBlendMode(int mode) = 0;
 	virtual void	DrawColor(const col4_t col = NULL) = 0;
 	virtual void	DrawColor(dword col) = 0;

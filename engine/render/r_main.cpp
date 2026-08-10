@@ -1708,6 +1708,12 @@ int r_renderer_c::GetDrawLayer()
 	return curLayer->subLayer;
 }
 
+void r_renderer_c::GetViewportOrigin(int& x, int& y)
+{
+	x = curViewport.x;
+	y = curViewport.y;
+}
+
 void r_renderer_c::SetViewport(int x, int y, int width, int height)
 {
 	if (height == 0) {

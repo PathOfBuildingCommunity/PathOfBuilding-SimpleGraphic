@@ -68,6 +68,8 @@ public:
 	void	DoError(const char* msg, const char* error);
 
 	void	CallKeyHandler(const char* hname, int key, bool dblclk);
+	void	CallCharHandler(const char* hname, char32_t codepoint);
+	void	PreeditEvent(const char* utf8Text, int caret);
 	const char* NameForKey(int key);
 	int		KeyForName(const char* name);
 

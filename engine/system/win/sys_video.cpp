@@ -8,6 +8,7 @@
 #include <glad/gles2.h>
 
 #include "sys_local.h"
+#include "sys_ime.h"
 #include "core.h"
 
 #include <GLFW/glfw3.h>
@@ -518,6 +519,13 @@ int sys_video_c::Apply(sys_vidSet_s* set)
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			sys->video->PosChanged(x, y);
 			});
+		// Route input-method composition updates into the UI. Committed text
+		// still arrives through the character callback below.
+		IME_Install(wnd, [](const char* text, int caret, void* user) {
+			auto sys = (sys_main_c*)user;
+			sys->core->PreeditEvent(text, caret);
+			}, sys);
+
 		glfwSetCharCallback(wnd, [](GLFWwindow* wnd, uint32_t codepoint) {
 			auto sys = (sys_main_c*)glfwGetWindowUserPointer(wnd);
 			if (ImGui::GetIO().WantCaptureKeyboard) {

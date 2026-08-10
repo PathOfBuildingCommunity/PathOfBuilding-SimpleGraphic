@@ -86,6 +86,7 @@ public:
 	void	SetDrawSubLayer(int subLayer);
 	int		GetDrawLayer();
 	void	SetViewport(int x = 0, int y = 0, int width = 0, int height = 0);
+	void	GetViewportOrigin(int& x, int& y);
 	void	SetBlendMode(int mode);
 	void	DrawColor(const col4_t col = NULL);
 	void	DrawColor(dword col);

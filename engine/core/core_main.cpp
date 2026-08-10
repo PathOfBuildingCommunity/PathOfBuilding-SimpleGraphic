@@ -21,6 +21,7 @@ public:
 	void	Frame();
 	void	Shutdown();
 	void	KeyEvent(int key, int type);
+	void	PreeditEvent(const char* utf8Text, int caret);
 	bool	CanExit();
 
 	// Encapsulated
@@ -100,6 +101,13 @@ void core_main_c::KeyEvent(int key, int type)
 	if ( !initialised ) return;
 
 	ui->KeyEvent(key, type);
+}
+
+void core_main_c::PreeditEvent(const char* utf8Text, int caret)
+{
+	if ( !initialised ) return;
+
+	ui->PreeditEvent(utf8Text, caret);
 }
 
 bool core_main_c::CanExit()

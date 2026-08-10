@@ -5,6 +5,7 @@
 //
 
 #include "ui_local.h"
+#include "system/win/sys_ime.h"
 
 #include <filesystem>
 #include <fstream>
@@ -753,6 +754,24 @@ static int l_SetClearColor(lua_State* L)
 		color[3] = 1.0;
 	}
 	ui->renderer->SetClearColor(color);
+	return 0;
+}
+
+static int l_SetIMECaretRect(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 4, "Usage: SetIMECaretRect(x, y, width, height)");
+	for (int i = 1; i <= 4; i++) {
+		ui->LAssert(L, lua_isnumber(L, i), "SetIMECaretRect() argument %d: expected number, got %s", i, luaL_typename(L, i));
+	}
+	// Coordinates arrive relative to the active viewport, which is what a
+	// control draws in. Shift them into window space for the input method.
+	// UI coordinates already match the window's logical points, so they are
+	// passed through unscaled. Read as numbers, not integers: text widths are
+	// fractional, and an integer read of a non-integral value yields zero.
+	IME_SetCaretRect((int)lua_tonumber(L, 1), (int)lua_tonumber(L, 2),
+		(int)lua_tonumber(L, 3), (int)lua_tonumber(L, 4));
 	return 0;
 }
 
@@ -2210,6 +2229,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	// Rendering
 	ADDFUNC(RenderInit);
 	ADDFUNC(GetScreenSize);
+	ADDFUNC(SetIMECaretRect);
 	ADDFUNC(GetScreenScale);
 	ADDFUNC(SetClearColor);
 	ADDFUNC(SetDrawLayer);
