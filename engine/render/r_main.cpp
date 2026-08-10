@@ -1164,6 +1164,7 @@ void r_renderer_c::BeginFrame()
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 	{
+		sys->video->SyncSurfaceScale();
 		auto& vid = sys->video->vid;
 		int wNew = VirtualScreenWidth();
 		int hNew = VirtualScreenHeight();

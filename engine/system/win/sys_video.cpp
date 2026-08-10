@@ -8,6 +8,9 @@
 #include <glad/gles2.h>
 
 #include "sys_local.h"
+#ifdef __APPLE__
+#include "sys_platform_macos.h"
+#endif
 #include "core.h"
 
 #include <GLFW/glfw3.h>
@@ -32,6 +35,7 @@ public:
 	void	SetForeground();
 	bool	IsActive();
 	void	FramebufferSizeChanged(int width, int height);
+	void	SyncSurfaceScale();
 	void	SizeChanged(int width, int height, bool max);
 	void	PosChanged(int x, int y);
 	void	GetMinSize(int& width, int& height);
@@ -675,6 +679,25 @@ void sys_video_c::FramebufferSizeChanged(int width, int height)
 		vid.fbSize[0] = width;
 		vid.fbSize[1] = height;
 	}
+}
+
+void sys_video_c::SyncSurfaceScale()
+{
+#ifdef __APPLE__
+	if (!wnd) {
+		return;
+	}
+	if (Platform_SyncLayerScale(wnd)) {
+		// The surface was rebuilt at the correct density; re-read the size
+		// that describes it.
+		int fbW = 0, fbH = 0;
+		glfwGetFramebufferSize(wnd, &fbW, &fbH);
+		if (fbW > 0 && fbH > 0) {
+			vid.fbSize[0] = fbW;
+			vid.fbSize[1] = fbH;
+		}
+	}
+#endif
 }
 
 void sys_video_c::SizeChanged(int width, int height, bool max)

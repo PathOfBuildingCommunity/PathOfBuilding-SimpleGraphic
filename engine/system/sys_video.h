@@ -50,6 +50,7 @@ public:
 	virtual void	SetForeground() = 0; // Activate the window if shown
 	virtual bool	IsActive() = 0; // Get activated status
 	virtual void	FramebufferSizeChanged(int width, int height) = 0; // Respond to framebuffer size change
+	virtual void	SyncSurfaceScale() = 0; // Keep the drawing surface density matched to the display
 	virtual void	SizeChanged(int width, int height, bool max) = 0; // Respond to window size change
 	virtual void	PosChanged(int x, int y) = 0; // Respond to window position change
 	virtual void	GetMinSize(int &width, int &height) = 0; // Get minimum window size
