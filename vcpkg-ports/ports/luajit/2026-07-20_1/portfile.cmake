@@ -102,6 +102,15 @@ file(REMOVE_RECURSE
     "${CURRENT_PACKAGES_DIR}/share/man"
 )
 
+if(NOT VCPKG_TARGET_IS_WINDOWS)
+    # The make install step symlinks bin/luajit to a versioned binary that the
+    # configure shim never installs, leaving a self-referential link. Replace
+    # it with the real binary from the build tree so vcpkg_copy_tools finds it.
+    file(REMOVE "${CURRENT_PACKAGES_DIR}/bin/luajit")
+    file(REMOVE_RECURSE "${CURRENT_PACKAGES_DIR}/debug/bin")
+    file(COPY "${CURRENT_BUILDTREES_DIR}/${TARGET_TRIPLET}-rel/src/luajit" DESTINATION "${CURRENT_PACKAGES_DIR}/bin")
+endif()
+
 vcpkg_copy_tools(TOOL_NAMES luajit AUTO_CLEAN)
 
 vcpkg_fixup_pkgconfig()

@@ -1640,7 +1640,7 @@ void r_renderer_c::GetShaderImageSize(r_shaderHnd_c* hnd, int& width, int& heigh
 	if (hnd)
 	{
 		while (hnd->sh->tex->status < r_tex_c::SIZE_KNOWN) {
-			Sleep(1);
+			sys->Sleep(1);
 		}
 		width = hnd->sh->tex->fileWidth;
 		height = hnd->sh->tex->fileHeight;

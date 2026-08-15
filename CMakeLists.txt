@@ -14,6 +14,10 @@ endif ()
 
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
+if (APPLE)
+    set(VCPKG_OVERLAY_TRIPLETS "${PROJECT_SOURCE_DIR}/triplets")
+endif ()
+
 include(${PROJECT_SOURCE_DIR}/vcpkg/scripts/buildsystems/vcpkg.cmake)
 
 set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION ".")
@@ -84,12 +88,12 @@ if (APPLE)
 endif()
 
 if (WIN32)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list(APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
         "SimpleGraphic.rc"
     )
 else()
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list(APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console_unix.cpp"
     )
 endif()
@@ -222,6 +226,41 @@ if (APPLE)
         ${CORE_FOUNDATION_LIBRARY}
         ${APPLICATION_SERVICES_LIBRARY}
     )
+    set_target_properties(SimpleGraphic PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@loader_path"
+    )
+    file(GLOB ANGLE_DYLIBS
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*EGL*.dylib"
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib/*GLESv2*.dylib")
+    set(ANGLE_EGL_NAME "")
+    set(ANGLE_GLES_NAME "")
+    foreach (angle_dylib IN LISTS ANGLE_DYLIBS)
+        get_filename_component(angle_dylib_name "${angle_dylib}" NAME)
+        if (angle_dylib_name MATCHES "EGL")
+            set(ANGLE_EGL_NAME "${angle_dylib_name}")
+        elseif (angle_dylib_name MATCHES "GLESv2")
+            set(ANGLE_GLES_NAME "${angle_dylib_name}")
+        endif ()
+    endforeach ()
+    if (NOT ANGLE_EGL_NAME OR NOT ANGLE_GLES_NAME)
+        message(FATAL_ERROR "Shared ANGLE dylibs not found in ${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/lib (got: '${ANGLE_DYLIBS}'); expected dynamic ANGLE via triplets/arm64-osx.cmake")
+    endif ()
+    install(FILES ${ANGLE_DYLIBS} DESTINATION ".")
+    # GLFW loads EGL at runtime by these canonical names (egl_context.c), so
+    # alias the ANGLE dylibs, whose install names stay @rpath-based.
+    install(CODE "
+        file(REMOVE \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\")
+        file(CREATE_LINK ${ANGLE_EGL_NAME} \"\${CMAKE_INSTALL_PREFIX}/libEGL.dylib\" SYMBOLIC)
+        file(CREATE_LINK ${ANGLE_GLES_NAME} \"\${CMAKE_INSTALL_PREFIX}/libGLESv2.dylib\" SYMBOLIC)
+    ")
+endif ()
+
+# Static triplets (e.g. arm64-osx) only provide the static zstd target
+if (TARGET zstd::libzstd_shared)
+    set(ZSTD_TARGET zstd::libzstd_shared)
+else ()
+    set(ZSTD_TARGET zstd::libzstd)
 endif ()
 
 target_link_libraries(SimpleGraphic
@@ -240,11 +279,11 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    ${ZSTD_TARGET}
 )
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
-install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
+install(TARGETS SimpleGraphic RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 
 if (WIN32)
     set(DEPS_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
@@ -283,6 +322,18 @@ set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
 add_library(lcurl SHARED ${LCURL_SOURCES})
 
+if (NOT WIN32)
+    # When linking LuaJIT statically, Lua-cURLv3's local Lua 5.2-compat
+    # luaL_setfuncs shim collides with the one LuaJIT itself exports.
+    # Rename the local shim (and its internal callers) instead of patching
+    # the submodule; drop once https://github.com/Lua-cURL/Lua-cURLv3/pull/197
+    # is merged and the submodule is bumped.
+    target_compile_definitions(lcurl
+        PRIVATE
+        "luaL_setfuncs=lcurl_compat_setfuncs"
+    )
+endif ()
+
 target_include_directories(lcurl
     PRIVATE
     ${LCURL_SOURCE_DIR}/src
@@ -294,17 +345,28 @@ target_link_libraries(lcurl
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lcurl RUNTIME DESTINATION ".")
+install(TARGETS lcurl RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 # luautf8 module
 
 add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
 
-target_compile_definitions(lua-utf8
-    PRIVATE
-    LUA_BUILD_AS_DLL
-)
+if (WIN32)
+    target_compile_definitions(lua-utf8
+        PRIVATE
+        LUA_BUILD_AS_DLL
+    )
+else ()
+    # lutf8lib.c uses INT_MAX without including <limits.h>; force-include it
+    # instead of patching the submodule; drop once
+    # https://github.com/starwing/luautf8/pull/62 is merged and the submodule
+    # is bumped.
+    target_compile_options(lua-utf8
+        PRIVATE
+        -include limits.h
+    )
+endif ()
 
 target_include_directories(lua-utf8
     PRIVATE
@@ -315,10 +377,16 @@ target_link_libraries(lua-utf8
     LuaJIT::LuaJIT
 )
 
-install(TARGETS lua-utf8 RUNTIME DESTINATION ".")
+install(TARGETS lua-utf8 RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lua-utf8> DESTINATION ".")
 
 # luasocket module
+
+if (WIN32)
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/wsocket.c")
+else ()
+    set(LUASOCKET_PLATFORM_SOURCES "libs/luasocket/src/usocket.c")
+endif ()
 
 add_library(luasocket SHARED
    "libs/luasocket/src/auxiliar.c"
@@ -333,7 +401,7 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
+   ${LUASOCKET_PLATFORM_SOURCES}
 )
 
 target_include_directories(luasocket
@@ -344,12 +412,14 @@ target_include_directories(luasocket
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
 )
 
-set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
-install(TARGETS luasocket RUNTIME DESTINATION ".")
+if (WIN32)
+    target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
+endif ()
+
+set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" )
+install(TARGETS luasocket RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:luasocket> DESTINATION ".")
 
 # lzip module
@@ -366,5 +436,23 @@ target_link_libraries(lzip
     ZLIB::ZLIB
 )
 
-install(TARGETS lzip RUNTIME DESTINATION ".")
+install(TARGETS lzip RUNTIME DESTINATION "." LIBRARY DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
+if (NOT WIN32)
+    set_target_properties(lcurl lua-utf8 luasocket lzip PROPERTIES PREFIX "" SUFFIX ".so")
+endif ()
+
+# macOS launcher (counterpart of the Windows frontend executable)
+if (APPLE)
+    add_executable(pob macos/main.mm)
+    target_link_libraries(pob PRIVATE SimpleGraphic "-framework Foundation" "-framework CoreServices")
+    if (DEFINED POB_DEFAULT_SCRIPT)
+        target_compile_definitions(pob PRIVATE "POB_DEFAULT_SCRIPT=\"${POB_DEFAULT_SCRIPT}\"")
+    endif ()
+    set_target_properties(pob PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@executable_path"
+    )
+    install(TARGETS pob RUNTIME DESTINATION ".")
+endif ()
