@@ -521,7 +521,7 @@ void ui_main_c::KeyEvent(int key, int type)
 
 	switch (type) {
 	case KE_CHAR:
-		CallKeyHandler("OnChar", key, false);
+		CallCharHandler("OnChar", (char32_t)key);
 		break;
 	case KE_KEYDOWN:
 	case KE_DBLCLK:
@@ -543,6 +543,54 @@ void ui_main_c::KeyEvent(int key, int type)
 		}
 		break;
 	} 
+}
+
+// Text input arrives as a Unicode codepoint. The UI layer works in UTF-8,
+// so hand it the encoded character rather than routing it through the key
+// name table, which only knows named keys and would yield "?".
+void ui_main_c::CallCharHandler(const char* hname, char32_t codepoint)
+{
+	if ( !L ) return;
+	int extraArgs = PushCallback(hname);
+	if (extraArgs < 0) {
+		return;
+	}
+	char utf8[4];
+	int len = 0;
+	uint32_t cp = (uint32_t)codepoint;
+	if (cp < 0x80) {
+		utf8[len++] = (char)cp;
+	}
+	else if (cp < 0x800) {
+		utf8[len++] = (char)(0xC0 | (cp >> 6));
+		utf8[len++] = (char)(0x80 | (cp & 0x3F));
+	}
+	else if (cp < 0x10000) {
+		utf8[len++] = (char)(0xE0 | (cp >> 12));
+		utf8[len++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+		utf8[len++] = (char)(0x80 | (cp & 0x3F));
+	}
+	else {
+		utf8[len++] = (char)(0xF0 | (cp >> 18));
+		utf8[len++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+		utf8[len++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+		utf8[len++] = (char)(0x80 | (cp & 0x3F));
+	}
+	lua_pushlstring(L, utf8, len);
+	lua_pushboolean(L, false);
+	PCall(2 + extraArgs, 0);
+}
+
+void ui_main_c::PreeditEvent(const char* utf8Text, int caret)
+{
+	if ( !L ) return;
+	int extraArgs = PushCallback("OnPreedit");
+	if (extraArgs < 0) {
+		return;
+	}
+	lua_pushstring(L, utf8Text ? utf8Text : "");
+	lua_pushinteger(L, caret);
+	PCall(2 + extraArgs, 0);
 }
 
 void ui_main_c::CallKeyHandler(const char* hname, int key, bool dblclk)

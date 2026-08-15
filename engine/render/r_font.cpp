@@ -6,6 +6,9 @@
 
 #include "r_local.h"
 
+#include "r_dynfont.h"
+
+#include <algorithm>
 #include <fmt/format.h>
 #include <iostream>
 #include <fstream>
@@ -122,6 +125,72 @@ r_font_c::~r_font_c()
 		delete fontHeights[i];
 	}
 	delete fontHeightMap;
+
+	for (auto& [key, glyph] : dynGlyphs) {
+		delete glyph.tex;
+	}
+}
+
+// Rasterise (and cache) a glyph for a codepoint the bitmap fonts don't cover.
+// A cached entry with a negative advance means "the platform has no glyph",
+// so we only ask once per codepoint/size.
+r_font_c::f_dynGlyph_s const* r_font_c::FindDynGlyph(char32_t cp, int pixelHeight)
+{
+	if (pixelHeight <= 0) {
+		return nullptr;
+	}
+	uint64_t key = ((uint64_t)cp << 16) | (uint64_t)(pixelHeight & 0xFFFF);
+	if (auto it = dynGlyphs.find(key); it != dynGlyphs.end()) {
+		return it->second.valid ? &it->second : nullptr;
+	}
+
+	// The bitmap fonts size their glyphs to cap height, but a CJK glyph fills
+	// its whole em box, so rasterising at the full line height makes it look
+	// oversized next to Latin text. Render slightly smaller and centre it.
+	const float emScale = 0.82f;
+	// Rasterise at physical pixel density so glyphs stay sharp on HiDPI.
+	const float dpi = (std::max)(1.0f, renderer->sys->video->vid.dpiScale);
+	const int pixelSize = (std::max)(1, (int)std::lround(pixelHeight * emScale * dpi));
+
+	f_dynGlyph_s entry{};
+	dynGlyph_s raster;
+	if (!DynFontRasterize(cp, pixelSize, raster)) {
+		dynGlyphs[key] = entry;	// valid stays false: don't ask again
+		return nullptr;
+	}
+
+	entry.valid = true;
+	entry.width = raster.width / dpi;
+	entry.height = raster.height / dpi;
+	entry.bearingX = raster.bearingX / dpi;
+	entry.advance = raster.advance / dpi;
+
+	if (raster.width > 0 && raster.height > 0) {
+		// The renderer treats a single-channel image as luminance, which would
+		// draw an opaque box, so expand coverage into the alpha of a white RGBA
+		// image and let the layer colour tint it.
+		std::vector<byte> rgba((size_t)raster.width * raster.height * 4);
+		for (size_t i = 0; i < (size_t)raster.width * raster.height; ++i) {
+			rgba[i * 4 + 0] = 255;
+			rgba[i * 4 + 1] = 255;
+			rgba[i * 4 + 2] = 255;
+			rgba[i * 4 + 3] = raster.coverage[i];
+		}
+		auto img = std::make_unique<image_c>();
+		if (img->CopyRaw(IMGTYPE_RGBA, raster.width, raster.height, rgba.data())) {
+			entry.tex = new r_tex_c(renderer->texMan, std::move(img), TF_NOMIPMAP | TF_CLAMP);
+		}
+	}
+
+	// Offset from the top of the line box down to the glyph's top edge.
+	// The font's own ascent includes leading and sits lower than where the
+	// bitmap fonts put their baseline, so anchor to a fixed fraction of the
+	// line height instead to keep Latin and CJK sitting on the same line.
+	const float baseline = pixelHeight * 0.80f;
+	entry.bearingY = baseline - raster.bearingY / dpi;
+
+	auto [it, ok] = dynGlyphs.emplace(key, std::move(entry));
+	return &it->second;
 }
 
 // =============
@@ -158,10 +227,16 @@ int r_font_c::StringWidthInternal(f_fontHeight_s* fh, std::u32string_view str, i
 			idx += escLen;
 		}
 		else if (ch >= (unsigned)fh->numGlyph) {
-			auto tofu = BuildTofuString(ch);
-			for (auto cp : tofu) {
-				width += measureCodepoint(tofuFont.fh, cp);
+			if (auto* dyn = FindDynGlyph(ch, height)) {
+				width += dyn->advance;
 				width = std::ceil(width);
+			}
+			else {
+				auto tofu = BuildTofuString(ch);
+				for (auto cp : tofu) {
+					width += measureCodepoint(tofuFont.fh, cp);
+					width = std::ceil(width);
+				}
 			}
 			++idx;
 		}
@@ -222,12 +297,21 @@ size_t r_font_c::StringCursorInternal(f_fontHeight_s* fh, std::u32string_view st
 			I += escLen;
 		}
 		else if (*I >= (unsigned)fh->numGlyph) {
-			auto tofu = BuildTofuString(*I);
-			for (auto cp : tofu) {
-				x += measureCodepoint(tofuFont.fh, cp);
+			if (auto* dyn = FindDynGlyph(*I, height)) {
+				x += dyn->advance;
 				x = std::ceil(x);
 				if (curX <= x) {
 					return std::distance(str.begin(), I);
+				}
+			}
+			else {
+				auto tofu = BuildTofuString(*I);
+				for (auto cp : tofu) {
+					x += measureCodepoint(tofuFont.fh, cp);
+					x = std::ceil(x);
+					if (curX <= x) {
+						return std::distance(str.begin(), I);
+					}
 				}
 			}
 			++I;
@@ -394,14 +478,44 @@ void r_font_c::DrawTextLine(scp_t pos, int align, int height, col4_t col, std::u
 		x = std::ceil(x);
 	};
 
+	// Draw a glyph that came from the platform font engine. Unlike the bitmap
+	// glyphs these carry their own metrics and sit relative to the baseline.
+	auto drawDynGlyph = [this, &curTex, &x, y, height](f_dynGlyph_s const* g) {
+		if (g->tex && g->width > 0 && g->height > 0) {
+			if (curTex != g->tex) {
+				curTex = g->tex;
+				renderer->curLayer->Bind(g->tex);
+			}
+			float gx = x + g->bearingX;
+			float gy = y + g->bearingY;
+			float gw = g->width;
+			float gh = g->height;
+			if (gx + gw >= 0 && gx < renderer->VirtualScreenWidth()) {
+				renderer->curLayer->Quad(
+					0.0f, 0.0f, gx, gy,
+					1.0f, 0.0f, gx + gw, gy,
+					1.0f, 1.0f, gx + gw, gy + gh,
+					0.0f, 1.0f, gx, gy + gh
+				);
+			}
+		}
+		x += g->advance;
+		x = std::ceil(x);
+	};
+
 	// Render the string
 	for (auto tail = str; !tail.empty();) {
 		// Draw unprintable characters as tofu placeholders
 		auto ch = tail[0];
 		if (ch >= (unsigned)fh->numGlyph) {
-			auto tofu = BuildTofuString(ch);
-			for (auto ch : tofu) {
-				drawCodepoint(tofuFont.fh, tofuFont.fh->height, 1.0f, tofuFont.yPad, ch);
+			if (auto* dyn = FindDynGlyph(ch, height)) {
+				drawDynGlyph(dyn);
+			}
+			else {
+				auto tofu = BuildTofuString(ch);
+				for (auto ch : tofu) {
+					drawCodepoint(tofuFont.fh, tofuFont.fh->height, 1.0f, tofuFont.yPad, ch);
+				}
 			}
 			tail = tail.substr(1);
 			continue;

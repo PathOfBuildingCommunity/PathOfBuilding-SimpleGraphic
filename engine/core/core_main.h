@@ -21,6 +21,8 @@ public:
 	virtual void	Frame() = 0;
 	virtual void	Shutdown() = 0;
 	virtual void	KeyEvent(int key, int type) = 0;
+	// Input method composition state; text is UTF-8, caret is a byte offset.
+	virtual void	PreeditEvent(const char* utf8Text, int caret) = 0;
 	virtual bool	CanExit() = 0;
 };
 

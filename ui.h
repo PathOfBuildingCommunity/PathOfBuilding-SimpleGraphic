@@ -18,5 +18,6 @@ public:
 	virtual void	Frame() = 0;
 	virtual void	Shutdown() = 0;
 	virtual void	KeyEvent(int key, int type) = 0;
+	virtual void	PreeditEvent(const char* utf8Text, int caret) = 0;
 	virtual bool	CanExit() = 0;
 };
