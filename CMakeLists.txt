@@ -78,18 +78,18 @@ set(SIMPLEGRAPHIC_SOURCES
 
 set (SIMPLEGRAPHIC_PLATFORM_SOURCES)
 if (APPLE)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_macos.mm"
     )
 endif()
 
 if (WIN32)
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console.cpp"
         "SimpleGraphic.rc"
     )
 else()
-    set (SIMPLEGRAPHIC_PLATFORM_SOURCES
+    list (APPEND SIMPLEGRAPHIC_PLATFORM_SOURCES
         "engine/system/win/sys_console_unix.cpp"
     )
 endif()
@@ -130,6 +130,12 @@ find_package(Threads REQUIRED)
 find_package(zstd REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(WebP)
+
+if (TARGET zstd::libzstd_shared)
+    set(ZSTD_LIBRARY zstd::libzstd_shared)
+else ()
+    set(ZSTD_LIBRARY zstd::libzstd_static)
+endif ()
 
 add_library(cmp_core STATIC
     dep/compressonator/cmp_core/source/cmp_core.cpp
@@ -240,8 +246,16 @@ target_link_libraries(SimpleGraphic
     Threads::Threads
     WebP::webpdecoder
     ZLIB::ZLIB
-    zstd::libzstd_shared
+    ${ZSTD_LIBRARY}
 )
+
+if (APPLE)
+    set_target_properties(SimpleGraphic PROPERTIES
+        BUILD_WITH_INSTALL_NAME_DIR TRUE
+        INSTALL_NAME_DIR "@rpath"
+        MACOSX_RPATH TRUE
+    )
+endif ()
 
 install(FILES $<TARGET_RUNTIME_DLLS:SimpleGraphic> DESTINATION ".")
 install(TARGETS SimpleGraphic RUNTIME DESTINATION ".")
@@ -276,10 +290,25 @@ if (WIN32)
     )
 endif ()
 
+if (APPLE)
+    find_program(PATCH_EXECUTABLE patch REQUIRED)
+    set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_BINARY_DIR}/Lua-cURLv3)
+    file(REMOVE_RECURSE ${LCURL_SOURCE_DIR})
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3/src
+        DESTINATION ${LCURL_SOURCE_DIR})
+    execute_process(
+        COMMAND ${PATCH_EXECUTABLE} -l -p1 -i
+            ${CMAKE_CURRENT_SOURCE_DIR}/patches/Lua-cURLv3-skip-luaL_setfuncs-on-luajit.patch
+        WORKING_DIRECTORY ${LCURL_SOURCE_DIR}
+        COMMAND_ERROR_IS_FATAL ANY
+    )
+else ()
+    set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
+endif ()
+
 
 # lcurl module
 
-set(LCURL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs/Lua-cURLv3)
 file(GLOB LCURL_SOURCES ${LCURL_SOURCE_DIR}/src/**.c)
 add_library(lcurl SHARED ${LCURL_SOURCES})
 
@@ -301,10 +330,14 @@ install(FILES $<TARGET_RUNTIME_DLLS:lcurl> DESTINATION ".")
 
 add_library(lua-utf8 SHARED libs/luautf8/lutf8lib.c)
 
-target_compile_definitions(lua-utf8
-    PRIVATE
-    LUA_BUILD_AS_DLL
-)
+if (WIN32)
+    target_compile_definitions(lua-utf8
+        PRIVATE
+        LUA_BUILD_AS_DLL
+    )
+elseif (APPLE)
+    target_compile_options(lua-utf8 PRIVATE -include limits.h)
+endif ()
 
 target_include_directories(lua-utf8
     PRIVATE
@@ -333,8 +366,13 @@ add_library(luasocket SHARED
    "libs/luasocket/src/tcp.c"
    "libs/luasocket/src/timeout.c"
    "libs/luasocket/src/udp.c"
-   "libs/luasocket/src/wsocket.c"
 )
+
+if (WIN32)
+    target_sources(luasocket PRIVATE "libs/luasocket/src/wsocket.c")
+else ()
+    target_sources(luasocket PRIVATE "libs/luasocket/src/usocket.c")
+endif ()
 
 target_include_directories(luasocket
     PRIVATE
@@ -344,9 +382,11 @@ target_include_directories(luasocket
 target_link_libraries(luasocket
     PRIVATE
     LuaJIT::LuaJIT
-    wsock32
-    ws2_32
 )
+
+if (WIN32)
+    target_link_libraries(luasocket PRIVATE wsock32 ws2_32)
+endif ()
 
 set_target_properties( luasocket PROPERTIES OUTPUT_NAME "socket" ) 
 install(TARGETS luasocket RUNTIME DESTINATION ".")
@@ -368,3 +408,71 @@ target_link_libraries(lzip
 
 install(TARGETS lzip RUNTIME DESTINATION ".")
 install(FILES $<TARGET_RUNTIME_DLLS:lzip> DESTINATION ".")
+
+if (APPLE)
+    set_target_properties(lcurl lua-utf8 luasocket lzip PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@loader_path/../Frameworks"
+        PREFIX ""
+        SUFFIX ".so"
+    )
+
+    set_source_files_properties(macos/smoke/Launch.lua PROPERTIES
+        MACOSX_PACKAGE_LOCATION Resources
+    )
+    add_executable(SimpleGraphicSmoke MACOSX_BUNDLE
+        macos/launcher.c
+        macos/smoke/Launch.lua
+    )
+    target_link_libraries(SimpleGraphicSmoke PRIVATE SimpleGraphic)
+    add_dependencies(SimpleGraphicSmoke lcurl lua-utf8 luasocket lzip)
+    set_property(TARGET SimpleGraphicSmoke APPEND PROPERTY LINK_DEPENDS
+        "$<TARGET_FILE:lcurl>"
+        "$<TARGET_FILE:lua-utf8>"
+        "$<TARGET_FILE:luasocket>"
+        "$<TARGET_FILE:lzip>"
+    )
+    set_target_properties(SimpleGraphicSmoke PROPERTIES
+        BUILD_WITH_INSTALL_RPATH TRUE
+        INSTALL_RPATH "@executable_path/../Frameworks"
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/macos/Info.plist.in"
+        MACOSX_BUNDLE_BUNDLE_NAME "SimpleGraphicSmoke"
+        MACOSX_BUNDLE_GUI_IDENTIFIER "org.pathofbuilding.simplegraphic.smoke"
+    )
+
+    add_custom_command(TARGET SimpleGraphicSmoke POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Frameworks"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lcurl"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/socket"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:SimpleGraphic>"
+            "$<TARGET_FILE:unofficial::angle::libEGL>"
+            "$<TARGET_FILE:unofficial::angle::libGLESv2>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Frameworks"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:unofficial::angle::libEGL>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Frameworks/libEGL.dylib"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:unofficial::angle::libGLESv2>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Frameworks/libGLESv2.dylib"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:lcurl>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lcurl.so"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:lcurl>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lcurl/safe.so"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:lua-utf8>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lua-utf8.so"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:luasocket>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/socket/core.so"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:lzip>"
+            "$<TARGET_FILE_DIR:SimpleGraphicSmoke>/../Resources/lzip.so"
+        COMMAND /usr/bin/codesign --force --deep --sign -
+            "$<TARGET_BUNDLE_DIR:SimpleGraphicSmoke>"
+        VERBATIM
+    )
+endif ()

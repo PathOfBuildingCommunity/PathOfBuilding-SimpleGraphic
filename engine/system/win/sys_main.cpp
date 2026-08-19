@@ -600,7 +600,13 @@ std::filesystem::path FindBasePath()
 	progPath = basePath;
 #endif
 	progPath = weakly_canonical(progPath);
-	return progPath.parent_path();
+	auto dirPath = progPath.parent_path();
+#if __APPLE__ && __MACH__
+	if (dirPath.filename() == "MacOS" && dirPath.parent_path().filename() == "Contents") {
+		dirPath = dirPath.parent_path() / "Resources";
+	}
+#endif
+	return dirPath;
 }
 
 std::tuple<std::optional<std::filesystem::path>, std::optional<std::string>> FindUserPath()
@@ -633,11 +639,7 @@ std::tuple<std::optional<std::filesystem::path>, std::optional<std::string>> Fin
 sys_main_c::sys_main_c()
 	: heldKeyState(KEY_SCROLL + 1, (uint8_t)0)
 {
-#ifdef _WIN64
-	x64 = true;
-#else
-	x64 = false;
-#endif
+	x64 = sizeof(void*) == 8;
 #ifdef _DEBUG
 	debug = true;
 #else
@@ -674,7 +676,12 @@ bool sys_main_c::Run(int argc, char** argv)
 	core = core_IMain::GetHandle(this);
 
 	// Print some handy information
-	con->Printf(CFG_VERSION" %s %s, built " __DATE__ "\n", x64? "x64":"x86", debug? "Debug":"Release");
+#if defined(__aarch64__) || defined(_M_ARM64)
+	const char* architecture = "arm64";
+#else
+	const char* architecture = x64 ? "x64" : "x86";
+#endif
+	con->Printf(CFG_VERSION" %s %s, built " __DATE__ "\n", architecture, debug? "Debug":"Release");
 	if (debuggerRunning) {
 		con->Printf("Debugger is present.\n");
 	}
@@ -739,7 +746,9 @@ bool sys_main_c::Run(int argc, char** argv)
 #endif
 
 	if (exitMsg) {
+#ifdef _WIN32
 		exitFlag = false;
+#endif
 		video->SetVisible(false);
 		conWin->SetVisible(true);
 		if (exitMsg) {
@@ -747,9 +756,11 @@ bool sys_main_c::Run(int argc, char** argv)
 			FreeString(exitMsg);
 			exitMsg = NULL;
 		}
+#ifdef _WIN32
 		while (exitFlag == false) {
 			Sleep(50);
 		}
+#endif
 	}	
 
 	initialised = false;

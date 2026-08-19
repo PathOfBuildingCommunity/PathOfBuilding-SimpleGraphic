@@ -1,0 +1,38 @@
+diff --git a/src/l52util.c b/src/l52util.c
+index 6373687..4c1d3ee 100644
+--- a/src/l52util.c
++++ b/src/l52util.c
+@@ -14,7 +14,16 @@
+ #include <string.h> /* for memset */
+ #include <assert.h>
+ 
+-#if LUA_VERSION_NUM >= 502 
++/* LuaJIT (LUA_VERSION_NUM == 501) ships luaL_setfuncs as an extension; pull in
++   luajit.h so LUAJIT_VERSION is visible and the < 502 definition below can be
++   skipped, avoiding a duplicate-symbol link error against the LuaJIT library. */
++#if defined(__has_include)
++#  if __has_include(<luajit.h>)
++#    include <luajit.h>
++#  endif
++#endif
++
++#if LUA_VERSION_NUM >= 502
+ 
+ int luaL_typerror (lua_State *L, int narg, const char *tname) {
+   const char *msg = lua_pushfstring(L, "%s expected, got %s", tname,
+@@ -33,6 +42,7 @@ void luaL_register (lua_State *L, const char *libname, const luaL_Reg *l){
+ 
+ #else 
+ 
++#if !defined(LUAJIT_VERSION) /* LuaJIT already provides luaL_setfuncs */
+ void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup){
+   luaL_checkstack(L, nup, "too many upvalues");
+   for (; l->name != NULL; l++) {  /* fill the table with given functions */
+@@ -44,6 +54,7 @@ void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup){
+   }
+   lua_pop(L, nup);  /* remove upvalues */
+ }
++#endif
+ 
+ void lua_rawgetp(lua_State *L, int index, const void *p){
+   index = lua_absindex(L, index);

@@ -1,6 +1,9 @@
 set(extra_patches "")
 if (VCPKG_TARGET_IS_OSX)
-	list(APPEND extra_patches 005-do-not-pass-ld-e-macosx.patch)
+	list(APPEND extra_patches
+		005-do-not-pass-ld-e-macosx.patch
+		luajit-internal-unwinding-on-macos.patch
+	)
 endif()
 
 vcpkg_from_github(
@@ -76,6 +79,11 @@ else()
     endif()
 
     file(COPY "${CMAKE_CURRENT_LIST_DIR}/configure" DESTINATION "${SOURCE_PATH}")
+    file(CHMOD "${SOURCE_PATH}/configure" PERMISSIONS
+        OWNER_READ OWNER_WRITE OWNER_EXECUTE
+        GROUP_READ GROUP_EXECUTE
+        WORLD_READ WORLD_EXECUTE
+    )
     vcpkg_configure_make(SOURCE_PATH "${SOURCE_PATH}"
         COPY_SOURCE
         OPTIONS
