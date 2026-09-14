@@ -140,14 +140,14 @@ std::optional<std::string> BuildGlobPattern(std::filesystem::path const& glob)
 {
 	using namespace std::literals::string_view_literals;
 	auto globStr = glob.generic_u8string();
-	auto globView = std::string_view(globStr);
+	auto globView = std::string_view((const char*)globStr.data(), globStr.size());
 
 	// Deal with traditional "everything" wildcards.
 	if (globView == "*" || globView == "*.*") {
 		return {};
 	}
 
-	auto u32Str = IndexUTF8ToUTF32(globStr);
+	auto u32Str = IndexUTF8ToUTF32(globView);
 	auto& offsets = u32Str.sourceCodeUnitOffsets;
 
 	fmt::memory_buffer buf;
@@ -200,8 +200,8 @@ bool GlobMatch(std::optional<std::string> const& globPattern, std::filesystem::p
 	reOpts.set_case_sensitive(false);
 	RE2 reGlob{globPattern.value(), reOpts};
 
-	auto fileStr = file.generic_u8string();
-	return RE2::FullMatch(fileStr, reGlob);
+	auto fileU8 = file.generic_u8string();
+	return RE2::FullMatch(std::string_view((const char*)fileU8.data(), fileU8.size()), reGlob);
 }
 
 bool find_c::FindFirst(std::filesystem::path const&& fileSpec)

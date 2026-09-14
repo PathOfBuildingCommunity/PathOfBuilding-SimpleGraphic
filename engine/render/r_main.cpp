@@ -816,7 +816,7 @@ void r_renderer_c::Init(r_featureFlag_e features)
 			glShaderSource(fs, 1, &fragSourcePtr, nullptr);
 		}
 		catch (std::exception& e) {
-			sys->Error(u8"Failed to format fragment shader:\n%s", e.what());
+			sys->Error("Failed to format fragment shader:\n%s", e.what());
 		}
 		glCompileShader(fs);
 		if (!GetShaderCompileSuccess(fs)) {
@@ -1770,7 +1770,8 @@ void r_renderer_c::DoScreenshot(image_c* i, int type, const char* ext)
 		sys->con->Print("Couldn't write screenshot!\n");
 		return;
 	}
-	sys->con->Print(fmt::format("Wrote screenshot to {}\n", ssPath.generic_u8string()).c_str());
+	const auto ssPathU8 = ssPath.generic_u8string();
+	sys->con->Print(fmt::format("Wrote screenshot to {}\n", std::string_view((const char*)ssPathU8.data(), ssPathU8.size())).c_str());
 }
 
 r_renderer_c::RenderTarget& r_renderer_c::GetDrawRenderTarget()

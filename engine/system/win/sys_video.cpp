@@ -318,6 +318,7 @@ bool ShouldIgnoreDpiScale() {
 	struct ScopedRegKey {
 		HKEY key{};
 
+		ScopedRegKey() = default;
 		ScopedRegKey& operator = (ScopedRegKey const&) = delete;
 		ScopedRegKey(ScopedRegKey const&) = delete;
 		~ScopedRegKey() {
