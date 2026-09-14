@@ -603,6 +603,16 @@ void r_tex_c::LoadFile()
 
 	auto raw = std::make_unique<image_c>();
 	raw->CopyRaw(IMGTYPE_GRAY, 8, 8, t_defaultTexture);
+	if (flags & TF_ASYNC) {
+		// Missing/failed file on an async worker thread: the GL context
+		// belongs to the main thread, so route the placeholder upload
+		// through the pending-upload queue like the success path above.
+		img = std::move(raw);
+		flags = TF_NOMIPMAP;
+		status = PENDING_UPLOAD;
+		manager->EnqueueTextureUpload(this);
+		return;
+	}
 	Upload(*raw, TF_NOMIPMAP);
 	status = DONE;
 }
