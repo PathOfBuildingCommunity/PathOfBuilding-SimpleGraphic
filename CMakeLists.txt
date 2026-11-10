@@ -108,6 +108,7 @@ cmrc_add_resources(SimpleGraphic-Assets
 if (APPLE)
     target_sources(SimpleGraphic PRIVATE
         "engine/system/win/sys_macos.mm"
+        "engine/system/win/sys_platform_macos.h"
     )
 endif()
 
