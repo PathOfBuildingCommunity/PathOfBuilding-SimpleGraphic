@@ -520,9 +520,40 @@ void ui_main_c::KeyEvent(int key, int type)
 	}
 
 	switch (type) {
-	case KE_CHAR:
-		CallKeyHandler("OnChar", key, false);
+	case KE_CHAR: {
+		if (!L) break;
+		int extraArgs = PushCallback("OnChar");
+		if (extraArgs < 0) break;
+		// Character events carry Unicode scalars, not the named-key identifiers.
+		char text[4];
+		int length;
+		if (key < 0x80) {
+			text[0] = (char)key;
+			length = 1;
+		}
+		else if (key < 0x800) {
+			text[0] = (char)(0xC0 | (key >> 6));
+			text[1] = (char)(0x80 | (key & 0x3F));
+			length = 2;
+		}
+		else if (key < 0x10000) {
+			text[0] = (char)(0xE0 | (key >> 12));
+			text[1] = (char)(0x80 | ((key >> 6) & 0x3F));
+			text[2] = (char)(0x80 | (key & 0x3F));
+			length = 3;
+		}
+		else {
+			text[0] = (char)(0xF0 | (key >> 18));
+			text[1] = (char)(0x80 | ((key >> 12) & 0x3F));
+			text[2] = (char)(0x80 | ((key >> 6) & 0x3F));
+			text[3] = (char)(0x80 | (key & 0x3F));
+			length = 4;
+		}
+		lua_pushlstring(L, text, length);
+		lua_pushboolean(L, false);
+		PCall(2 + extraArgs, 0);
 		break;
+	}
 	case KE_KEYDOWN:
 	case KE_DBLCLK:
 		CallKeyHandler("OnKeyDown", key, type == KE_DBLCLK);
