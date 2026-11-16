@@ -87,6 +87,7 @@
 ** compressedGzip = Deflate(uncompressed, true)
 ** uncompressed = Inflate(compressed)
 ** uncompressedGzip = Inflate(compressedGzip)
+** bytes = GenerateSecretBytes(count)
 ** msec = GetTime()
 ** path[, pathACP[, err]] = GetScriptPath()
 ** path[, pathACP[, err]] = GetRuntimePath()
@@ -1646,6 +1647,23 @@ static int l_Inflate(lua_State* L)
 	}
 }
 
+static int l_GenerateSecretBytes(lua_State* L)
+{
+	ui_main_c* ui = GetUIPtr(L);
+	int n = lua_gettop(L);
+	ui->LAssert(L, n >= 1, "Usage: GenerateSecretBytes(count)");
+	ui->LAssert(L, lua_isnumber(L, 1), "GenerateSecretBytes() argument 1: expected number, got %s", luaL_typename(L, 1));
+	int isInteger{};
+	lua_Number count = lua_tonumberx(L, 1, &isInteger);
+	ui->LAssert(L, isInteger == 1 && count >= 0, "GenerateSecretBytes() argument 1: expected a whole non-negative count");
+	std::vector<char> buf((size_t)count);
+	if (!ui->sys->GenerateSecretBytes(std::as_writable_bytes(std::span(buf)))) {
+		return 0;
+	}
+	lua_pushlstring(L, buf.data(), buf.size());
+	return 1;
+}
+
 static int l_GetTime(lua_State* L)
 {
 	ui_main_c* ui = GetUIPtr(L);
@@ -2261,6 +2279,7 @@ int ui_main_c::InitAPI(lua_State* L)
 	ADDFUNC(Paste);
 	ADDFUNC(Deflate);
 	ADDFUNC(Inflate);
+	ADDFUNC(GenerateSecretBytes);
 	ADDFUNC(GetTime);
 	ADDFUNC(GetScriptPath);
 	ADDFUNC(GetRuntimePath);

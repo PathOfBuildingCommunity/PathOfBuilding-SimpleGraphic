@@ -13,6 +13,8 @@
 #include "core.h"
 
 #ifdef _WIN32
+#include <minwindef.h>
+#include <bcrypt.h>
 #include <eh.h>
 #include <Shlobj.h>
 #elif __linux__
@@ -30,6 +32,7 @@
 
 #include <GLFW/glfw3.h>
 #include <filesystem>
+#include <fstream>
 #include <map>
 #include <set>
 #include <thread>
@@ -498,7 +501,7 @@ const char* PlatformOpenURL(const char* url)
 #endif
 }
 #else
-const char* PlatformOpenURL(const char* url);
+extern "C" const char* PlatformOpenURL(const char* url);
 #endif
 
 std::optional<std::string> sys_main_c::OpenURL(const char* url)
@@ -510,6 +513,27 @@ std::optional<std::string> sys_main_c::OpenURL(const char* url)
 		return ret;
 	}
 	return {};
+}
+
+bool PlatformGenerateSecretBytes(char* output, size_t count)
+{
+#ifdef _WIN32
+	if (BCRYPT_SUCCESS(BCryptGenRandom(nullptr, (UCHAR*)output, (ULONG)count, BCRYPT_USE_SYSTEM_PREFERRED_RNG))) {
+		return true;
+	}
+	return false;
+#else
+	std::ifstream is("/dev/urandom", std::ios::binary);
+	return !!is.read(output, count);
+#endif
+}
+
+bool sys_main_c::GenerateSecretBytes(std::span<std::byte> output)
+{
+	if (output.empty()) {
+		return true;
+	}
+	return PlatformGenerateSecretBytes((char*)output.data(), output.size());
 }
 
 // ==============================

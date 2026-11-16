@@ -6,6 +6,7 @@
 
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <string>
 
 // =======
@@ -79,6 +80,7 @@ public:
 	virtual bool	SetWorkDir(std::filesystem::path const& newCwd = {}) = 0;
 	virtual void	SpawnProcess(std::filesystem::path cmdName, const char* argList) = 0;
 	virtual std::optional<std::string> OpenURL(const char* url) = 0;
+	virtual bool	GenerateSecretBytes(std::span<std::byte> output) = 0;
 	virtual void	Error(const char* fmt, ...) = 0;
 	virtual void	Exit(const char* msg = NULL) = 0;
 	virtual void	Restart() = 0;
