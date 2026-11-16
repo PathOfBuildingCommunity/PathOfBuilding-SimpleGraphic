@@ -38,6 +38,7 @@ public:
 	bool	SetWorkDir(std::filesystem::path const& newCwd = {});
 	void	SpawnProcess(std::filesystem::path cmdName, const char* argList);
 	std::optional<std::string> OpenURL(const char* url); // return value has failure reason
+	bool	GenerateSecretBytes(std::span<std::byte> output);
 	void	Error(const char* fmt, ...);
 	void	Exit(const char* msg = NULL);
 	void	Restart();

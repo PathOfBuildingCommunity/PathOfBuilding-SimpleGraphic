@@ -223,6 +223,7 @@ if (WIN32)
     )
     target_link_libraries(SimpleGraphic
         PRIVATE
+        "bcrypt.lib"
         "winmm.lib"
     )
 endif ()
